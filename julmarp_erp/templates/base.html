@@ -6,14 +6,18 @@
     <title>{% block title %}JulMarp ERP{% endblock %}</title>
     <link rel="stylesheet" href="{% static 'css/style.css' %}">
 </head>
-<body>
-    {% include "partials/_header.html" %}
-    {% include "partials/_navbar.html" %}
+<body class="{% block body_class %}{% endblock %}">
+    {% block header %}
+        {% include "partials/header.html" %}
+    {% endblock %}
+    {% block navbar %}
+        {% include "partials/navbar.html" %}
+    {% endblock %}
 
     <main>
         {% block content %}{% endblock %}
     </main>
 
-    {% include "partials/_footer.html" %}
+    {% include "partials/footer.html" %}
 </body>
 </html>

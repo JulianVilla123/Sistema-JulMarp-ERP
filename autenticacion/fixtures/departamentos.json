@@ -1,0 +1,47 @@
+[
+  {
+    "model": "autenticacion.departamento",
+    "pk": 1,
+    "fields": {
+      "nombre": "Inventario",
+      "descripcion": "Gestión de inventarios: entrada de material a planta y línea de producción",
+      "activo": true
+    }
+  },
+  {
+    "model": "autenticacion.departamento",
+    "pk": 2,
+    "fields": {
+      "nombre": "Producción",
+      "descripcion": "Captura de lotes de producción y escaneo de producción realizada",
+      "activo": true
+    }
+  },
+  {
+    "model": "autenticacion.departamento",
+    "pk": 3,
+    "fields": {
+      "nombre": "Finanzas",
+      "descripcion": "Análisis de costos, ventas y reportes financieros",
+      "activo": true
+    }
+  },
+  {
+    "model": "autenticacion.departamento",
+    "pk": 4,
+    "fields": {
+      "nombre": "RRHH",
+      "descripcion": "Gestión de empleados, números de empleado y overtime",
+      "activo": true
+    }
+  },
+  {
+    "model": "autenticacion.departamento",
+    "pk": 5,
+    "fields": {
+      "nombre": "Admin",
+      "descripcion": "Administración del sistema y permisos globales",
+      "activo": true
+    }
+  }
+]

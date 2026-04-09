@@ -2,7 +2,7 @@
 
 {% block body_class %}login-page{% endblock %}
 
-{% block title %}Inicio de Sesión{% endblock %}
+{% block title %}Registro{% endblock %}
 
 {% block header %}{% endblock %}
 {% block navbar %}{% endblock %}
@@ -11,15 +11,15 @@
 <div class="login-screen">
     <div class="login-visual">
         <p class="visual-label">JulMarp ERP</p>
-        <h1>Bienvenido</h1>
-        <p>Accede de forma segura a tu panel de inventario, finanzas y RRHH.</p>
+        <h1>Regístrate</h1>
+        <p>Crea tu cuenta para acceder al sistema de inventario, finanzas y recursos humanos.</p>
     </div>
 
     <section class="login-panel">
         <div class="login-card">
             <div class="login-card__header">
-                <span class="login-card__logo">ERP</span>
-                <p>Inicia sesión para continuar</p>
+                <span class="login-card__logo">Nuevo</span>
+                <p>Completa tus datos para registrarte</p>
             </div>
             {% if messages %}
             <ul class="messages">
@@ -31,11 +31,15 @@
             <form method="POST">
                 {% csrf_token %}
                 <input type="text" name="username" placeholder="Usuario" required>
+                <input type="text" name="first_name" placeholder="Nombre" required>
+                <input type="text" name="last_name" placeholder="Apellido" required>
+                <input type="email" name="email" placeholder="Correo electrónico" required>
+                <input type="text" name="telefono" placeholder="Teléfono" required>
+                <input type="text" name="numero_empleado" placeholder="Número de empleado" required>
                 <input type="password" name="password" placeholder="Contraseña" required>
-                <button type="submit">Ingresar</button>
+                <button type="submit">Registrarse</button>
             </form>
-            <a href="{% url 'register' %}" class="secondary-button">Crear cuenta</a>
-            <p class="login-card__note">Ingresa con tu usuario y contraseña corporativa.</p>
+            <p class="login-card__note">Ya tienes cuenta? <a href="{% url 'login' %}">Inicia sesión</a></p>
         </div>
     </section>
 </div>

@@ -1,0 +1,207 @@
+/* Estilos generales */
+body {
+    font-family: 'Inter', Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #f3efe8;
+    color: #2f3a4a;
+}
+
+body.login-page {
+    background: radial-gradient(circle at top left, rgba(255, 255, 255, 0.9), transparent 35%),
+                radial-gradient(circle at bottom right, rgba(214, 83, 60, 0.12), transparent 25%),
+                #f3efe8;
+}
+
+main {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+}
+
+.login-screen {
+    width: 100%;
+    max-width: 1200px;
+    display: grid;
+    grid-template-columns: 1.2fr 1fr;
+    gap: 2rem;
+    align-items: center;
+}
+
+.login-visual {
+    padding: 2.5rem;
+}
+
+.visual-label {
+    display: inline-block;
+    margin-bottom: 1.5rem;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    font-size: 0.8rem;
+    color: #b65b4a;
+    font-weight: 700;
+}
+
+.login-visual h1 {
+    margin: 0;
+    font-size: clamp(3rem, 5vw, 5rem);
+    line-height: 0.95;
+    color: #d5433c;
+}
+
+.login-visual p {
+    margin-top: 1.5rem;
+    max-width: 420px;
+    font-size: 1.05rem;
+    line-height: 1.8;
+    color: #5d6370;
+}
+
+.login-panel {
+    display: flex;
+    justify-content: center;
+}
+
+.login-card {
+    width: 100%;
+    max-width: 420px;
+    background: rgba(255, 255, 255, 0.96);
+    border-radius: 30px;
+    padding: 2.5rem;
+    box-shadow: 0 32px 90px rgba(49, 53, 68, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.8);
+}
+
+.login-card__header {
+    text-align: left;
+    margin-bottom: 2rem;
+}
+
+.login-card__logo {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 56px;
+    height: 56px;
+    border-radius: 16px;
+    background: #d5433c;
+    color: white;
+    font-weight: 700;
+    margin-bottom: 1rem;
+}
+
+.login-card__header p {
+    margin: 0;
+    color: #656d7a;
+    font-size: 0.95rem;
+}
+
+.login-card form {
+    display: flex;
+    flex-direction: column;
+}
+
+.login-card input {
+    padding: 1rem 1rem;
+    margin-bottom: 1.25rem;
+    border: 1px solid #e0dcd5;
+    border-radius: 14px;
+    font-size: 1rem;
+    background: #faf7f4;
+    color: #2f3a4a;
+}
+
+.login-card input::placeholder {
+    color: #999;
+}
+
+.login-card input:focus {
+    outline: none;
+    border-color: #d5433c;
+    box-shadow: 0 0 0 4px rgba(213, 67, 60, 0.12);
+}
+
+.login-card button {
+    padding: 1rem;
+    background-color: #d5433c;
+    color: white;
+    border: none;
+    border-radius: 16px;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: transform 0.25s ease, background-color 0.25s ease;
+}
+
+.login-card button:hover {
+    background-color: #b6372f;
+    transform: translateY(-1px);
+}
+
+.secondary-button {
+    display: block;
+    width: 100%;
+    margin-top: 0.75rem;
+    margin-bottom: 0;
+    padding: 1rem 1.25rem;
+    background: transparent;
+    color: #d5433c;
+    border: 2px solid #d5433c;
+    border-radius: 16px;
+    text-decoration: none;
+    text-align: center;
+    font-weight: 700;
+    box-sizing: border-box;
+    transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+.secondary-button:hover {
+    background: #d5433c;
+    color: white;
+}
+
+/* Estilos para mensajes de error */
+.messages {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 1.25rem;
+}
+
+.messages li {
+    color: #842029;
+    background-color: #f8d7da;
+    border: 1px solid #f5c2c7;
+    padding: 0.85rem 1rem;
+    border-radius: 14px;
+}
+
+.login-card__note {
+    margin-top: 1.5rem;
+    color: #7d828a;
+    font-size: 0.95rem;
+    line-height: 1.6;
+    text-align: center;
+}
+
+@media (max-width: 900px) {
+    .login-screen {
+        grid-template-columns: 1fr;
+    }
+
+    .login-visual {
+        padding: 1.5rem 0;
+    }
+}
+
+@media (max-width: 600px) {
+    .login-card {
+        padding: 1.75rem;
+    }
+
+    .login-card input,
+    .login-card button {
+        border-radius: 12px;
+    }
+}
