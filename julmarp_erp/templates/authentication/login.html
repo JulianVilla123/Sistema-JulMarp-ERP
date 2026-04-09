@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+
+{% block title %}Inicio de Sesión{% endblock %}
+
+{% block content %}
+<div class="login-container">
+    <h2>Acceso al Sistema</h2>
+    <form method="POST">
+        {% csrf_token %}
+        <input type="text" name="username" placeholder="Usuario" required>
+        <input type="password" name="password" placeholder="Contraseña" required>
+        <button type="submit">Ingresar</button>
+    </form>
+</div>
+{% endblock %}
