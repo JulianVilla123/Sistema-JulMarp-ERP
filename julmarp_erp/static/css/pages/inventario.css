@@ -1,0 +1,181 @@
+/* Entrada de material a planta */
+.entrada-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 40px 20px;
+}
+
+.entrada-header {
+    margin-bottom: 24px;
+}
+
+.entrada-header h1 {
+    margin-bottom: 6px;
+    color: #2f3c52;
+}
+
+.entrada-header p {
+    color: #6e7480;
+}
+
+.entrada-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+.entrada-card {
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 22px;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.08);
+    border-top: 4px solid #c0392b;
+}
+
+.entrada-card h3 {
+    margin-bottom: 16px;
+    color: #2f3c52;
+}
+
+.entrada-card-full {
+    grid-column: 1 / -1;
+}
+
+.entrada-form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+}
+
+.entrada-form-grid label {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 0.88rem;
+    color: #4f5562;
+}
+
+.entrada-form-grid input,
+.entrada-form-grid select,
+.entrada-form-grid textarea {
+    border: 1px solid #d8dde6;
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 0.95rem;
+    background: #fcfdff;
+}
+
+.proveedor-combobox {
+    position: relative;
+}
+
+.proveedor-combobox-input {
+    width: 100%;
+    border: 1px solid #d8dde6;
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 0.95rem;
+    background: #fcfdff;
+    box-sizing: border-box;
+}
+
+.proveedor-combobox-input:focus {
+    outline: none;
+    border-color: #c0392b;
+    box-shadow: 0 0 0 3px rgba(192, 57, 43, 0.14);
+}
+
+.proveedor-combobox-menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    right: 0;
+    z-index: 20;
+    max-height: 220px;
+    overflow-y: auto;
+    background: #ffffff;
+    border: 1px solid #d8dde6;
+    border-radius: 10px;
+    box-shadow: 0 12px 28px rgba(47, 60, 82, 0.16);
+    padding: 6px;
+}
+
+.proveedor-option {
+    display: block;
+    width: 100%;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    padding: 10px 12px;
+    text-align: left;
+    color: #2f3c52;
+    cursor: pointer;
+    font-size: 0.92rem;
+}
+
+.proveedor-option:hover,
+.proveedor-option:focus {
+    background: #f5e6e3;
+    outline: none;
+}
+
+.proveedor-option-empty {
+    padding: 10px 12px;
+    color: #6e7480;
+    font-size: 0.9rem;
+}
+
+.entrada-form-grid textarea {
+    resize: vertical;
+    min-height: 90px;
+}
+
+.checklist-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.entrada-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 16px;
+}
+
+.material-captura-wrap {
+    margin-top: 10px;
+}
+
+.material-captura-table {
+    min-width: 1200px;
+}
+
+.material-captura-table input,
+.material-captura-table select {
+    width: 100%;
+    border: 1px solid #d8dde6;
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 0.88rem;
+    background: #fcfdff;
+    box-sizing: border-box;
+}
+
+.manual-sku-input {
+    width: 100%;
+}
+
+.material-captura-table .btn-row-remove {
+    padding: 8px 10px;
+    font-size: 0.82rem;
+}
+
+@media (max-width: 900px) {
+    .entrada-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .entrada-form-grid {
+        grid-template-columns: 1fr;
+    }
+}

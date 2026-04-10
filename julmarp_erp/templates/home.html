@@ -1,0 +1,163 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Home - JulMarp ERP{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/pages/home.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="home-container">
+    <div class="welcome-card">
+        <h1>Bienvenido al ERP JulMarp</h1>
+        <h3>{{ usuario.get_full_name|default:usuario.username }}</h3>
+        <p class="department-badge">{{ departamento }}</p>
+    </div>
+
+    {% if departamento == 'Inventario' %}
+        <div class="modules-section">
+            <h2>Módulos disponibles</h2>
+            <div class="modules-grid">
+                <div class="module-card">
+                    <h4>Entrada de Material a Planta</h4>
+                    <p>Registra el ingreso de material a la planta</p>
+                    <a href="{% url 'entrada_planta' %}" class="btn btn-primary">Acceder</a>
+                </div>
+                <div class="module-card">
+                    <h4>Entrada a Línea de Producción</h4>
+                    <p>Registra el material que entra a producción</p>
+                    <a href="#" class="btn btn-primary">Acceder</a>
+                </div>
+                <div class="module-card">
+                    <h4>BOM</h4>
+                    <p>Consulta y administra la lista de materiales</p>
+                    <a href="#" class="btn btn-primary">Acceder</a>
+                </div>
+                <div class="module-card">
+                    <h4>Proveedores</h4>
+                    <p>Gestiona el catálogo de proveedores</p>
+                    <a href="#" class="btn btn-primary">Acceder</a>
+                </div>
+                <div class="module-card">
+                    <h4>Órdenes de Compra</h4>
+                    <p>Crea y da seguimiento a órdenes de compra</p>
+                    <a href="#" class="btn btn-primary">Acceder</a>
+                </div>
+                <div class="module-card">
+                    <h4>Transferencias entre Almacenes</h4>
+                    <p>Mueve stock entre ubicaciones de almacén</p>
+                    <a href="#" class="btn btn-primary">Acceder</a>
+                </div>
+            </div>
+        </div>
+
+    {% elif departamento == 'Producción' %}
+        <div class="modules-section">
+            <h2>Módulos disponibles</h2>
+            <div class="modules-grid">
+                <div class="module-card">
+                    <h4>Captura de Lotes de Producción</h4>
+                    <p>Registra los lotes de producción requeridos</p>
+                    <a href="#" class="btn btn-success">Acceder</a>
+                </div>
+                <div class="module-card">
+                    <h4>Escaneo de Producción Realizada</h4>
+                    <p>Escanea y valida la producción completada</p>
+                    <a href="#" class="btn btn-success">Acceder</a>
+                </div>
+            </div>
+        </div>
+
+    {% elif departamento == 'Finanzas' %}
+        <div class="modules-section">
+            <h2>Módulos disponibles</h2>
+            <div class="modules-grid">
+                <div class="module-card">
+                    <h4>Análisis de Costos</h4>
+                    <p>Visualiza costos de fabricación</p>
+                    <a href="#" class="btn btn-warning">Acceder</a>
+                </div>
+                <div class="module-card">
+                    <h4>Reportes de Ventas</h4>
+                    <p>Reportes y gráficas de ventas</p>
+                    <a href="#" class="btn btn-warning">Acceder</a>
+                </div>
+                <div class="module-card">
+                    <h4>Gráficas Financieras</h4>
+                    <p>Análisis gráfico financiero</p>
+                    <a href="#" class="btn btn-warning">Acceder</a>
+                </div>
+            </div>
+        </div>
+
+    {% elif departamento == 'RRHH' %}
+        <div class="modules-section">
+            <h2>Módulos disponibles</h2>
+            <div class="modules-grid">
+                <div class="module-card">
+                    <h4>Gestión de Empleados</h4>
+                    <p>Administra todos los empleados de la planta</p>
+                    <a href="#" class="btn btn-info">Acceder</a>
+                </div>
+                <div class="module-card">
+                    <h4>Control de Overtime</h4>
+                    <p>Registra y controla horas extras</p>
+                    <a href="#" class="btn btn-info">Acceder</a>
+                </div>
+            </div>
+        </div>
+
+    {% elif departamento == 'QA' or departamento == 'Calidad' %}
+        <div class="modules-section">
+            <h2>Módulos disponibles</h2>
+            <div class="modules-grid">
+                <div class="module-card">
+                    <h4>SQA - Supplier Quality Assurance</h4>
+                    <p>Aseguramiento de calidad de material y producto recibido de proveedores</p>
+                    <a href="{% url 'qa_sqa' %}" class="btn btn-success">Acceder</a>
+                </div>
+                <div class="module-card">
+                    <h4>OQA - Outgoing Quality Assurance</h4>
+                    <p>Aseguramiento de calidad para producto terminado antes de embarque</p>
+                    <a href="{% url 'qa_oqa' %}" class="btn btn-success">Acceder</a>
+                </div>
+                <div class="module-card">
+                    <h4>Customer Service</h4>
+                    <p>Gestión y seguimiento de reclamos de cliente</p>
+                    <a href="{% url 'qa_customer_service' %}" class="btn btn-success">Acceder</a>
+                </div>
+            </div>
+        </div>
+
+    {% elif departamento == 'Admin' %}
+        <div class="modules-section">
+            <h2>Módulos disponibles</h2>
+            <div class="modules-grid">
+                <div class="module-card">
+                    <h4>Administración de Usuarios</h4>
+                    <p>Gestiona usuarios y permisos del sistema</p>
+                    <a href="/admin/" class="btn btn-danger">Acceder</a>
+                </div>
+                <div class="module-card">
+                    <h4>Reportes Globales</h4>
+                    <p>Reportes generales del sistema</p>
+                    <a href="#" class="btn btn-danger">Acceder</a>
+                </div>
+                <div class="module-card">
+                    <h4>Configuración del Sistema</h4>
+                    <p>Configuración general del ERP</p>
+                    <a href="#" class="btn btn-danger">Acceder</a>
+                </div>
+            </div>
+        </div>
+
+    {% else %}
+        <div class="alert alert-warning">
+            <h4>Departamento no asignado</h4>
+            <p>Contacta al administrador para que te asigne un departamento.</p>
+        </div>
+    {% endif %}
+
+</div>
+{% endblock %}

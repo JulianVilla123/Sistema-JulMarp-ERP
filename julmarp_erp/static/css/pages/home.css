@@ -1,0 +1,74 @@
+/* Home / Dashboard */
+.home-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 40px 20px;
+}
+
+.welcome-card {
+    background: linear-gradient(135deg, #c0392b 0%, #8e1a12 100%);
+    color: white;
+    padding: 40px;
+    border-radius: 15px;
+    text-align: center;
+    margin-bottom: 40px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+}
+
+.welcome-card h1 {
+    font-size: 2.5em;
+    margin-bottom: 10px;
+}
+
+.welcome-card h3 {
+    font-size: 1.5em;
+    margin-bottom: 15px;
+    opacity: 0.9;
+}
+
+.department-badge {
+    display: inline-block;
+    background: rgba(255, 255, 255, 0.3);
+    padding: 10px 20px;
+    border-radius: 20px;
+    font-weight: bold;
+    font-size: 1.1em;
+}
+
+.modules-section h2 {
+    font-size: 1.8em;
+    margin-bottom: 30px;
+    color: #333;
+}
+
+.modules-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 25px;
+}
+
+.module-card {
+    background: white;
+    border-radius: 12px;
+    padding: 25px;
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+    transition: transform 0.3s, box-shadow 0.3s;
+    border-left: 5px solid #c0392b;
+}
+
+.module-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+}
+
+.module-card h4 {
+    color: #333;
+    margin-bottom: 10px;
+    font-size: 1.2em;
+}
+
+.module-card p {
+    color: #666;
+    margin-bottom: 20px;
+    font-size: 0.95em;
+}

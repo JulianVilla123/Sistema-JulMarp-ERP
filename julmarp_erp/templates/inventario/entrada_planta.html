@@ -1,0 +1,566 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Entrada de Material a Planta{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/pages/inventario.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="entrada-container">
+    <div class="entrada-header">
+        <h1>Entrada de Material a Planta</h1>
+        <p>Checklist de recepción de material proveniente de proveedor</p>
+    </div>
+
+    {% if messages %}
+    <ul class="messages" style="margin-bottom: 20px;">
+        {% for message in messages %}
+        <li class="{{ message.tags }}">{{ message }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    <form method="post">
+        {% csrf_token %}
+        <div class="entrada-grid">
+        <section class="entrada-card">
+            <h3>Datos Generales de Recepción</h3>
+            <div class="entrada-form-grid">
+                <label>
+                    Fecha de recepción
+                    <input type="date" name="fecha_recepcion" required>
+                </label>
+                <label>
+                    Hora de recepción
+                    <input type="time" name="hora_recepcion" required>
+                </label>
+                <label>
+                    Proveedor
+                    <div class="proveedor-combobox" data-proveedor-combobox>
+                        <input type="hidden" name="proveedor" value="">
+                        <input
+                            type="text"
+                            class="proveedor-combobox-input"
+                            placeholder="Selecciona un proveedor"
+                            autocomplete="off"
+                            data-proveedor-input
+                        >
+                        <div class="proveedor-combobox-menu" data-proveedor-menu hidden>
+                            {% for proveedor in proveedores_catalogo %}
+                            <button
+                                type="button"
+                                class="proveedor-option"
+                                data-proveedor-option
+                                data-value="{{ proveedor.id }}"
+                                data-label="{{ proveedor.nombre }}"
+                            >{{ proveedor.nombre }}</button>
+                            {% endfor %}
+                            <div class="proveedor-option-empty" data-proveedor-empty hidden>No se encontraron proveedores.</div>
+                        </div>
+                    </div>
+                </label>
+                <label>
+                    Orden de compra
+                    <input type="text" name="orden_compra" placeholder="Ej. OC-2026-0145">
+                </label>
+                <label>
+                    Factura / Remisión
+                    <input type="text" name="factura" placeholder="Ej. REM-99821">
+                </label>
+                <label>
+                    Transportista
+                    <input type="text" name="transportista" placeholder="Ej. Logística Express">
+                </label>
+                <label>
+                    Placas de unidad
+                    <input type="text" name="placas" placeholder="Ej. 54-AT-9X">
+                </label>
+                <label>
+                    Recibió (usuario)
+                    <input type="text" name="recibio" value="{{ user.get_full_name|default:user.username }}" readonly>
+                </label>
+            </div>
+        </section>
+
+        <section class="entrada-card">
+            <h3>Checklist de Validación</h3>
+            <div class="checklist-wrap">
+                <label class="check-item"><input type="checkbox" name="chk_oc"> Coincide material vs orden de compra</label>
+                <label class="check-item"><input type="checkbox" name="chk_cantidad"> Cantidad recibida coincide con documentos</label>
+                <label class="check-item"><input type="checkbox" name="chk_empaque"> Empaque en buen estado (sin daño visible)</label>
+                <label class="check-item"><input type="checkbox" name="chk_lote"> Material identificado con etiqueta/lote</label>
+                <label class="check-item"><input type="checkbox" name="chk_vigencia"> Lote y fecha vigentes (si aplica)</label>
+                <label class="check-item"><input type="checkbox" name="chk_certificado"> Certificado de calidad adjunto (si aplica)</label>
+                <label class="check-item"><input type="checkbox" name="chk_estado_fisico"> Sin contaminación / humedad / corrosión</label>
+                <label class="check-item"><input type="checkbox" name="chk_foto"> Se tomó evidencia fotográfica</label>
+                <label class="check-item"><input type="checkbox" name="chk_calidad"> Se notificó a calidad por desviación (si aplica)</label>
+            </div>
+        </section>
+
+        <section class="entrada-card entrada-card-full">
+            <h3>Detalle de Material Recibido (Ejemplo)</h3>
+            <div class="tabla-wrap">
+                <table class="tabla-material">
+                    <thead>
+                        <tr>
+                            <th>SKU</th>
+                            <th>Descripción</th>
+                            <th>UM</th>
+                            <th>Cant. OC</th>
+                            <th>Cant. Recibida</th>
+                            <th>Lote</th>
+                            <th>Ubicación destino</th>
+                            <th>Estatus</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>MAT-00128</td>
+                            <td>Lámina galvanizada 3mm</td>
+                            <td>Placa</td>
+                            <td>120</td>
+                            <td>120</td>
+                            <td>L260410-A</td>
+                            <td>ALM-A1-03</td>
+                            <td><span class="badge ok">Aceptado</span></td>
+                        </tr>
+                        <tr>
+                            <td>MAT-00452</td>
+                            <td>Resina ABS negro</td>
+                            <td>Saco</td>
+                            <td>80</td>
+                            <td>78</td>
+                            <td>ABS-26-04</td>
+                            <td>ALM-B2-01</td>
+                            <td><span class="badge warn">Diferencia</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <h3 style="margin-top: 24px;">Captura de Material a Guardar</h3>
+            <p style="margin-top: -8px; margin-bottom: 10px; color: #6e7480;">
+                Puedes capturar múltiples materiales del catálogo registrado. Solo se pueden seleccionar materiales ya dados de alta.
+            </p>
+            <div class="tabla-wrap material-captura-wrap">
+                <table class="tabla-material material-captura-table" id="materiales-table">
+                    <thead>
+                        <tr>
+                            <th>SKU</th>
+                            <th>Descripción</th>
+                            <th>UM</th>
+                            <th>Cant. OC</th>
+                            <th>Cant. Recibida</th>
+                            <th>Lote</th>
+                            <th>Ubicación</th>
+                            <th>Estatus</th>
+                            <th>Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody id="materiales-body">
+                        <tr>
+                            <td>
+                                <select name="sku[]" class="sku-select" disabled>
+                                    <option value="">Selecciona primero un proveedor</option>
+                                </select>
+                            </td>
+                            <td><input type="text" name="descripcion[]" class="descripcion-input" placeholder="Lámina galvanizada 3mm"></td>
+                            <td><input type="text" name="um[]" class="um-input" placeholder="Placa"></td>
+                            <td><input type="number" step="0.01" name="cantidad_oc[]" value="0"></td>
+                            <td><input type="number" step="0.01" name="cantidad_recibida[]" value="0"></td>
+                            <td><input type="text" name="lote_material[]" placeholder="L260410-A"></td>
+                            <td>
+                                <select name="ubicacion_destino[]">
+                                    <option value="">Selecciona almacen</option>
+                                    {% for almacen in almacenes_catalogo %}
+                                    <option value="{{ almacen.codigo }}">{{ almacen.codigo }} - {{ almacen.nombre }}</option>
+                                    {% endfor %}
+                                </select>
+                            </td>
+                            <td>
+                                <select name="estatus_material[]">
+                                    <option value="ACEPTADO">Aceptado</option>
+                                    <option value="DIFERENCIA">Diferencia</option>
+                                    <option value="RECHAZADO">Rechazado</option>
+                                </select>
+                            </td>
+                            <td>
+                                <button type="button" class="btn btn-danger btn-row-remove">Quitar</button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="entrada-actions" style="margin-top: 12px; margin-bottom: 6px;">
+                <button type="button" class="btn btn-success" id="btn-add-material">+ Agregar material</button>
+            </div>
+
+            <div class="entrada-form-grid" style="margin-top: 18px;">
+                <label>
+                    Observaciones
+                    <textarea rows="4" name="observaciones" placeholder="Ej. Llegaron 2 sacos dañados. Se deja evidencia y se notifica a compras/proveedor."></textarea>
+                </label>
+                <label>
+                    Acción recomendada
+                    <select name="accion_recomendada">
+                        <option value="">Selecciona una opción</option>
+                        <option value="ACEPTAR_TODO">Aceptar todo el embarque</option>
+                        <option value="ACEPTAR_PARCIAL">Aceptar parcial y levantar incidencia</option>
+                        <option value="RECHAZAR">Rechazar embarque</option>
+                        <option value="CUARENTENA">Cuarentena para revisión de calidad</option>
+                    </select>
+                </label>
+            </div>
+
+            <div class="entrada-actions">
+                <button class="btn btn-primary" type="submit" name="accion" value="guardar">Guardar recepción</button>
+                <button class="btn btn-warning" type="submit" name="accion" value="borrador">Guardar borrador</button>
+                <a href="{% url 'historial_recepciones' %}" class="btn btn-info">Ver historial</a>
+            </div>
+        </section>
+        </div>
+    </form>
+
+    <section class="entrada-card entrada-card-full" style="margin-top: 20px;">
+        <h3>Recepciones recientes</h3>
+        <div class="tabla-wrap">
+            <table class="tabla-material">
+                <thead>
+                    <tr>
+                        <th>Folio</th>
+                        <th>Fecha</th>
+                        <th>Proveedor</th>
+                        <th>Estado</th>
+                        <th>Usuario</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for recepcion in recepciones_recientes %}
+                    <tr>
+                        <td>{{ recepcion.id }}</td>
+                        <td>{{ recepcion.fecha_recepcion|date:'d/m/Y' }}</td>
+                        <td>{{ recepcion.proveedor }}</td>
+                        <td>{{ recepcion.get_estado_display }}</td>
+                        <td>{{ recepcion.creado_por.get_full_name|default:recepcion.creado_por.username }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5">No hay recepciones guardadas todavía.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+</div>
+
+{{ materiales_catalogo_json|json_script:"materiales-catalogo-json" }}
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const tbody = document.getElementById('materiales-body');
+    const addBtn = document.getElementById('btn-add-material');
+    const proveedorCombobox = document.querySelector('[data-proveedor-combobox]');
+    const proveedorHiddenInput = proveedorCombobox ? proveedorCombobox.querySelector('input[name="proveedor"]') : null;
+    const proveedorSearchInput = proveedorCombobox ? proveedorCombobox.querySelector('[data-proveedor-input]') : null;
+    const proveedorMenu = proveedorCombobox ? proveedorCombobox.querySelector('[data-proveedor-menu]') : null;
+    const proveedorOptions = proveedorCombobox ? Array.from(proveedorCombobox.querySelectorAll('[data-proveedor-option]')) : [];
+    const proveedorEmpty = proveedorCombobox ? proveedorCombobox.querySelector('[data-proveedor-empty]') : null;
+    const materialesCatalogo = JSON.parse(document.getElementById('materiales-catalogo-json').textContent);
+    const apiTemplate = '{% url "api_materiales_proveedor" 999999 %}';
+    const emptyOptionHtml = '<option value="">Selecciona primero un proveedor</option>';
+
+    let materialesPorProveedor = {};
+
+    function crearSelectMateriales(materialesDisponibles = null) {
+        let html = '<option value="">Selecciona un material</option>';
+
+        for (const [sku, data] of Object.entries(materialesDisponibles || {})) {
+            html += `<option value="${sku}">${sku} - ${data.descripcion}</option>`;
+        }
+
+        return html;
+    }
+
+    function limpiarCapturaMaterial(row) {
+        const skuSelect = row.querySelector('.sku-select');
+        const descripcionInput = row.querySelector('.descripcion-input');
+        const umInput = row.querySelector('.um-input');
+
+        if (skuSelect) {
+            skuSelect.selectedIndex = 0;
+        }
+        if (descripcionInput) {
+            descripcionInput.value = '';
+            descripcionInput.readOnly = false;
+        }
+        if (umInput) {
+            umInput.value = '';
+            umInput.readOnly = false;
+        }
+    }
+
+    function actualizarSelectoresMateriales(materialesObj = null) {
+        const skuSelects = document.querySelectorAll('.sku-select');
+        const hasMateriales = materialesObj && Object.keys(materialesObj).length > 0;
+        const htmlMateriales = hasMateriales ? crearSelectMateriales(materialesObj) : emptyOptionHtml;
+
+        skuSelects.forEach(function (select) {
+            const valorActual = select.value;
+            select.innerHTML = htmlMateriales;
+            select.disabled = !hasMateriales;
+
+            if (hasMateriales && materialesObj[valorActual]) {
+                select.value = valorActual;
+            } else {
+                select.value = '';
+                limpiarCapturaMaterial(select.closest('tr'));
+            }
+        });
+
+        addBtn.disabled = !hasMateriales;
+    }
+
+    function cerrarMenuProveedores() {
+        if (!proveedorMenu || !proveedorCombobox) {
+            return;
+        }
+        proveedorMenu.hidden = true;
+        proveedorCombobox.classList.remove('is-open');
+    }
+
+    function abrirMenuProveedores() {
+        if (!proveedorMenu || !proveedorCombobox) {
+            return;
+        }
+        proveedorMenu.hidden = false;
+        proveedorCombobox.classList.add('is-open');
+    }
+
+    function filtrarProveedores() {
+        if (!proveedorSearchInput) {
+            return;
+        }
+
+        const term = proveedorSearchInput.value.trim().toLowerCase();
+        let visibles = 0;
+
+        proveedorOptions.forEach(function (option) {
+            const label = (option.dataset.label || '').toLowerCase();
+            const match = !term || label.includes(term);
+            option.hidden = !match;
+            if (match) {
+                visibles += 1;
+            }
+        });
+
+        if (proveedorEmpty) {
+            proveedorEmpty.hidden = visibles !== 0;
+        }
+    }
+
+    function seleccionarProveedor(option) {
+        if (!option || !proveedorHiddenInput || !proveedorSearchInput) {
+            return;
+        }
+
+        proveedorHiddenInput.value = option.dataset.value || '';
+        proveedorSearchInput.value = option.dataset.label || '';
+        proveedorSearchInput.dataset.selectedValue = option.dataset.value || '';
+        cerrarMenuProveedores();
+        cargarMaterialesProveedor();
+    }
+
+    function cargarMaterialesProveedor() {
+        const proveedorId = proveedorHiddenInput ? proveedorHiddenInput.value : '';
+
+        if (!proveedorId) {
+            actualizarSelectoresMateriales({});
+            return;
+        }
+
+        if (materialesPorProveedor[proveedorId]) {
+            actualizarSelectoresMateriales(materialesPorProveedor[proveedorId]);
+            return;
+        }
+
+        const apiUrl = apiTemplate.replace('999999', proveedorId);
+        fetch(apiUrl)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('No se pudieron cargar los materiales del proveedor.');
+                }
+                return response.json();
+            })
+            .then(data => {
+                materialesPorProveedor[proveedorId] = data;
+                actualizarSelectoresMateriales(data);
+            })
+            .catch(error => {
+                console.error('Error cargando materiales:', error);
+                actualizarSelectoresMateriales({});
+            });
+    }
+
+    function bindSkuAutoFill(row) {
+        const skuSelect = row.querySelector('.sku-select');
+        const descripcionInput = row.querySelector('.descripcion-input');
+        const umInput = row.querySelector('.um-input');
+
+        if (!skuSelect || !descripcionInput || !umInput) {
+            return;
+        }
+
+        const applyMaterialData = function () {
+            const sku = (skuSelect.value || '').trim().toUpperCase();
+
+            if (!sku) {
+                descripcionInput.value = '';
+                umInput.value = '';
+                descripcionInput.readOnly = false;
+                umInput.readOnly = false;
+                return;
+            }
+
+            const data = materialesCatalogo[sku];
+
+            if (data) {
+                descripcionInput.value = data.descripcion || '';
+                umInput.value = data.um || '';
+                descripcionInput.readOnly = true;
+                umInput.readOnly = true;
+            } else {
+                descripcionInput.value = '';
+                umInput.value = '';
+                descripcionInput.readOnly = false;
+                umInput.readOnly = false;
+            }
+        };
+
+        skuSelect.addEventListener('change', applyMaterialData);
+        applyMaterialData();
+    }
+
+    function bindRemoveButtons() {
+        const removeButtons = document.querySelectorAll('.btn-row-remove');
+        removeButtons.forEach(function (btn) {
+            btn.onclick = function () {
+                const rows = tbody.querySelectorAll('tr');
+                if (rows.length === 1) {
+                    rows[0].querySelectorAll('input').forEach(function (input) {
+                        if (input.type === 'number') {
+                            input.value = '0';
+                        } else {
+                            input.value = '';
+                        }
+                    });
+                    rows[0].querySelector('select').selectedIndex = 0;
+                    return;
+                }
+                btn.closest('tr').remove();
+            };
+        });
+    }
+
+    addBtn.addEventListener('click', function () {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>
+                <select name="sku[]" class="sku-select" disabled>
+                    <option value="">Selecciona primero un proveedor</option>
+                </select>
+            </td>
+            <td><input type="text" name="descripcion[]" class="descripcion-input" placeholder="Lámina galvanizada 3mm"></td>
+            <td><input type="text" name="um[]" class="um-input" placeholder="Placa"></td>
+            <td><input type="number" step="0.01" name="cantidad_oc[]" value="0"></td>
+            <td><input type="number" step="0.01" name="cantidad_recibida[]" value="0"></td>
+            <td><input type="text" name="lote_material[]" placeholder="L260410-A"></td>
+            <td>
+                <select name="ubicacion_destino[]">
+                    <option value="">Selecciona almacen</option>
+                    {% for almacen in almacenes_catalogo %}
+                    <option value="{{ almacen.codigo }}">{{ almacen.codigo }} - {{ almacen.nombre }}</option>
+                    {% endfor %}
+                </select>
+            </td>
+            <td>
+                <select name="estatus_material[]">
+                    <option value="ACEPTADO">Aceptado</option>
+                    <option value="DIFERENCIA">Diferencia</option>
+                    <option value="RECHAZADO">Rechazado</option>
+                </select>
+            </td>
+            <td>
+                <button type="button" class="btn btn-danger btn-row-remove">Quitar</button>
+            </td>
+        `;
+        tbody.appendChild(row);
+        bindRemoveButtons();
+        bindSkuAutoFill(row);
+
+        if (proveedorHiddenInput && proveedorHiddenInput.value && materialesPorProveedor[proveedorHiddenInput.value]) {
+            const skuSelect = row.querySelector('.sku-select');
+            const htmlMateriales = crearSelectMateriales(materialesPorProveedor[proveedorHiddenInput.value]);
+            skuSelect.innerHTML = htmlMateriales;
+            skuSelect.disabled = false;
+        }
+    });
+
+    if (proveedorCombobox && proveedorSearchInput && proveedorHiddenInput) {
+        proveedorSearchInput.addEventListener('focus', function () {
+            abrirMenuProveedores();
+            filtrarProveedores();
+        });
+
+        proveedorSearchInput.addEventListener('click', function () {
+            abrirMenuProveedores();
+            filtrarProveedores();
+        });
+
+        proveedorSearchInput.addEventListener('input', function () {
+            const currentText = proveedorSearchInput.value.trim();
+            const selectedLabel = proveedorSearchInput.dataset.selectedLabel || '';
+
+            if (currentText !== selectedLabel) {
+                proveedorHiddenInput.value = '';
+            }
+
+            abrirMenuProveedores();
+            filtrarProveedores();
+            actualizarSelectoresMateriales({});
+        });
+
+        proveedorSearchInput.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape') {
+                cerrarMenuProveedores();
+            }
+        });
+
+        proveedorOptions.forEach(function (option) {
+            option.addEventListener('click', function () {
+                proveedorSearchInput.dataset.selectedLabel = option.dataset.label || '';
+                seleccionarProveedor(option);
+            });
+        });
+
+        document.addEventListener('click', function (event) {
+            if (!proveedorCombobox.contains(event.target)) {
+                cerrarMenuProveedores();
+            }
+        });
+    }
+
+    tbody.querySelectorAll('tr').forEach(bindSkuAutoFill);
+    bindRemoveButtons();
+
+    actualizarSelectoresMateriales({});
+
+    if (proveedorHiddenInput && proveedorHiddenInput.value) {
+        cargarMaterialesProveedor();
+    }
+});
+</script>
+{% endblock %}

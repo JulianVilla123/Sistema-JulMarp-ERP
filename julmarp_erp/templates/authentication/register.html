@@ -1,8 +1,13 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block body_class %}login-page{% endblock %}
 
 {% block title %}Registro{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/pages/auth.css' %}">
+{% endblock %}
 
 {% block header %}{% endblock %}
 {% block navbar %}{% endblock %}
@@ -24,23 +29,40 @@
             {% if messages %}
             <ul class="messages">
                 {% for message in messages %}
-                <li>{{ message }}</li>
+                <li class="{{ message.tags }}">{{ message }}</li>
                 {% endfor %}
             </ul>
             {% endif %}
-            <form method="POST">
+            <form method="POST" id="register-form">
                 {% csrf_token %}
-                <input type="text" name="username" placeholder="Usuario" required>
-                <input type="text" name="first_name" placeholder="Nombre" required>
-                <input type="text" name="last_name" placeholder="Apellido" required>
-                <input type="email" name="email" placeholder="Correo electrónico" required>
-                <input type="text" name="telefono" placeholder="Teléfono" required>
-                <input type="text" name="numero_empleado" placeholder="Número de empleado" required>
-                <input type="password" name="password" placeholder="Contraseña" required>
+                <input type="text" name="username" placeholder="Usuario" value="{{ form_data.username|default:'' }}" required>
+                <input type="text" name="first_name" placeholder="Nombre" value="{{ form_data.first_name|default:'' }}" required>
+                <input type="text" name="last_name" placeholder="Apellido" value="{{ form_data.last_name|default:'' }}" required>
+                <input type="email" name="email" placeholder="Correo electrónico" value="{{ form_data.email|default:'' }}" required>
+                <input type="text" name="telefono" placeholder="Teléfono" value="{{ form_data.telefono|default:'' }}" required>
+                <input type="text" name="numero_empleado" placeholder="Número de empleado" value="{{ form_data.numero_empleado|default:'' }}" required>
+                <input type="password" name="password" id="password" placeholder="Contraseña" required>
+                <input type="password" name="confirm_password" id="confirm_password" placeholder="Confirmar contraseña" required>
                 <button type="submit">Registrarse</button>
             </form>
             <p class="login-card__note">Ya tienes cuenta? <a href="{% url 'login' %}">Inicia sesión</a></p>
         </div>
     </section>
 </div>
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const form = document.getElementById('register-form');
+        const passwordInput = document.getElementById('password');
+        const confirmInput = document.getElementById('confirm_password');
+
+        form.addEventListener('submit', function (event) {
+            if (passwordInput.value !== confirmInput.value) {
+                event.preventDefault();
+                alert('Las contraseñas no coinciden.');
+                confirmInput.value = '';
+                confirmInput.focus();
+            }
+        });
+    });
+</script>
 {% endblock %}

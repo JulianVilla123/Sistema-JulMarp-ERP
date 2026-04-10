@@ -1,0 +1,119 @@
+/* QA pages */
+.calidad-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 40px 20px;
+}
+
+.calidad-header {
+    margin-bottom: 24px;
+}
+
+.calidad-header h1 {
+    margin-bottom: 6px;
+    color: #2f3c52;
+}
+
+.calidad-header p {
+    color: #6e7480;
+}
+
+.calidad-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+.calidad-card {
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 22px;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.08);
+    border-top: 4px solid #c0392b;
+}
+
+.calidad-card h3 {
+    margin-bottom: 16px;
+    color: #2f3c52;
+}
+
+.calidad-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.calidad-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 0.88rem;
+    color: #4f5562;
+}
+
+.calidad-form input,
+.calidad-form select,
+.calidad-form textarea {
+    border: 1px solid #d8dde6;
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 0.95rem;
+    background: #fcfdff;
+}
+
+.calidad-form textarea {
+    resize: vertical;
+    min-height: 130px;
+}
+
+.hallazgos-section {
+    margin-top: 8px;
+    padding: 14px;
+    border-radius: 10px;
+    background: #f8fafc;
+    border: 1px solid #e7ecf3;
+}
+
+.hallazgos-section h4 {
+    margin-bottom: 4px;
+    color: #2f3c52;
+    font-size: 1rem;
+}
+
+.hallazgos-section p {
+    margin-bottom: 10px;
+    color: #6e7480;
+    font-size: 0.86rem;
+}
+
+.resultado-section {
+    margin-top: 4px;
+}
+
+.calidad-actions {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+}
+
+.calidad-actions .btn {
+    width: 220px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 10px 14px;
+}
+
+@media (max-width: 900px) {
+    .calidad-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .calidad-actions .btn {
+        width: 100%;
+    }
+}

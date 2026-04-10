@@ -1,0 +1,101 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}QA - SQA{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/pages/qa.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="calidad-container">
+    <div class="calidad-header">
+        <h1>QA / SQA</h1>
+        <p>Supplier Quality Assurance: validación de material y producto recibido de proveedores.</p>
+    </div>
+
+    {% if messages %}
+    <ul class="messages" style="margin-bottom: 20px;">
+        {% for message in messages %}
+        <li class="{{ message.tags }}">{{ message }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    <div class="calidad-grid">
+        <section class="calidad-card">
+            <h3>Checklist de Inspección de Entrada</h3>
+            <form method="post" class="calidad-form">
+                {% csrf_token %}
+                <label>
+                    Lote a inspeccionar
+                    <input type="text" name="lote" placeholder="Ej. L260410-A" required>
+                </label>
+
+                <label class="check-item"><input type="checkbox" name="chk_especificacion"> Cumple especificación técnica</label>
+                <label class="check-item"><input type="checkbox" name="chk_apariencia"> Apariencia física conforme</label>
+                <label class="check-item"><input type="checkbox" name="chk_documentos"> Documentación/certificados completos</label>
+                <label class="check-item"><input type="checkbox" name="chk_trazabilidad"> Trazabilidad de lote correcta</label>
+                <label class="check-item"><input type="checkbox" name="chk_muestreo"> Muestreo aprobado</label>
+
+                <div class="hallazgos-section">
+                    <h4>Detalle de hallazgos</h4>
+                    <p>Describe no conformidades, evidencia encontrada y acciones inmediatas.</p>
+                    <textarea name="observaciones" rows="7" placeholder="Ej. Se detecta variación en espesor en 3 de 20 piezas muestreadas. Se bloquea lote y se abre reporte de no conformidad con evidencia fotográfica."></textarea>
+                </div>
+
+                <div class="resultado-section">
+                    <label>
+                        Resultado de inspección
+                        <select name="resultado" required>
+                            <option value="">Selecciona resultado</option>
+                            <option value="aprobado">Aprobado</option>
+                            <option value="aprobado_condicional">Aprobado condicional</option>
+                            <option value="rechazado">Rechazado</option>
+                        </select>
+                    </label>
+                </div>
+
+                <div class="calidad-actions">
+                    <button type="submit" class="btn btn-warning" name="accion" value="guardar">Guardar inspección</button>
+                    <button type="submit" class="btn btn-success" name="accion" value="liberar">Liberar a producción</button>
+                    <button type="submit" class="btn btn-danger" name="accion" value="rechazar">Rechazar / Cuarentena</button>
+                </div>
+            </form>
+        </section>
+
+        <section class="calidad-card">
+            <h3>Lotes pendientes SQA (Ejemplo)</h3>
+            <div class="tabla-wrap">
+                <table class="tabla-material">
+                    <thead>
+                        <tr>
+                            <th>Lote</th>
+                            <th>Material</th>
+                            <th>Proveedor</th>
+                            <th>Fecha recepción</th>
+                            <th>Estatus</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>L260410-A</td>
+                            <td>Lámina galvanizada 3mm</td>
+                            <td>Aceros Industriales del Norte</td>
+                            <td>10/04/2026</td>
+                            <td><span class="badge warn">Pendiente</span></td>
+                        </tr>
+                        <tr>
+                            <td>ABS-26-04</td>
+                            <td>Resina ABS negro</td>
+                            <td>Polímeros del Bajío</td>
+                            <td>10/04/2026</td>
+                            <td><span class="badge warn">Pendiente</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+</div>
+{% endblock %}

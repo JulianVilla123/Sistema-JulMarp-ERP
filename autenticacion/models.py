@@ -19,7 +19,7 @@ class Departamento(models.Model):
 class UsuarioERP(AbstractUser):
     # Modelo de usuario personalizado para el ERP
     telefono = models.CharField('Teléfono', max_length=20, blank=True)
-    numero_empleado = models.CharField('Número de empleado', max_length=30, blank=True)
+    numero_empleado = models.CharField('Número de empleado', max_length=30, blank=True, unique=True)
     departamento = models.ForeignKey(
         Departamento,
         on_delete=models.SET_NULL,
@@ -27,4 +27,219 @@ class UsuarioERP(AbstractUser):
         blank=True,
         verbose_name='Departamento'
     )
+    activo = models.BooleanField('Activo', default=True)
+    fecha_creacion = models.DateTimeField('Fecha de creación', auto_now_add=True)
+    fecha_ultima_sesion = models.DateTimeField('Última sesión', null=True, blank=True)
 
+    @property
+    def iniciales(self):
+        nombre = (self.first_name or '').strip()
+        apellido = (self.last_name or '').strip()
+
+        primer_nombre = nombre.split()[0] if nombre else ''
+        primer_apellido = apellido.split()[0] if apellido else ''
+
+        inicial_nombre = primer_nombre[:1].upper()
+        inicial_apellido = primer_apellido[:1].upper()
+
+        if inicial_nombre and inicial_apellido:
+            return f"{inicial_nombre}{inicial_apellido}"
+        if inicial_nombre:
+            return inicial_nombre
+        if inicial_apellido:
+            return inicial_apellido
+        return (self.username or '')[:1].upper()
+
+    def __str__(self):
+        return f"{self.get_full_name() or self.username} - {self.departamento or 'Sin departamento'}"
+
+    class Meta:
+        verbose_name = 'Usuario ERP'
+        verbose_name_plural = 'Usuarios ERP'
+
+
+class Material(models.Model):
+    sku = models.CharField('SKU', max_length=50, unique=True)
+    nombre = models.CharField('Nombre', max_length=255)
+    descripcion = models.TextField('Descripción', blank=True)
+    um = models.CharField('Unidad de medida', max_length=20, blank=True)
+    stock_actual = models.DecimalField('Stock actual', max_digits=14, decimal_places=2, default=0)
+    activo = models.BooleanField('Activo', default=True)
+    fecha_creacion = models.DateTimeField(auto_now_add=True, null=True, blank=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True, null=True, blank=True)
+
+    def __str__(self):
+        return f"{self.sku} - {self.nombre}"
+
+    class Meta:
+        verbose_name = 'Material'
+        verbose_name_plural = 'Materiales'
+        ordering = ['sku']
+
+
+class Proveedor(models.Model):
+    nombre = models.CharField('Nombre', max_length=200, unique=True)
+    descripcion = models.TextField('Descripción', blank=True)
+    telefono = models.CharField('Teléfono', max_length=30, blank=True)
+    email = models.EmailField('Correo electrónico', blank=True)
+    materiales = models.ManyToManyField(
+        Material,
+        blank=True,
+        verbose_name='Materiales',
+        help_text='Materiales que suministra este proveedor'
+    )
+    activo = models.BooleanField('Activo', default=True)
+    fecha_creacion = models.DateTimeField(auto_now_add=True, null=True, blank=True)
+
+    def __str__(self):
+        return self.nombre
+
+    class Meta:
+        verbose_name = 'Proveedor'
+        verbose_name_plural = 'Proveedores'
+        ordering = ['nombre']
+
+
+class Almacen(models.Model):
+    codigo = models.CharField('Codigo', max_length=20, unique=True)
+    nombre = models.CharField('Nombre', max_length=120, unique=True)
+    descripcion = models.CharField('Descripcion', max_length=255, blank=True)
+    activo = models.BooleanField('Activo', default=True)
+
+    def __str__(self):
+        return f"{self.codigo} - {self.nombre}"
+
+    class Meta:
+        verbose_name = 'Almacen'
+        verbose_name_plural = 'Almacenes'
+        ordering = ['codigo']
+
+
+class InventarioAlmacen(models.Model):
+    material = models.ForeignKey(
+        Material,
+        on_delete=models.CASCADE,
+        related_name='inventarios_almacen',
+    )
+    almacen = models.ForeignKey(
+        Almacen,
+        on_delete=models.CASCADE,
+        related_name='inventarios_material',
+    )
+    stock_actual = models.DecimalField('Stock actual', max_digits=14, decimal_places=2, default=0)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.material.sku} @ {self.almacen.codigo}"
+
+    class Meta:
+        verbose_name = 'Inventario por almacen'
+        verbose_name_plural = 'Inventario por almacen'
+        ordering = ['almacen__codigo', 'material__sku']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['material', 'almacen'],
+                name='unique_material_almacen',
+            )
+        ]
+
+
+class RecepcionMaterial(models.Model):
+    class EstadoRecepcion(models.TextChoices):
+        BORRADOR = 'BORRADOR', 'Borrador'
+        ENVIADA = 'ENVIADA', 'Enviada'
+
+    class AccionRecomendada(models.TextChoices):
+        ACEPTAR_TODO = 'ACEPTAR_TODO', 'Aceptar todo el embarque'
+        ACEPTAR_PARCIAL = 'ACEPTAR_PARCIAL', 'Aceptar parcial y levantar incidencia'
+        RECHAZAR = 'RECHAZAR', 'Rechazar embarque'
+        CUARENTENA = 'CUARENTENA', 'Cuarentena para revisión de calidad'
+
+    fecha_recepcion = models.DateField('Fecha de recepción')
+    hora_recepcion = models.TimeField('Hora de recepción')
+    proveedor = models.CharField('Proveedor', max_length=200)
+    proveedor_registrado = models.ForeignKey(
+        Proveedor,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='recepciones_material',
+    )
+    orden_compra = models.CharField('Orden de compra', max_length=80, blank=True)
+    factura = models.CharField('Factura / Remisión', max_length=80, blank=True)
+    transportista = models.CharField('Transportista', max_length=200, blank=True)
+    placas = models.CharField('Placas de unidad', max_length=30, blank=True)
+
+    chk_oc = models.BooleanField(default=False)
+    chk_cantidad = models.BooleanField(default=False)
+    chk_empaque = models.BooleanField(default=False)
+    chk_lote = models.BooleanField(default=False)
+    chk_vigencia = models.BooleanField(default=False)
+    chk_certificado = models.BooleanField(default=False)
+    chk_estado_fisico = models.BooleanField(default=False)
+    chk_foto = models.BooleanField(default=False)
+    chk_calidad = models.BooleanField(default=False)
+
+    observaciones = models.TextField('Observaciones', blank=True)
+    accion_recomendada = models.CharField(
+        'Acción recomendada',
+        max_length=30,
+        choices=AccionRecomendada.choices,
+        blank=True,
+    )
+    estado = models.CharField(
+        'Estado',
+        max_length=10,
+        choices=EstadoRecepcion.choices,
+        default=EstadoRecepcion.ENVIADA,
+    )
+
+    creado_por = models.ForeignKey(
+        UsuarioERP,
+        on_delete=models.PROTECT,
+        related_name='recepciones_material',
+    )
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Recepción {self.id} - {self.proveedor} - {self.fecha_recepcion}"
+
+    class Meta:
+        verbose_name = 'Recepción de material'
+        verbose_name_plural = 'Recepciones de material'
+        ordering = ['-fecha_creacion']
+
+
+class RecepcionMaterialDetalle(models.Model):
+    class EstatusDetalle(models.TextChoices):
+        ACEPTADO = 'ACEPTADO', 'Aceptado'
+        DIFERENCIA = 'DIFERENCIA', 'Diferencia'
+        RECHAZADO = 'RECHAZADO', 'Rechazado'
+
+    recepcion = models.ForeignKey(
+        RecepcionMaterial,
+        on_delete=models.CASCADE,
+        related_name='detalles',
+    )
+    material = models.ForeignKey(
+        Material,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='recepciones_detalle',
+    )
+    sku = models.CharField(max_length=50)
+    descripcion = models.CharField(max_length=255)
+    um = models.CharField('Unidad de medida', max_length=20, blank=True)
+    cantidad_oc = models.DecimalField('Cantidad OC', max_digits=12, decimal_places=2, default=0)
+    cantidad_recibida = models.DecimalField('Cantidad recibida', max_digits=12, decimal_places=2, default=0)
+    lote = models.CharField(max_length=80, blank=True)
+    ubicacion_destino = models.CharField(max_length=80, blank=True)
+    estatus = models.CharField(max_length=12, choices=EstatusDetalle.choices, default=EstatusDetalle.ACEPTADO)
+
+    def __str__(self):
+        return f"{self.sku} - {self.descripcion} ({self.recepcion_id})"
+
+    class Meta:
+        verbose_name = 'Detalle de recepción'
+        verbose_name_plural = 'Detalles de recepción'

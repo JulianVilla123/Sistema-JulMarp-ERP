@@ -1,0 +1,110 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}QA - Customer Service{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/pages/qa.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="calidad-container">
+    <div class="calidad-header">
+        <h1>QA / Customer Service</h1>
+        <p>Aseguramiento y seguimiento de reclamos de cliente con enfoque de contención y cierre.</p>
+    </div>
+
+    {% if messages %}
+    <ul class="messages" style="margin-bottom: 20px;">
+        {% for message in messages %}
+        <li class="{{ message.tags }}">{{ message }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    <div class="calidad-grid">
+        <section class="calidad-card">
+            <h3>Registro de Reclamo</h3>
+            <form method="post" class="calidad-form">
+                {% csrf_token %}
+                <label>
+                    Folio de reclamo
+                    <input type="text" name="folio_reclamo" placeholder="Ej. RCL-2026-0042" required>
+                </label>
+                <label>
+                    Cliente
+                    <input type="text" name="cliente" placeholder="Ej. LG Electronics México" required>
+                </label>
+                <label>
+                    Producto / lote
+                    <input type="text" name="producto_lote" placeholder="Ej. PT-260410-09">
+                </label>
+
+                <label>
+                    Tipo de reclamo
+                    <select name="tipo_reclamo" required>
+                        <option value="">Selecciona tipo</option>
+                        <option value="defecto_visual">Defecto visual</option>
+                        <option value="funcional">Falla funcional</option>
+                        <option value="documental">Error documental</option>
+                        <option value="logistico">Incidencia logística</option>
+                    </select>
+                </label>
+
+                <label>
+                    Estado del reclamo
+                    <select name="estado_reclamo" required>
+                        <option value="abierto">Abierto</option>
+                        <option value="en_analisis">En análisis</option>
+                        <option value="en_contencion">En contención</option>
+                        <option value="cerrado">Cerrado</option>
+                    </select>
+                </label>
+
+                <label>
+                    Descripción del reclamo
+                    <textarea name="descripcion" rows="4" placeholder="Describe el reclamo, impacto y evidencia."></textarea>
+                </label>
+
+                <div class="calidad-actions">
+                    <button type="submit" class="btn btn-warning">Guardar seguimiento</button>
+                    <button type="submit" class="btn btn-success" name="estado_reclamo" value="cerrado">Cerrar reclamo</button>
+                </div>
+            </form>
+        </section>
+
+        <section class="calidad-card">
+            <h3>Reclamos abiertos (Ejemplo)</h3>
+            <div class="tabla-wrap">
+                <table class="tabla-material">
+                    <thead>
+                        <tr>
+                            <th>Folio</th>
+                            <th>Cliente</th>
+                            <th>Producto/Lote</th>
+                            <th>Estado</th>
+                            <th>Prioridad</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>RCL-2026-0042</td>
+                            <td>LG Electronics México</td>
+                            <td>PT-260410-09</td>
+                            <td><span class="badge warn">En análisis</span></td>
+                            <td>Alta</td>
+                        </tr>
+                        <tr>
+                            <td>RCL-2026-0045</td>
+                            <td>ElectroNorth</td>
+                            <td>PT-260410-11</td>
+                            <td><span class="badge warn">En contención</span></td>
+                            <td>Media</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+</div>
+{% endblock %}

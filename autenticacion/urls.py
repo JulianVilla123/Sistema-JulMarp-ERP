@@ -1,7 +1,32 @@
 from django.urls import path
-from .views import login_usuario, register_usuario
+from .views import (
+    login_usuario,
+    register_usuario,
+    home,
+    logout_usuario,
+    perfil_usuario,
+    entrada_material_planta,
+    historial_recepciones,
+    inventario_almacen,
+    calidad_inspeccion_material,
+    qa_sqa,
+    qa_oqa,
+    qa_customer_service,
+    api_materiales_proveedor,
+)
 
 urlpatterns = [
     path('login/', login_usuario, name='login'),
     path('register/', register_usuario, name='register'),
+    path('home/', home, name='home'),
+    path('logout/', logout_usuario, name='logout'),
+    path('perfil/', perfil_usuario, name='perfil'),
+    path('inventario/entrada-planta/', entrada_material_planta, name='entrada_planta'),
+    path('inventario/historial-recepciones/', historial_recepciones, name='historial_recepciones'),
+    path('inventario/almacen/', inventario_almacen, name='inventario_almacen'),
+    path('calidad/inspeccion-material/', calidad_inspeccion_material, name='calidad_inspeccion'),
+    path('qa/sqa/', qa_sqa, name='qa_sqa'),
+    path('qa/oqa/', qa_oqa, name='qa_oqa'),
+    path('qa/customer-service/', qa_customer_service, name='qa_customer_service'),
+    path('api/materiales-proveedor/<int:proveedor_id>/', api_materiales_proveedor, name='api_materiales_proveedor'),
 ]

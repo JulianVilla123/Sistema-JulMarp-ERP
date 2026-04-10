@@ -43,5 +43,14 @@
       "descripcion": "Administración del sistema y permisos globales",
       "activo": true
     }
+  },
+  {
+    "model": "autenticacion.departamento",
+    "pk": 6,
+    "fields": {
+      "nombre": "QA",
+      "descripcion": "Quality Assurance: SQA para entrada, OQA para salida y Customer Service para reclamos",
+      "activo": true
+    }
   }
 ]

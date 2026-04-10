@@ -1,8 +1,13 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block body_class %}login-page{% endblock %}
 
 {% block title %}Inicio de Sesión{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/pages/auth.css' %}">
+{% endblock %}
 
 {% block header %}{% endblock %}
 {% block navbar %}{% endblock %}
@@ -24,7 +29,7 @@
             {% if messages %}
             <ul class="messages">
                 {% for message in messages %}
-                <li>{{ message }}</li>
+                <li class="{{ message.tags }}">{{ message }}</li>
                 {% endfor %}
             </ul>
             {% endif %}

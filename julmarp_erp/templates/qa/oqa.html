@@ -1,0 +1,104 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}QA - OQA{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/pages/qa.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="calidad-container">
+    <div class="calidad-header">
+        <h1>QA / OQA</h1>
+        <p>Outgoing Quality Assurance: aseguramiento de calidad de producto terminado antes de embarque.</p>
+    </div>
+
+    {% if messages %}
+    <ul class="messages" style="margin-bottom: 20px;">
+        {% for message in messages %}
+        <li class="{{ message.tags }}">{{ message }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    <div class="calidad-grid">
+        <section class="calidad-card">
+            <h3>Inspección Final de Producto</h3>
+            <form method="post" class="calidad-form">
+                {% csrf_token %}
+                <label>
+                    Lote de producto terminado
+                    <input type="text" name="lote_producto" placeholder="Ej. PT-260410-09" required>
+                </label>
+                <label>
+                    Cliente destino
+                    <input type="text" name="cliente" placeholder="Ej. LG Electronics México">
+                </label>
+
+                <label class="check-item"><input type="checkbox" name="chk_funcional"> Prueba funcional aprobada</label>
+                <label class="check-item"><input type="checkbox" name="chk_visual"> Inspección visual final aprobada</label>
+                <label class="check-item"><input type="checkbox" name="chk_empaque"> Empaque y etiquetado correctos</label>
+                <label class="check-item"><input type="checkbox" name="chk_documental"> Documentación de embarque completa</label>
+
+                <div class="hallazgos-section">
+                    <h4>Detalle de hallazgos OQA</h4>
+                    <p>Documenta defectos detectados, evidencia, riesgo de embarque y disposición del lote.</p>
+                    <textarea name="observaciones_oqa" rows="7" placeholder="Ej. Se detectan rayones en 4 de 50 unidades del muestreo final. Se retiene lote para retrabajo y reinspección al 100%."></textarea>
+                </div>
+
+                <div class="resultado-section">
+                    <label>
+                        Decisión final
+                        <select name="decision_final" required>
+                            <option value="">Selecciona decisión</option>
+                            <option value="liberado">Liberado para embarque</option>
+                            <option value="retenido">Retenido para retrabajo</option>
+                            <option value="bloqueado">Bloqueado por no conformidad</option>
+                        </select>
+                    </label>
+                </div>
+
+                <div class="calidad-actions">
+                    <button type="submit" class="btn btn-warning">Guardar evaluación</button>
+                    <button type="submit" class="btn btn-success" name="decision_final" value="liberado">Liberar embarque</button>
+                    <button type="submit" class="btn btn-danger" name="decision_final" value="retenido">Retener lote</button>
+                </div>
+            </form>
+        </section>
+
+        <section class="calidad-card">
+            <h3>Lotes listos para OQA (Ejemplo)</h3>
+            <div class="tabla-wrap">
+                <table class="tabla-material">
+                    <thead>
+                        <tr>
+                            <th>Lote PT</th>
+                            <th>Producto</th>
+                            <th>Cantidad</th>
+                            <th>Cliente</th>
+                            <th>Estatus</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>PT-260410-09</td>
+                            <td>Panel Ensamble X5</td>
+                            <td>550</td>
+                            <td>LG Electronics México</td>
+                            <td><span class="badge warn">Pendiente</span></td>
+                        </tr>
+                        <tr>
+                            <td>PT-260410-11</td>
+                            <td>Módulo Control Z2</td>
+                            <td>400</td>
+                            <td>ElectroNorth</td>
+                            <td><span class="badge warn">Pendiente</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+</div>
+{% endblock %}

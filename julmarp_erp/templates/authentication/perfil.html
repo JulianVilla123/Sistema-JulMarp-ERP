@@ -1,0 +1,91 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Mi Perfil - JulMarp ERP{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/pages/profile.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="perfil-container">
+
+    <div class="perfil-header">
+        <div class="perfil-avatar-grande">{{ usuario.iniciales }}</div>
+        <div class="perfil-header-info">
+            <h1>{{ usuario.get_full_name }}</h1>
+            <p class="perfil-username">@{{ usuario.username }}</p>
+            <span class="perfil-dept-badge">{{ usuario.departamento|default:"Sin departamento" }}</span>
+        </div>
+    </div>
+
+    <div class="perfil-grid">
+
+        <div class="perfil-card">
+            <h3 class="perfil-card-title">Información Personal</h3>
+            <ul class="perfil-info-list">
+                <li>
+                    <span class="perfil-label">Nombre</span>
+                    <span class="perfil-value">{{ usuario.first_name|default:"—" }}</span>
+                </li>
+                <li>
+                    <span class="perfil-label">Apellido</span>
+                    <span class="perfil-value">{{ usuario.last_name|default:"—" }}</span>
+                </li>
+                <li>
+                    <span class="perfil-label">Correo electrónico</span>
+                    <span class="perfil-value">{{ usuario.email|default:"—" }}</span>
+                </li>
+                <li>
+                    <span class="perfil-label">Teléfono</span>
+                    <span class="perfil-value">{{ usuario.telefono|default:"—" }}</span>
+                </li>
+            </ul>
+        </div>
+
+        <div class="perfil-card">
+            <h3 class="perfil-card-title">Información del Empleado</h3>
+            <ul class="perfil-info-list">
+                <li>
+                    <span class="perfil-label">Número de empleado</span>
+                    <span class="perfil-value">{{ usuario.numero_empleado|default:"—" }}</span>
+                </li>
+                <li>
+                    <span class="perfil-label">Departamento</span>
+                    <span class="perfil-value">{{ usuario.departamento|default:"Sin asignar" }}</span>
+                </li>
+                <li>
+                    <span class="perfil-label">Estado</span>
+                    <span class="perfil-value">
+                        {% if usuario.activo %}
+                            <span class="perfil-badge-activo">Activo</span>
+                        {% else %}
+                            <span class="perfil-badge-inactivo">Inactivo</span>
+                        {% endif %}
+                    </span>
+                </li>
+                <li>
+                    <span class="perfil-label">Fecha de registro</span>
+                    <span class="perfil-value">{{ usuario.fecha_creacion|date:"d/m/Y" }}</span>
+                </li>
+                <li>
+                    <span class="perfil-label">Última sesión</span>
+                    <span class="perfil-value">
+                        {% if usuario.last_login %}
+                            {{ usuario.last_login|date:"d/m/Y H:i" }}
+                        {% else %}
+                            —
+                        {% endif %}
+                    </span>
+                </li>
+            </ul>
+        </div>
+
+    </div>
+
+    <div class="perfil-actions">
+        <a href="{% url 'home' %}" class="btn-perfil-volver">← Volver al inicio</a>
+    </div>
+
+</div>
+{% endblock %}

@@ -1,8 +1,84 @@
-<nav>
-    <ul>
-        <li><a href="/dashboard/">Inicio</a></li>
-        <li><a href="/inventario/">Inventario</a></li>
-        <li><a href="/finanzas/">Finanzas</a></li>
-        <li><a href="/rrhh/">RRHH</a></li>
+<nav class="main-nav">
+    <div class="nav-brand">
+        <a href="{% url 'home' %}">JulMarp ERP</a>
+    </div>
+
+    <ul class="nav-menu">
+        <li class="nav-item">
+            <a href="{% url 'home' %}" class="nav-link">Inicio</a>
+        </li>
+
+        {% if user.is_authenticated %}
+            {% with departamento=user.departamento.nombre|default:'' %}
+                {% if departamento == 'Inventario' or departamento == 'Admin' %}
+                <li class="nav-item">
+                    <a href="{% url 'entrada_planta' %}" class="nav-link">Entrada a Planta</a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link">Entrada a Línea</a>
+                </li>
+                <li class="nav-item dropdown">
+                    <a href="#" class="nav-link dropdown-toggle">Inventario <span class="arrow">&#9660;</span></a>
+                    <ul class="dropdown-menu">
+                        <li><a href="{% url 'inventario_almacen' %}">Almacen</a></li>
+                        <li><a href="#">BOM</a></li>
+                        <li><a href="#">Proveedores</a></li>
+                        <li><a href="#">Órdenes de Compra</a></li>
+                        <li><a href="{% url 'historial_recepciones' %}">Historial de Recepciones</a></li>
+                        <li><a href="#">Transferencias entre Almacenes</a></li>
+                    </ul>
+                </li>
+                {% endif %}
+
+                {% if departamento == 'Producción' or departamento == 'Admin' %}
+                <li class="nav-item dropdown">
+                    <a href="#" class="nav-link dropdown-toggle">Producción <span class="arrow">&#9660;</span></a>
+                    <ul class="dropdown-menu">
+                        <li><a href="#">Captura de Lotes</a></li>
+                        <li><a href="#">Escaneo de Producción</a></li>
+                    </ul>
+                </li>
+                {% endif %}
+
+                {% if departamento == 'Finanzas' or departamento == 'Admin' %}
+                <li class="nav-item dropdown">
+                    <a href="#" class="nav-link dropdown-toggle">Finanzas <span class="arrow">&#9660;</span></a>
+                    <ul class="dropdown-menu">
+                        <li><a href="#">Análisis de Costos</a></li>
+                        <li><a href="#">Reportes de Ventas</a></li>
+                        <li><a href="#">Gráficas Financieras</a></li>
+                    </ul>
+                </li>
+                {% endif %}
+
+                {% if departamento == 'RRHH' or departamento == 'Admin' %}
+                <li class="nav-item dropdown">
+                    <a href="#" class="nav-link dropdown-toggle">RRHH <span class="arrow">&#9660;</span></a>
+                    <ul class="dropdown-menu">
+                        <li><a href="#">Gestión de Empleados</a></li>
+                        <li><a href="#">Control de Overtime</a></li>
+                    </ul>
+                </li>
+                {% endif %}
+
+                {% if departamento == 'QA' or departamento == 'Calidad' or departamento == 'Admin' %}
+                <li class="nav-item dropdown">
+                    <a href="#" class="nav-link dropdown-toggle">QA <span class="arrow">&#9660;</span></a>
+                    <ul class="dropdown-menu">
+                        <li><a href="{% url 'qa_sqa' %}">SQA - Supplier Quality Assurance</a></li>
+                        <li><a href="{% url 'qa_oqa' %}">OQA - Producto Terminado</a></li>
+                        <li><a href="{% url 'qa_customer_service' %}">Customer Service - Reclamos</a></li>
+                    </ul>
+                </li>
+                {% endif %}
+            {% endwith %}
+        {% endif %}
     </ul>
+
+    <div class="nav-user">
+        {% if user.is_authenticated %}
+            <a href="{% url 'perfil' %}" class="nav-avatar" title="{{ user.get_full_name|default:user.username }}">{{ user.iniciales }}</a>
+            <a href="{% url 'logout' %}" class="nav-logout">Cerrar sesión</a>
+        {% endif %}
+    </div>
 </nav>

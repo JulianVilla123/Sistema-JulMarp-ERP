@@ -1,0 +1,66 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Inventario por Almacen{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/pages/inventario.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="entrada-container">
+    <div class="entrada-header">
+        <h1>Inventario por Almacen</h1>
+        <p>Consulta existencias de materiales por cada almacen registrado.</p>
+    </div>
+
+    <section class="entrada-card entrada-card-full">
+        <div class="entrada-form-grid resumen-inventario-grid">
+            <label>
+                Total de almacenes
+                <input type="text" value="{{ total_almacenes }}" readonly>
+            </label>
+            <label>
+                Stock global registrado
+                <input type="text" value="{{ total_stock_global }}" readonly>
+            </label>
+        </div>
+    </section>
+
+    {% for bloque in almacenes_data %}
+    <section class="entrada-card entrada-card-full" style="margin-top: 16px;">
+        <h3>{{ bloque.almacen.codigo }} - {{ bloque.almacen.nombre }}</h3>
+        <p style="margin-top: -8px; margin-bottom: 10px; color: #6e7480;">
+            Materiales con stock: {{ bloque.total_materiales }} | Stock acumulado: {{ bloque.total_stock }}
+        </p>
+
+        <div class="tabla-wrap">
+            <table class="tabla-material">
+                <thead>
+                    <tr>
+                        <th>SKU</th>
+                        <th>Material</th>
+                        <th>UM</th>
+                        <th>Stock en almacén</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for inventario in bloque.inventarios %}
+                    <tr>
+                        <td>{{ inventario.material.sku }}</td>
+                        <td>{{ inventario.material.nombre }}</td>
+                        <td>{{ inventario.material.um|default:'-' }}</td>
+                        <td>{{ inventario.stock_actual }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="4">Sin existencias registradas en este almacen.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+    {% endfor %}
+</div>
+{% endblock %}

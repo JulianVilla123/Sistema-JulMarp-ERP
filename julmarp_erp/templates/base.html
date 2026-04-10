@@ -4,7 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <title>{% block title %}JulMarp ERP{% endblock %}</title>
-    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+    <link rel="stylesheet" href="{% static 'css/base.css' %}">
+    {% block extra_css %}{% endblock %}
 </head>
 <body class="{% block body_class %}{% endblock %}">
     {% block header %}
