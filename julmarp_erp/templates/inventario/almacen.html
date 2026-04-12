@@ -4,7 +4,7 @@
 {% block title %}Inventario por Almacen{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'css/pages/inventario.css' %}">
+<link rel="stylesheet" href="{% static 'css/pages/inventario.css' %}?v=2">
 {% endblock %}
 
 {% block content %}
@@ -14,53 +14,165 @@
         <p>Consulta existencias de materiales por cada almacen registrado.</p>
     </div>
 
-    <section class="entrada-card entrada-card-full">
-        <div class="entrada-form-grid resumen-inventario-grid">
-            <label>
-                Total de almacenes
-                <input type="text" value="{{ total_almacenes }}" readonly>
-            </label>
-            <label>
-                Stock global registrado
-                <input type="text" value="{{ total_stock_global }}" readonly>
-            </label>
+    <section class="entrada-card entrada-card-full inventario-warehouse-panel" style="margin-top: 16px;">
+        <div class="inventario-dashboard-head">
+            <div>
+                <h3>Almacenes</h3>
+                <p>Selecciona uno de los 5 almacenes principales para ver su resumen inmediato.</p>
+            </div>
+            <form method="get" class="inventario-filter-form inventario-historico-form">
+                <label>
+                    Fecha histórica
+                    <input type="date" name="fecha_historial" value="{{ fecha_historial_value }}">
+                </label>
+                <div class="inventario-filter-actions">
+                    <button type="submit" class="btn btn-primary">Buscar</button>
+                    <a href="{% url 'inventario_almacen' %}" class="btn btn-info">Limpiar</a>
+                </div>
+            </form>
+        </div>
+        {% if fecha_historial_value %}
+        <p class="inventario-filter-caption">Inventario estimado al {{ fecha_historial_value }}.</p>
+        {% else %}
+        <p class="inventario-filter-caption">Inventario Actual.</p>
+        {% endif %}
+        <div class="inventario-warehouse-layout">
+            <aside class="inventario-warehouse-list">
+                {% for bloque in almacenes_data|slice:":5" %}
+                <button type="button" class="inventario-warehouse-tab{% if forloop.first %} is-active{% endif %}" data-warehouse-target="{{ bloque.almacen.codigo }}">
+                    <span class="warehouse-code">{{ bloque.almacen.codigo }}</span>
+                    <strong>{{ bloque.almacen.nombre }}</strong>
+                    <small>Stock {{ bloque.total_stock }} | {{ bloque.total_materiales }} materiales</small>
+                </button>
+                {% endfor %}
+            </aside>
+            <div class="inventario-warehouse-detail-stack">
+                {% for bloque in almacenes_data|slice:":5" %}
+                <article class="entrada-card entrada-card-full inventario-warehouse-detail{% if forloop.first %} is-active{% endif %}" data-warehouse-panel="{{ bloque.almacen.codigo }}">
+                    <div class="inventario-section-head">
+                        <div>
+                            <h4>{{ bloque.almacen.codigo }} - {{ bloque.almacen.nombre }}</h4>
+                            <p>Materiales con stock: {{ bloque.total_materiales }} | Stock acumulado: {{ bloque.total_stock }} pzas</p>
+                            <p>Lotes: {{ bloque.lotes_distintos }} | Pzas: {{ bloque.total_stock }}</p>
+                        </div>
+                        <span class="inventario-stock-pill">{{ bloque.participacion_stock }}% del mayor stock registrado</span>
+                    </div>
+
+                    <article class="dashboard-summary-card inventario-arribos-card">
+                        <header>
+                            <h4>Arribo inspeccionado</h4>
+                            <small>Resumen del material recibido e inspeccionado</small>
+                        </header>
+                        <div class="inventario-arribos-grid inventario-arribos-grid--summary">
+                            <div class="inventario-arribo-stat inventario-arribo-stat--wide">
+                                <span>Arribo inspeccionado</span>
+                                <strong>{{ bloque.arribos_inspeccionados }}</strong>
+                                <small>{{ bloque.pzas_inspeccionadas|floatformat:0 }} pzas inspeccionadas</small>
+                            </div>
+                            <div class="inventario-arribo-stat">
+                                <span>Registros OK</span>
+                                <strong>{{ bloque.materiales_ok }}</strong>
+                                <small>{{ bloque.cantidad_ok|floatformat:0 }} pzas aceptadas</small>
+                            </div>
+                            <div class="inventario-arribo-stat">
+                                <span>Registro malo / rechazado</span>
+                                <strong>{{ bloque.materiales_rechazados }}</strong>
+                                <small>{{ bloque.cantidad_rechazada|floatformat:0 }} pzas rechazadas</small>
+                            </div>
+                            <div class="inventario-arribo-stat">
+                                <span>Mandado a línea</span>
+                                <strong>{{ bloque.mandado_linea|floatformat:0 }}</strong>
+                                <small>Pendiente de integración</small>
+                            </div>
+                        </div>
+                    </article>
+
+                    <div class="tabla-wrap">
+                        <table class="tabla-material">
+                            <thead>
+                                <tr>
+                                    <th>SKU</th>
+                                    <th>Material</th>
+                                    <th>Lote</th>
+                                    <th>UM</th>
+                                    <th>Stock en almacén</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% if bloque.historico_inventario %}
+                                    {% for inventario in bloque.historico_inventario %}
+                                    <tr>
+                                        <td>{{ inventario.sku }}</td>
+                                        <td>{{ inventario.nombre }}</td>
+                                        <td>{{ inventario.lote }}</td>
+                                        <td>{{ inventario.um }}</td>
+                                        <td>{{ inventario.stock_historico }}</td>
+                                    </tr>
+                                    {% empty %}
+                                    <tr>
+                                        <td colspan="5">No hay inventario registrado para este almacén.</td>
+                                    </tr>
+                                    {% endfor %}
+                                {% else %}
+                                    {% for inventario in bloque.inventarios %}
+                                    <tr>
+                                        <td>{{ inventario.material.sku }}</td>
+                                        <td>{{ inventario.material.nombre }}</td>
+                                        <td>{{ inventario.lote|default:'Sin lote registrado' }}</td>
+                                        <td>{{ inventario.material.um|default:'-' }}</td>
+                                        <td>{{ inventario.stock_actual }}</td>
+                                    </tr>
+                                    {% empty %}
+                                    <tr>
+                                        <td colspan="5">No hay inventario registrado para este almacén.</td>
+                                    </tr>
+                                    {% endfor %}
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="inventario-progress-block">
+                        <div class="inventario-progress-labels">
+                            <span>Participación visual de stock</span>
+                            <strong>{{ bloque.total_stock }}</strong>
+                        </div>
+                        <div class="inventario-progress-track">
+                            <div class="inventario-progress-fill" data-progress="{{ bloque.participacion_stock }}"></div>
+                        </div>
+                    </div>
+                </article>
+                {% endfor %}
+            </div>
         </div>
     </section>
-
-    {% for bloque in almacenes_data %}
-    <section class="entrada-card entrada-card-full" style="margin-top: 16px;">
-        <h3>{{ bloque.almacen.codigo }} - {{ bloque.almacen.nombre }}</h3>
-        <p style="margin-top: -8px; margin-bottom: 10px; color: #6e7480;">
-            Materiales con stock: {{ bloque.total_materiales }} | Stock acumulado: {{ bloque.total_stock }}
-        </p>
-
-        <div class="tabla-wrap">
-            <table class="tabla-material">
-                <thead>
-                    <tr>
-                        <th>SKU</th>
-                        <th>Material</th>
-                        <th>UM</th>
-                        <th>Stock en almacén</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for inventario in bloque.inventarios %}
-                    <tr>
-                        <td>{{ inventario.material.sku }}</td>
-                        <td>{{ inventario.material.nombre }}</td>
-                        <td>{{ inventario.material.um|default:'-' }}</td>
-                        <td>{{ inventario.stock_actual }}</td>
-                    </tr>
-                    {% empty %}
-                    <tr>
-                        <td colspan="4">Sin existencias registradas en este almacen.</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </section>
-    {% endfor %}
 </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const tabs = Array.from(document.querySelectorAll('.inventario-warehouse-tab'));
+        const panels = Array.from(document.querySelectorAll('.inventario-warehouse-detail'));
+
+        function activateWarehouse(code) {
+            tabs.forEach(function (tab) {
+                tab.classList.toggle('is-active', tab.dataset.warehouseTarget === code);
+            });
+            panels.forEach(function (panel) {
+                panel.classList.toggle('is-active', panel.dataset.warehousePanel === code);
+            });
+        }
+
+        tabs.forEach(function (tab) {
+            tab.addEventListener('click', function () {
+                activateWarehouse(tab.dataset.warehouseTarget);
+            });
+        });
+
+        const progressBars = document.querySelectorAll('.inventario-progress-fill');
+        progressBars.forEach(function (bar) {
+            const progress = Number(bar.dataset.progress) || 0;
+            bar.style.width = progress + '%';
+        });
+    });
+</script>
 {% endblock %}
