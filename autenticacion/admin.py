@@ -1,6 +1,17 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import Departamento, UsuarioERP, Material, Proveedor, Almacen, InventarioAlmacen
+from .models import (
+    Almacen,
+    Departamento,
+    InventarioAlmacen,
+    Material,
+    Proveedor,
+    SalidaLinea,
+    SalidaLineaDetalle,
+    TransferenciaAlmacen,
+    TransferenciaAlmacenDetalle,
+    UsuarioERP,
+)
 
 @admin.register(Departamento)
 class DepartamentoAdmin(admin.ModelAdmin):
@@ -68,6 +79,34 @@ class AlmacenAdmin(admin.ModelAdmin):
 
 @admin.register(InventarioAlmacen)
 class InventarioAlmacenAdmin(admin.ModelAdmin):
-    list_display = ('almacen', 'material', 'stock_actual', 'fecha_actualizacion')
-    search_fields = ('almacen__codigo', 'almacen__nombre', 'material__sku', 'material__nombre')
+    list_display = ('almacen', 'material', 'lote', 'stock_actual', 'fecha_actualizacion')
+    search_fields = ('almacen__codigo', 'almacen__nombre', 'material__sku', 'material__nombre', 'lote')
     list_filter = ('almacen',)
+
+
+@admin.register(SalidaLinea)
+class SalidaLineaAdmin(admin.ModelAdmin):
+    list_display = ('id', 'fecha_salida', 'hora_salida', 'linea_destino', 'orden_produccion', 'creado_por')
+    search_fields = ('linea_destino', 'orden_produccion', 'creado_por__username')
+    list_filter = ('linea_destino',)
+
+
+@admin.register(SalidaLineaDetalle)
+class SalidaLineaDetalleAdmin(admin.ModelAdmin):
+    list_display = ('salida', 'almacen_origen', 'material', 'lote', 'cantidad_enviada')
+    search_fields = ('salida__id', 'almacen_origen__codigo', 'material__sku', 'descripcion', 'lote')
+    list_filter = ('almacen_origen',)
+
+
+@admin.register(TransferenciaAlmacen)
+class TransferenciaAlmacenAdmin(admin.ModelAdmin):
+    list_display = ('id', 'fecha_transferencia', 'hora_transferencia', 'almacen_origen', 'almacen_destino', 'referencia', 'creado_por')
+    search_fields = ('almacen_origen__codigo', 'almacen_destino__codigo', 'referencia', 'creado_por__username')
+    list_filter = ('almacen_origen', 'almacen_destino')
+
+
+@admin.register(TransferenciaAlmacenDetalle)
+class TransferenciaAlmacenDetalleAdmin(admin.ModelAdmin):
+    list_display = ('transferencia', 'material', 'lote', 'cantidad_transferida')
+    search_fields = ('transferencia__id', 'material__sku', 'descripcion', 'lote')
+    list_filter = ('material',)

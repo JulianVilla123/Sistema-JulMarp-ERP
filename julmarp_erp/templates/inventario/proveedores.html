@@ -1,0 +1,114 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Alta de Proveedores{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/pages/inventario.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="entrada-container">
+    <div class="entrada-header">
+        <h1>Alta de Proveedores</h1>
+        <p>Registra proveedores y define los materiales que puede surtir cada uno.</p>
+    </div>
+
+    {% if messages %}
+    <ul class="messages" style="margin-bottom: 20px;">
+        {% for message in messages %}
+        <li class="{{ message.tags }}">{{ message }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    <div class="entrada-grid">
+        <section class="entrada-card">
+            <h3>Datos del Proveedor</h3>
+            <form method="post">
+                {% csrf_token %}
+                <div class="entrada-form-grid">
+                    <label>
+                        Nombre
+                        <input type="text" name="nombre" value="{{ form_data.nombre }}" required placeholder="Ej. Suministros ABC SA de CV">
+                    </label>
+                    <label>
+                        Teléfono
+                        <input type="text" name="telefono" value="{{ form_data.telefono }}" placeholder="Ej. +52 33 1234 5678">
+                    </label>
+                    <label>
+                        Correo electrónico
+                        <input type="email" name="email" value="{{ form_data.email }}" placeholder="contacto@proveedor.com">
+                    </label>
+                    <label>
+                        Estado
+                        <select name="activo">
+                            <option value="1" {% if form_data.activo %}selected{% endif %}>Activo</option>
+                            <option value="0" {% if not form_data.activo %}selected{% endif %}>Inactivo</option>
+                        </select>
+                    </label>
+                    <label style="grid-column: 1 / -1;">
+                        Descripción
+                        <textarea rows="3" name="descripcion" placeholder="Información adicional del proveedor.">{{ form_data.descripcion }}</textarea>
+                    </label>
+                    <label style="grid-column: 1 / -1;">
+                        Materiales que suministra
+                        <select name="materiales[]" multiple size="10">
+                            {% for material in materiales_catalogo %}
+                            <option value="{{ material.id }}" {% if material.id|stringformat:'s' in form_data.materiales_ids %}selected{% endif %}>
+                                {{ material.sku }} - {{ material.nombre }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <small style="color: #6e7480;">Usa Ctrl o Cmd para seleccionar múltiples materiales.</small>
+                    </label>
+                </div>
+
+                <div class="entrada-actions" style="margin-top: 16px;">
+                    <button class="btn btn-primary" type="submit">Guardar proveedor</button>
+                    <a class="btn btn-info" href="{% url 'proveedores_alta' %}">Limpiar</a>
+                </div>
+            </form>
+        </section>
+
+        <section class="entrada-card">
+            <h3>Proveedores Recientes</h3>
+            <div class="tabla-wrap">
+                <table class="tabla-material">
+                    <thead>
+                        <tr>
+                            <th>Nombre</th>
+                            <th>Contacto</th>
+                            <th>Materiales</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for proveedor in proveedores_recientes %}
+                        <tr>
+                            <td>{{ proveedor.nombre }}</td>
+                            <td>
+                                {% if proveedor.telefono %}{{ proveedor.telefono }}<br>{% endif %}
+                                {{ proveedor.email|default:'-' }}
+                            </td>
+                            <td>{{ proveedor.materiales.count }}</td>
+                            <td>
+                                {% if proveedor.activo %}
+                                <span class="badge ok">Activo</span>
+                                {% else %}
+                                <span class="badge warn">Inactivo</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4">No hay proveedores registrados todavía.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+</div>
+{% endblock %}

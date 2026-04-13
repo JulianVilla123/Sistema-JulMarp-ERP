@@ -4,53 +4,107 @@
 {% block title %}Home - JulMarp ERP{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'css/pages/home.css' %}">
+<link rel="stylesheet" href="{% static 'css/pages/home.css' %}?v=20260413a">
 {% endblock %}
 
 {% block content %}
 <div class="home-container">
-    <div class="welcome-card">
-        <h1>Bienvenido al ERP JulMarp</h1>
-        <h3>{{ usuario.get_full_name|default:usuario.username }}</h3>
+    <section class="welcome-card premium-hero">
+        <div>
+            <p class="hero-kicker">Panel Operativo</p>
+            <h1>Bienvenido al ERP JulMarp</h1>
+            <h3>{{ usuario.get_full_name|default:usuario.username }}</h3>
+        </div>
         <p class="department-badge">{{ departamento }}</p>
-    </div>
+    </section>
 
     {% if departamento == 'Inventario' %}
-        <div class="modules-section">
-            <h2>Módulos disponibles</h2>
+        <section class="modules-section premium-actions">
+            <h2>Acciones rápidas de Inventario</h2>
             <div class="modules-grid">
                 <div class="module-card">
                     <h4>Entrada de Material a Planta</h4>
-                    <p>Registra el ingreso de material a la planta</p>
-                    <a href="{% url 'entrada_planta' %}" class="btn btn-primary">Acceder</a>
+                    <p>Registra el ingreso de material y alimenta stock por lote.</p>
+                    <a href="{% url 'entrada_planta' %}" class="btn btn-primary">Abrir módulo</a>
                 </div>
                 <div class="module-card">
                     <h4>Entrada a Línea de Producción</h4>
-                    <p>Registra el material que entra a producción</p>
-                    <a href="#" class="btn btn-primary">Acceder</a>
-                </div>
-                <div class="module-card">
-                    <h4>BOM</h4>
-                    <p>Consulta y administra la lista de materiales</p>
-                    <a href="#" class="btn btn-primary">Acceder</a>
-                </div>
-                <div class="module-card">
-                    <h4>Proveedores</h4>
-                    <p>Gestiona el catálogo de proveedores</p>
-                    <a href="#" class="btn btn-primary">Acceder</a>
-                </div>
-                <div class="module-card">
-                    <h4>Órdenes de Compra</h4>
-                    <p>Crea y da seguimiento a órdenes de compra</p>
-                    <a href="#" class="btn btn-primary">Acceder</a>
+                    <p>Descuenta material desde almacén para orden de producción.</p>
+                    <a href="{% url 'entrada_linea' %}" class="btn btn-primary">Abrir módulo</a>
                 </div>
                 <div class="module-card">
                     <h4>Transferencias entre Almacenes</h4>
-                    <p>Mueve stock entre ubicaciones de almacén</p>
-                    <a href="#" class="btn btn-primary">Acceder</a>
+                    <p>Mueve inventario entre almacenes sin perder trazabilidad.</p>
+                    <a href="{% url 'transferencias_almacenes' %}" class="btn btn-primary">Abrir módulo</a>
+                </div>
+                <div class="module-card">
+                    <h4>Proveedores</h4>
+                    <p>Da de alta proveedores y asigna materiales autorizados.</p>
+                    <a href="{% url 'proveedores_alta' %}" class="btn btn-primary">Abrir módulo</a>
                 </div>
             </div>
-        </div>
+        </section>
+
+        <section class="dashboard-grid chart-grid">
+            <article class="dashboard-card chart-card">
+                <h3>Top Materiales por Stock</h3>
+                <p class="chart-subtitle">Comparativo de piezas disponibles por SKU</p>
+                <div class="chart-stage">
+                    <canvas id="chart-top-materiales" height="120"></canvas>
+                </div>
+            </article>
+            <article class="dashboard-card chart-card">
+                <h3>Flujo de Inventario (7 días)</h3>
+                <p class="chart-subtitle">Distribución de movimientos operativos semanales</p>
+                <div class="chart-stage">
+                    <canvas id="chart-flujo-inventario" height="120"></canvas>
+                </div>
+            </article>
+        </section>
+
+        <section class="dashboard-grid">
+            <article class="dashboard-card">
+                <h3>Top materiales por stock</h3>
+                <ul class="top-material-list">
+                    {% for material in inv_top_materiales %}
+                    <li>
+                        <span>{{ material.material__sku }} - {{ material.material__nombre }}</span>
+                        <strong>{{ material.stock_total|floatformat:2 }} pzas</strong>
+                    </li>
+                    {% empty %}
+                    <li>
+                        <span>Sin datos de inventario disponibles</span>
+                        <strong>-</strong>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </article>
+
+            <article class="dashboard-card">
+                <h3>Actividad reciente</h3>
+                <ul class="recent-activity-list">
+                    {% for mov in inv_movimientos_recientes %}
+                    <li>
+                        <div>
+                            <p>{{ mov.descripcion }}</p>
+                            <small>{{ mov.fecha|date:'d/m/Y' }} | {{ mov.referencia }}</small>
+                        </div>
+                        <span class="activity-tag {{ mov.tipo|lower }}">{{ mov.tipo }}</span>
+                        <strong>{{ mov.cantidad|floatformat:2 }} pzas</strong>
+                    </li>
+                    {% empty %}
+                    <li>
+                        <div>
+                            <p>Sin movimientos recientes</p>
+                            <small>Registra entradas, salidas o transferencias</small>
+                        </div>
+                        <span class="activity-tag">N/A</span>
+                        <strong>-</strong>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </article>
+        </section>
 
     {% elif departamento == 'Producción' %}
         <div class="modules-section">
@@ -160,4 +214,194 @@
     {% endif %}
 
 </div>
+
+{% if departamento == 'Inventario' and inv_chart_data %}
+{{ inv_chart_data|json_script:"inv-chart-data" }}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    Chart.defaults.font.family = "Manrope, Segoe UI, sans-serif";
+    Chart.defaults.color = '#5b6475';
+
+    const dataNode = document.getElementById('inv-chart-data');
+    if (!dataNode || typeof Chart === 'undefined') {
+        return;
+    }
+
+    const chartData = JSON.parse(dataNode.textContent || '{}');
+    const numberFormatter = new Intl.NumberFormat('es-MX', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    });
+
+    const doughnutCenterText = {
+        id: 'doughnutCenterText',
+        afterDatasetsDraw(chart) {
+            const text = chart?.config?.options?.plugins?.doughnutCenterText?.text;
+            if (!text) {
+                return;
+            }
+
+            const meta = chart.getDatasetMeta(0);
+            if (!meta || !meta.data || !meta.data.length) {
+                return;
+            }
+
+            const { ctx } = chart;
+            const centerX = meta.data[0].x;
+            const centerY = meta.data[0].y;
+
+            ctx.save();
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillStyle = '#1f2937';
+            ctx.font = '700 22px Space Grotesk, Manrope, sans-serif';
+            ctx.fillText(text.value, centerX, centerY - 8);
+            ctx.fillStyle = '#6b7280';
+            ctx.font = '600 11px Manrope, sans-serif';
+            ctx.fillText(text.label, centerX, centerY + 14);
+            ctx.restore();
+        },
+    };
+
+    const topValues = chartData.top_values || [];
+    const flujoValues = chartData.flujo_values || [];
+    const flujoTotal = flujoValues.reduce((acc, value) => acc + Number(value || 0), 0);
+
+    const topCtx = document.getElementById('chart-top-materiales');
+    if (topCtx) {
+        const barGradient = topCtx.getContext('2d').createLinearGradient(0, 0, 0, 220);
+        barGradient.addColorStop(0, '#b71f17');
+        barGradient.addColorStop(1, '#ef8c57');
+
+        new Chart(topCtx, {
+            type: 'bar',
+            data: {
+                labels: chartData.top_labels || [],
+                datasets: [{
+                    label: 'Piezas en stock',
+                    data: topValues,
+                    backgroundColor: barGradient,
+                    borderRadius: 12,
+                    borderSkipped: false,
+                    maxBarThickness: 48,
+                }],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                layout: {
+                    padding: {
+                        top: 10,
+                        right: 8,
+                    },
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: '#111827',
+                        titleColor: '#f9fafb',
+                        bodyColor: '#f9fafb',
+                        padding: 10,
+                        displayColors: false,
+                        callbacks: {
+                            label(context) {
+                                return numberFormatter.format(context.raw || 0) + ' pzas';
+                            },
+                        },
+                    },
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            color: '#6b7280',
+                            callback(value) {
+                                return numberFormatter.format(value);
+                            },
+                        },
+                        grid: {
+                            color: '#e9edf3',
+                            drawBorder: false,
+                        },
+                        border: {
+                            display: false,
+                        },
+                    },
+                    x: {
+                        ticks: {
+                            color: '#4b5563',
+                            font: {
+                                weight: 700,
+                            },
+                        },
+                        grid: { display: false },
+                        border: {
+                            display: false,
+                        },
+                    },
+                },
+            },
+        });
+    }
+
+    const flujoCtx = document.getElementById('chart-flujo-inventario');
+    if (flujoCtx) {
+        new Chart(flujoCtx, {
+            type: 'doughnut',
+            data: {
+                labels: chartData.flujo_labels || [],
+                datasets: [{
+                    data: flujoValues,
+                    backgroundColor: ['#2158cf', '#c9490b', '#6d33c8'],
+                    borderColor: '#ffffff',
+                    borderWidth: 3,
+                    hoverOffset: 7,
+                }],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '68%',
+                plugins: {
+                    doughnutCenterText: {
+                        text: {
+                            value: numberFormatter.format(flujoTotal),
+                            label: 'pzas movidas',
+                        },
+                    },
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            color: '#374151',
+                            boxWidth: 10,
+                            usePointStyle: true,
+                            pointStyle: 'circle',
+                            padding: 16,
+                            font: {
+                                weight: 700,
+                            },
+                        },
+                    },
+                    tooltip: {
+                        backgroundColor: '#111827',
+                        titleColor: '#f9fafb',
+                        bodyColor: '#f9fafb',
+                        padding: 10,
+                        callbacks: {
+                            label(context) {
+                                const value = Number(context.raw || 0);
+                                const pct = flujoTotal > 0 ? (value / flujoTotal) * 100 : 0;
+                                return `${context.label}: ${numberFormatter.format(value)} pzas (${pct.toFixed(1)}%)`;
+                            },
+                        },
+                    },
+                },
+            },
+            plugins: [doughnutCenterText],
+        });
+    }
+});
+</script>
+{% endif %}
 {% endblock %}

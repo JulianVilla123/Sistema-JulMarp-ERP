@@ -1,0 +1,300 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Transferencias entre Almacenes{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/pages/inventario.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="entrada-container">
+    <div class="entrada-header">
+        <h1>Transferencias entre Almacenes</h1>
+        <p>Mueve inventario entre almacenes conservando trazabilidad por lote.</p>
+    </div>
+
+    {% if messages %}
+    <ul class="messages" style="margin-bottom: 20px;">
+        {% for message in messages %}
+        <li class="{{ message.tags }}">{{ message }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    <form method="post">
+        {% csrf_token %}
+
+        <section class="entrada-card entrada-card-full">
+            <h3>Datos Generales de Transferencia</h3>
+            <div class="entrada-form-grid">
+                <label>
+                    Fecha transferencia
+                    <input type="date" name="fecha_transferencia" required>
+                </label>
+                <label>
+                    Hora transferencia
+                    <input type="time" name="hora_transferencia" required>
+                </label>
+                <label>
+                    Almacen origen
+                    <select name="almacen_origen" id="almacen-origen" required>
+                        <option value="">Selecciona almacen</option>
+                        {% for almacen in almacenes_catalogo %}
+                        <option value="{{ almacen.codigo }}">{{ almacen.codigo }} - {{ almacen.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <label>
+                    Almacen destino
+                    <select name="almacen_destino" required>
+                        <option value="">Selecciona almacen</option>
+                        {% for almacen in almacenes_catalogo %}
+                        <option value="{{ almacen.codigo }}">{{ almacen.codigo }} - {{ almacen.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <label>
+                    Folio
+                    <input type="text" value="Se genera automaticamente al guardar" readonly>
+                </label>
+                <label>
+                    Capturo
+                    <input type="text" value="{{ user.get_full_name|default:user.username }}" readonly>
+                </label>
+            </div>
+        </section>
+
+        <section class="entrada-card entrada-card-full" style="margin-top: 16px;">
+            <h3>Material a Transferir</h3>
+            <p style="margin-top: -8px; margin-bottom: 10px; color: #6e7480;">
+                Selecciona el almacen origen, luego SKU y lote disponible para transferir al almacen destino.
+            </p>
+
+            <div class="tabla-wrap material-captura-wrap">
+                <table class="tabla-material material-captura-table" id="transferencia-table">
+                    <thead>
+                        <tr>
+                            <th>SKU</th>
+                            <th>Lote</th>
+                            <th>Descripcion</th>
+                            <th>UM</th>
+                            <th>Cantidad transferida</th>
+                            <th>Accion</th>
+                        </tr>
+                    </thead>
+                    <tbody id="transferencia-body">
+                        <tr>
+                            <td>
+                                <select name="sku[]" class="sku-select" disabled>
+                                    <option value="">Selecciona SKU</option>
+                                </select>
+                            </td>
+                            <td>
+                                <select name="lote[]" class="lote-select" disabled>
+                                    <option value="">Selecciona lote</option>
+                                </select>
+                            </td>
+                            <td><input type="text" name="descripcion[]" class="descripcion-input" readonly></td>
+                            <td><input type="text" name="um[]" class="um-input" readonly></td>
+                            <td><input type="number" step="0.01" min="0" name="cantidad_transferida[]" value="0"></td>
+                            <td><button type="button" class="btn btn-danger btn-row-remove">Quitar</button></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="entrada-actions" style="margin-top: 12px; margin-bottom: 6px;">
+                <button type="button" class="btn btn-success" id="btn-add-row">+ Agregar material</button>
+            </div>
+
+            <div class="entrada-form-grid" style="margin-top: 18px;">
+                <label>
+                    Motivo
+                    <textarea rows="3" name="motivo" placeholder="Motivo o contexto de la transferencia."></textarea>
+                </label>
+            </div>
+
+            <div class="entrada-actions">
+                <button class="btn btn-primary" type="submit">Guardar transferencia</button>
+                <a href="{% url 'inventario_almacen' %}" class="btn btn-info">Ver inventario por almacen</a>
+            </div>
+        </section>
+    </form>
+
+    <section class="entrada-card entrada-card-full" style="margin-top: 20px;">
+        <h3>Transferencias recientes</h3>
+        <div class="tabla-wrap">
+            <table class="tabla-material">
+                <thead>
+                    <tr>
+                        <th>Folio</th>
+                        <th>Fecha</th>
+                        <th>Origen</th>
+                        <th>Destino</th>
+                        <th>Folio</th>
+                        <th>Usuario</th>
+                        <th>Detalles</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for transferencia in transferencias_recientes %}
+                    <tr>
+                        <td>{{ transferencia.id }}</td>
+                        <td>{{ transferencia.fecha_transferencia|date:'d/m/Y' }}</td>
+                        <td>{{ transferencia.almacen_origen.codigo }}</td>
+                        <td>{{ transferencia.almacen_destino.codigo }}</td>
+                        <td>{{ transferencia.referencia|default:'-' }}</td>
+                        <td>{{ transferencia.creado_por.get_full_name|default:transferencia.creado_por.username }}</td>
+                        <td>{{ transferencia.detalles.count }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7">No hay transferencias registradas todavía.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+</div>
+
+{{ inventario_catalogo_json|json_script:"inventario-catalogo-json" }}
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const tbody = document.getElementById('transferencia-body');
+    const addBtn = document.getElementById('btn-add-row');
+    const almacenOrigen = document.getElementById('almacen-origen');
+    const inventarioCatalogo = JSON.parse(document.getElementById('inventario-catalogo-json').textContent || '{}');
+
+    function renderSkuOptions(almacenCodigo) {
+        const materiales = inventarioCatalogo[almacenCodigo] || {};
+        let html = '<option value="">Selecciona SKU</option>';
+        Object.keys(materiales).sort().forEach(function (sku) {
+            html += `<option value="${sku}">${sku} - ${materiales[sku].descripcion || ''}</option>`;
+        });
+        return html;
+    }
+
+    function renderLoteOptions(almacenCodigo, sku) {
+        const materiales = inventarioCatalogo[almacenCodigo] || {};
+        const data = materiales[sku] || {};
+        const lotes = data.lotes || [];
+        let html = '<option value="">Selecciona lote</option>';
+        lotes.forEach(function (item) {
+            html += `<option value="${item.lote}">${item.lote_label} (stock: ${item.stock})</option>`;
+        });
+        return html;
+    }
+
+    function bindRow(row) {
+        const skuSelect = row.querySelector('.sku-select');
+        const loteSelect = row.querySelector('.lote-select');
+        const descripcionInput = row.querySelector('.descripcion-input');
+        const umInput = row.querySelector('.um-input');
+
+        function clearMaterial() {
+            skuSelect.innerHTML = '<option value="">Selecciona SKU</option>';
+            skuSelect.disabled = true;
+            loteSelect.innerHTML = '<option value="">Selecciona lote</option>';
+            loteSelect.disabled = true;
+            descripcionInput.value = '';
+            umInput.value = '';
+        }
+
+        function clearLote() {
+            loteSelect.innerHTML = '<option value="">Selecciona lote</option>';
+            loteSelect.disabled = true;
+        }
+
+        function refreshSkuOptions() {
+            const almacenCodigo = (almacenOrigen.value || '').trim();
+            if (!almacenCodigo) {
+                clearMaterial();
+                return;
+            }
+
+            skuSelect.innerHTML = renderSkuOptions(almacenCodigo);
+            skuSelect.disabled = false;
+            clearLote();
+            descripcionInput.value = '';
+            umInput.value = '';
+        }
+
+        almacenOrigen.addEventListener('change', refreshSkuOptions);
+
+        skuSelect.addEventListener('change', function () {
+            const almacenCodigo = (almacenOrigen.value || '').trim();
+            const sku = (skuSelect.value || '').trim();
+            const materialData = ((inventarioCatalogo[almacenCodigo] || {})[sku]) || null;
+
+            if (!materialData) {
+                descripcionInput.value = '';
+                umInput.value = '';
+                clearLote();
+                return;
+            }
+
+            descripcionInput.value = materialData.descripcion || '';
+            umInput.value = materialData.um || '';
+            loteSelect.innerHTML = renderLoteOptions(almacenCodigo, sku);
+            loteSelect.disabled = false;
+        });
+
+        refreshSkuOptions();
+    }
+
+    function bindRemoveButtons() {
+        const removeButtons = document.querySelectorAll('.btn-row-remove');
+        removeButtons.forEach(function (btn) {
+            btn.onclick = function () {
+                const rows = tbody.querySelectorAll('tr');
+                if (rows.length === 1) {
+                    rows[0].querySelectorAll('input').forEach(function (input) {
+                        if (input.type === 'number') {
+                            input.value = '0';
+                        } else {
+                            input.value = '';
+                        }
+                    });
+                    rows[0].querySelectorAll('select').forEach(function (select) {
+                        select.selectedIndex = 0;
+                    });
+                    rows[0].querySelector('.sku-select').disabled = true;
+                    rows[0].querySelector('.lote-select').disabled = true;
+                    return;
+                }
+                btn.closest('tr').remove();
+            };
+        });
+    }
+
+    addBtn.addEventListener('click', function () {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>
+                <select name="sku[]" class="sku-select" disabled>
+                    <option value="">Selecciona SKU</option>
+                </select>
+            </td>
+            <td>
+                <select name="lote[]" class="lote-select" disabled>
+                    <option value="">Selecciona lote</option>
+                </select>
+            </td>
+            <td><input type="text" name="descripcion[]" class="descripcion-input" readonly></td>
+            <td><input type="text" name="um[]" class="um-input" readonly></td>
+            <td><input type="number" step="0.01" min="0" name="cantidad_transferida[]" value="0"></td>
+            <td><button type="button" class="btn btn-danger btn-row-remove">Quitar</button></td>
+        `;
+        tbody.appendChild(row);
+        bindRow(row);
+        bindRemoveButtons();
+    });
+
+    tbody.querySelectorAll('tr').forEach(bindRow);
+    bindRemoveButtons();
+});
+</script>
+{% endblock %}

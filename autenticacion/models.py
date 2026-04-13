@@ -126,6 +126,7 @@ class InventarioAlmacen(models.Model):
         on_delete=models.CASCADE,
         related_name='inventarios_material',
     )
+    lote = models.CharField('Lote', max_length=80, blank=True)
     stock_actual = models.DecimalField('Stock actual', max_digits=14, decimal_places=2, default=0)
     fecha_actualizacion = models.DateTimeField(auto_now=True)
 
@@ -138,8 +139,8 @@ class InventarioAlmacen(models.Model):
         ordering = ['almacen__codigo', 'material__sku']
         constraints = [
             models.UniqueConstraint(
-                fields=['material', 'almacen'],
-                name='unique_material_almacen',
+                fields=['material', 'almacen', 'lote'],
+                name='unique_material_almacen_lote',
             )
         ]
 
@@ -243,3 +244,118 @@ class RecepcionMaterialDetalle(models.Model):
     class Meta:
         verbose_name = 'Detalle de recepción'
         verbose_name_plural = 'Detalles de recepción'
+
+
+class SalidaLinea(models.Model):
+    fecha_salida = models.DateField('Fecha de salida')
+    hora_salida = models.TimeField('Hora de salida')
+    linea_destino = models.CharField('Linea destino', max_length=120)
+    orden_produccion = models.CharField('Orden de produccion', max_length=80, blank=True)
+    turno = models.CharField('Turno', max_length=40, blank=True)
+    observaciones = models.TextField('Observaciones', blank=True)
+    creado_por = models.ForeignKey(
+        UsuarioERP,
+        on_delete=models.PROTECT,
+        related_name='salidas_linea',
+    )
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Salida {self.id} - {self.linea_destino} - {self.fecha_salida}"
+
+    class Meta:
+        verbose_name = 'Salida a linea'
+        verbose_name_plural = 'Salidas a linea'
+        ordering = ['-fecha_creacion']
+
+
+class SalidaLineaDetalle(models.Model):
+    salida = models.ForeignKey(
+        SalidaLinea,
+        on_delete=models.CASCADE,
+        related_name='detalles',
+    )
+    almacen_origen = models.ForeignKey(
+        Almacen,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='salidas_detalle',
+    )
+    material = models.ForeignKey(
+        Material,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='salidas_detalle',
+    )
+    sku = models.CharField(max_length=50)
+    descripcion = models.CharField(max_length=255)
+    um = models.CharField('Unidad de medida', max_length=20, blank=True)
+    cantidad_enviada = models.DecimalField('Cantidad enviada', max_digits=12, decimal_places=2, default=0)
+    lote = models.CharField(max_length=80, blank=True)
+
+    def __str__(self):
+        return f"{self.sku} -> {self.salida.linea_destino} ({self.cantidad_enviada})"
+
+    class Meta:
+        verbose_name = 'Detalle salida a linea'
+        verbose_name_plural = 'Detalles salida a linea'
+
+
+class TransferenciaAlmacen(models.Model):
+    fecha_transferencia = models.DateField('Fecha de transferencia')
+    hora_transferencia = models.TimeField('Hora de transferencia')
+    almacen_origen = models.ForeignKey(
+        Almacen,
+        on_delete=models.PROTECT,
+        related_name='transferencias_origen',
+    )
+    almacen_destino = models.ForeignKey(
+        Almacen,
+        on_delete=models.PROTECT,
+        related_name='transferencias_destino',
+    )
+    referencia = models.CharField('Referencia', max_length=80, blank=True)
+    motivo = models.TextField('Motivo', blank=True)
+    creado_por = models.ForeignKey(
+        UsuarioERP,
+        on_delete=models.PROTECT,
+        related_name='transferencias_almacen',
+    )
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Transferencia {self.id} - {self.almacen_origen.codigo} a {self.almacen_destino.codigo}"
+
+    class Meta:
+        verbose_name = 'Transferencia entre almacenes'
+        verbose_name_plural = 'Transferencias entre almacenes'
+        ordering = ['-fecha_creacion']
+
+
+class TransferenciaAlmacenDetalle(models.Model):
+    transferencia = models.ForeignKey(
+        TransferenciaAlmacen,
+        on_delete=models.CASCADE,
+        related_name='detalles',
+    )
+    material = models.ForeignKey(
+        Material,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='transferencias_detalle',
+    )
+    sku = models.CharField(max_length=50)
+    descripcion = models.CharField(max_length=255)
+    um = models.CharField('Unidad de medida', max_length=20, blank=True)
+    cantidad_transferida = models.DecimalField('Cantidad transferida', max_digits=12, decimal_places=2, default=0)
+    lote = models.CharField(max_length=80, blank=True)
+
+    def __str__(self):
+        return f"{self.sku} {self.lote or '-'} ({self.cantidad_transferida})"
+
+    class Meta:
+        verbose_name = 'Detalle transferencia entre almacenes'
+        verbose_name_plural = 'Detalles transferencia entre almacenes'

@@ -22,6 +22,8 @@ from .models import (
     RecepcionMaterialDetalle,
     SalidaLinea,
     SalidaLineaDetalle,
+    TransferenciaAlmacen,
+    TransferenciaAlmacenDetalle,
     UsuarioERP,
 )
 
@@ -211,6 +213,96 @@ def home(request):
         'usuario': usuario,
         'departamento': departamento,
     }
+
+    if departamento in {'Inventario', 'Admin'}:
+        fecha_fin = date.today()
+        fecha_inicio = fecha_fin - timedelta(days=6)
+
+        resumen_stock = InventarioAlmacen.objects.filter(stock_actual__gt=0).aggregate(
+            total_stock=Sum('stock_actual'),
+        )
+        materiales_activos = Material.objects.filter(activo=True).count()
+        almacenes_activos = Almacen.objects.filter(activo=True).count()
+
+        entradas_semana = RecepcionMaterialDetalle.objects.filter(
+            recepcion__fecha_recepcion__gte=fecha_inicio,
+            recepcion__fecha_recepcion__lte=fecha_fin,
+        ).aggregate(total=Sum('cantidad_recibida'))
+
+        salidas_semana = SalidaLineaDetalle.objects.filter(
+            salida__fecha_salida__gte=fecha_inicio,
+            salida__fecha_salida__lte=fecha_fin,
+        ).aggregate(total=Sum('cantidad_enviada'))
+
+        transferencias_semana = TransferenciaAlmacenDetalle.objects.filter(
+            transferencia__fecha_transferencia__gte=fecha_inicio,
+            transferencia__fecha_transferencia__lte=fecha_fin,
+        ).aggregate(total=Sum('cantidad_transferida'))
+
+        top_materiales = list(
+            InventarioAlmacen.objects.filter(stock_actual__gt=0)
+            .values('material__sku', 'material__nombre')
+            .annotate(stock_total=Sum('stock_actual'))
+            .order_by('-stock_total')[:5]
+        )
+
+        chart_top_labels = [f"{item['material__sku']}" for item in top_materiales]
+        chart_top_values = [float(item['stock_total'] or 0) for item in top_materiales]
+
+        chart_flujo_labels = ['Entradas', 'Salidas a linea', 'Transferencias']
+        chart_flujo_values = [
+            float(entradas_semana.get('total') or 0),
+            float(salidas_semana.get('total') or 0),
+            float(transferencias_semana.get('total') or 0),
+        ]
+
+        movimientos_recientes = []
+        for detalle in RecepcionMaterialDetalle.objects.select_related('recepcion').order_by('-recepcion__fecha_recepcion', '-id')[:3]:
+            movimientos_recientes.append({
+                'fecha': detalle.recepcion.fecha_recepcion,
+                'tipo': 'ENTRADA',
+                'descripcion': f"{detalle.sku} {detalle.descripcion}",
+                'cantidad': detalle.cantidad_recibida,
+                'referencia': f"REC-{detalle.recepcion_id}",
+            })
+
+        for detalle in SalidaLineaDetalle.objects.select_related('salida').order_by('-salida__fecha_salida', '-id')[:3]:
+            movimientos_recientes.append({
+                'fecha': detalle.salida.fecha_salida,
+                'tipo': 'SALIDA_LINEA',
+                'descripcion': f"{detalle.sku} {detalle.descripcion}",
+                'cantidad': detalle.cantidad_enviada,
+                'referencia': f"SAL-{detalle.salida_id}",
+            })
+
+        for detalle in TransferenciaAlmacenDetalle.objects.select_related('transferencia').order_by('-transferencia__fecha_transferencia', '-id')[:3]:
+            movimientos_recientes.append({
+                'fecha': detalle.transferencia.fecha_transferencia,
+                'tipo': 'TRANSFERENCIA',
+                'descripcion': f"{detalle.sku} {detalle.descripcion}",
+                'cantidad': detalle.cantidad_transferida,
+                'referencia': detalle.transferencia.referencia or f"TRF-{detalle.transferencia_id}",
+            })
+
+        movimientos_recientes.sort(key=lambda x: (x['fecha'], x['referencia']), reverse=True)
+
+        context.update({
+            'inv_total_stock': resumen_stock.get('total_stock') or Decimal('0'),
+            'inv_materiales_activos': materiales_activos,
+            'inv_almacenes_activos': almacenes_activos,
+            'inv_entradas_semana': entradas_semana.get('total') or Decimal('0'),
+            'inv_salidas_semana': salidas_semana.get('total') or Decimal('0'),
+            'inv_transferencias_semana': transferencias_semana.get('total') or Decimal('0'),
+            'inv_top_materiales': top_materiales,
+            'inv_movimientos_recientes': movimientos_recientes[:6],
+            'inv_chart_data': {
+                'top_labels': chart_top_labels,
+                'top_values': chart_top_values,
+                'flujo_labels': chart_flujo_labels,
+                'flujo_values': chart_flujo_values,
+            },
+        })
+
     return render(request, 'home.html', context)
 
 
@@ -745,6 +837,343 @@ def entrada_material_linea(request):
 
 
 @login_required(login_url='login')
+@never_cache
+def transferencia_almacenes(request):
+    _ensure_almacenes_base()
+
+    transferencias_recientes = TransferenciaAlmacen.objects.filter(creado_por=request.user).prefetch_related('detalles')[:5]
+    almacenes_catalogo = Almacen.objects.filter(activo=True).order_by('codigo')
+    inventarios_con_stock = InventarioAlmacen.objects.filter(
+        almacen__activo=True,
+        material__activo=True,
+        stock_actual__gt=0,
+    ).select_related('almacen', 'material').order_by('almacen__codigo', 'material__sku')
+
+    inventario_catalogo_json = {}
+    for inventario in inventarios_con_stock:
+        almacen_data = inventario_catalogo_json.setdefault(inventario.almacen.codigo, {})
+        material_data = almacen_data.setdefault(
+            inventario.material.sku,
+            {
+                'descripcion': inventario.material.nombre,
+                'um': inventario.material.um,
+                'lotes': [],
+            },
+        )
+        material_data['lotes'].append({
+            'lote': inventario.lote,
+            'lote_label': inventario.lote or 'Sin lote registrado',
+            'stock': float(inventario.stock_actual),
+        })
+
+    if request.method == 'POST':
+        fecha_transferencia = (request.POST.get('fecha_transferencia') or '').strip()
+        hora_transferencia = (request.POST.get('hora_transferencia') or '').strip()
+        almacen_origen_codigo = (request.POST.get('almacen_origen') or '').strip().upper()
+        almacen_destino_codigo = (request.POST.get('almacen_destino') or '').strip().upper()
+        motivo = (request.POST.get('motivo') or '').strip()
+
+        skus = request.POST.getlist('sku[]')
+        descripciones = request.POST.getlist('descripcion[]')
+        ums = request.POST.getlist('um[]')
+        lotes = request.POST.getlist('lote[]')
+        cantidades = request.POST.getlist('cantidad_transferida[]')
+
+        if not fecha_transferencia or not hora_transferencia:
+            messages.error(request, 'Fecha y hora de transferencia son obligatorias.')
+            return render(
+                request,
+                'inventario/transferencias_almacenes.html',
+                {
+                    'transferencias_recientes': transferencias_recientes,
+                    'almacenes_catalogo': almacenes_catalogo,
+                    'inventario_catalogo_json': dict(inventario_catalogo_json),
+                },
+            )
+
+        fecha_transferencia_obj = _parse_iso_date(fecha_transferencia)
+        if not fecha_transferencia_obj:
+            messages.error(request, 'La fecha de transferencia no es valida.')
+            return render(
+                request,
+                'inventario/transferencias_almacenes.html',
+                {
+                    'transferencias_recientes': transferencias_recientes,
+                    'almacenes_catalogo': almacenes_catalogo,
+                    'inventario_catalogo_json': dict(inventario_catalogo_json),
+                },
+            )
+
+        if not almacen_origen_codigo or not almacen_destino_codigo:
+            messages.error(request, 'Debes seleccionar almacen origen y destino.')
+            return render(
+                request,
+                'inventario/transferencias_almacenes.html',
+                {
+                    'transferencias_recientes': transferencias_recientes,
+                    'almacenes_catalogo': almacenes_catalogo,
+                    'inventario_catalogo_json': dict(inventario_catalogo_json),
+                },
+            )
+
+        if almacen_origen_codigo == almacen_destino_codigo:
+            messages.error(request, 'El almacen destino debe ser diferente al almacen origen.')
+            return render(
+                request,
+                'inventario/transferencias_almacenes.html',
+                {
+                    'transferencias_recientes': transferencias_recientes,
+                    'almacenes_catalogo': almacenes_catalogo,
+                    'inventario_catalogo_json': dict(inventario_catalogo_json),
+                },
+            )
+
+        almacen_origen = Almacen.objects.filter(codigo=almacen_origen_codigo, activo=True).first()
+        almacen_destino = Almacen.objects.filter(codigo=almacen_destino_codigo, activo=True).first()
+        if not almacen_origen or not almacen_destino:
+            messages.error(request, 'Selecciona almacenes validos del catalogo.')
+            return render(
+                request,
+                'inventario/transferencias_almacenes.html',
+                {
+                    'transferencias_recientes': transferencias_recientes,
+                    'almacenes_catalogo': almacenes_catalogo,
+                    'inventario_catalogo_json': dict(inventario_catalogo_json),
+                },
+            )
+
+        movimientos = []
+        total_rows = max(len(skus), len(descripciones), len(ums), len(lotes), len(cantidades))
+
+        for idx in range(total_rows):
+            sku = (skus[idx] if idx < len(skus) else '').strip().upper()
+            descripcion = (descripciones[idx] if idx < len(descripciones) else '').strip()
+            um = (ums[idx] if idx < len(ums) else '').strip()
+            lote = (lotes[idx] if idx < len(lotes) else '').strip()
+            cantidad_texto = (cantidades[idx] if idx < len(cantidades) else '').strip()
+
+            row_has_data = any([sku, descripcion, um, lote, cantidad_texto])
+            if not row_has_data:
+                continue
+
+            if not sku or not cantidad_texto:
+                messages.error(request, f'En la fila {idx + 1}, SKU y cantidad son obligatorios.')
+                return render(
+                    request,
+                    'inventario/transferencias_almacenes.html',
+                    {
+                        'transferencias_recientes': transferencias_recientes,
+                        'almacenes_catalogo': almacenes_catalogo,
+                        'inventario_catalogo_json': dict(inventario_catalogo_json),
+                    },
+                )
+
+            lote_registrado = None
+            material_catalogo = (inventario_catalogo_json.get(almacen_origen_codigo, {}) or {}).get(sku, {})
+            for lote_info in material_catalogo.get('lotes', []):
+                if lote_info['lote'] == lote:
+                    lote_registrado = lote_info
+                    break
+
+            if lote_registrado is None:
+                messages.error(request, f'En la fila {idx + 1}, debes seleccionar un lote valido del almacen origen.')
+                return render(
+                    request,
+                    'inventario/transferencias_almacenes.html',
+                    {
+                        'transferencias_recientes': transferencias_recientes,
+                        'almacenes_catalogo': almacenes_catalogo,
+                        'inventario_catalogo_json': dict(inventario_catalogo_json),
+                    },
+                )
+
+            try:
+                cantidad_transferida = Decimal(cantidad_texto.replace(',', '.'))
+            except InvalidOperation:
+                messages.error(request, f'En la fila {idx + 1}, la cantidad debe ser numerica valida.')
+                return render(
+                    request,
+                    'inventario/transferencias_almacenes.html',
+                    {
+                        'transferencias_recientes': transferencias_recientes,
+                        'almacenes_catalogo': almacenes_catalogo,
+                        'inventario_catalogo_json': dict(inventario_catalogo_json),
+                    },
+                )
+
+            if cantidad_transferida <= 0:
+                messages.error(request, f'En la fila {idx + 1}, la cantidad debe ser mayor a cero.')
+                return render(
+                    request,
+                    'inventario/transferencias_almacenes.html',
+                    {
+                        'transferencias_recientes': transferencias_recientes,
+                        'almacenes_catalogo': almacenes_catalogo,
+                        'inventario_catalogo_json': dict(inventario_catalogo_json),
+                    },
+                )
+
+            movimientos.append({
+                'sku': sku,
+                'descripcion': descripcion,
+                'um': um,
+                'lote': lote,
+                'cantidad_transferida': cantidad_transferida,
+            })
+
+        if not movimientos:
+            messages.error(request, 'Debes capturar al menos un material para transferir.')
+            return render(
+                request,
+                'inventario/transferencias_almacenes.html',
+                {
+                    'transferencias_recientes': transferencias_recientes,
+                    'almacenes_catalogo': almacenes_catalogo,
+                    'inventario_catalogo_json': dict(inventario_catalogo_json),
+                },
+            )
+
+        try:
+            with transaction.atomic():
+                transferencia = TransferenciaAlmacen.objects.create(
+                    fecha_transferencia=fecha_transferencia_obj,
+                    hora_transferencia=hora_transferencia,
+                    almacen_origen=almacen_origen,
+                    almacen_destino=almacen_destino,
+                    motivo=motivo,
+                    creado_por=request.user,
+                )
+                transferencia.referencia = f"TRF-{fecha_transferencia_obj.year}-{transferencia.id:04d}"
+                transferencia.save(update_fields=['referencia'])
+
+                for idx, movimiento in enumerate(movimientos, start=1):
+                    inventario_origen = (
+                        InventarioAlmacen.objects
+                        .select_for_update()
+                        .select_related('material', 'almacen')
+                        .filter(
+                            almacen=almacen_origen,
+                            material__sku=movimiento['sku'],
+                            lote=movimiento['lote'],
+                        )
+                        .first()
+                    )
+
+                    if not inventario_origen or inventario_origen.stock_actual < movimiento['cantidad_transferida']:
+                        raise ValueError(f'En la fila {idx}, no hay stock suficiente en el almacen origen para ese lote.')
+
+                    inventario_origen.stock_actual = (inventario_origen.stock_actual or 0) - movimiento['cantidad_transferida']
+                    inventario_origen.save(update_fields=['stock_actual', 'fecha_actualizacion'])
+
+                    inventario_destino, _ = InventarioAlmacen.objects.select_for_update().get_or_create(
+                        almacen=almacen_destino,
+                        material=inventario_origen.material,
+                        lote=inventario_origen.lote,
+                        defaults={'stock_actual': 0},
+                    )
+                    inventario_destino.stock_actual = (inventario_destino.stock_actual or 0) + movimiento['cantidad_transferida']
+                    inventario_destino.save(update_fields=['stock_actual', 'fecha_actualizacion'])
+
+                    TransferenciaAlmacenDetalle.objects.create(
+                        transferencia=transferencia,
+                        material=inventario_origen.material,
+                        sku=inventario_origen.material.sku,
+                        descripcion=movimiento['descripcion'] or inventario_origen.material.nombre,
+                        um=movimiento['um'] or inventario_origen.material.um,
+                        cantidad_transferida=movimiento['cantidad_transferida'],
+                        lote=inventario_origen.lote,
+                    )
+        except ValueError as exc:
+            messages.error(request, str(exc))
+            return render(
+                request,
+                'inventario/transferencias_almacenes.html',
+                {
+                    'transferencias_recientes': transferencias_recientes,
+                    'almacenes_catalogo': almacenes_catalogo,
+                    'inventario_catalogo_json': dict(inventario_catalogo_json),
+                },
+            )
+
+        messages.success(request, f'Transferencia registrada con folio {transferencia.referencia}.')
+        return redirect('transferencias_almacenes')
+
+    return render(
+        request,
+        'inventario/transferencias_almacenes.html',
+        {
+            'transferencias_recientes': transferencias_recientes,
+            'almacenes_catalogo': almacenes_catalogo,
+            'inventario_catalogo_json': dict(inventario_catalogo_json),
+        },
+    )
+
+
+@login_required(login_url='login')
+@never_cache
+def proveedores_alta(request):
+    materiales_catalogo = Material.objects.filter(activo=True).order_by('sku')
+    proveedores_recientes = Proveedor.objects.prefetch_related('materiales').order_by('-fecha_creacion')[:8]
+
+    form_data = {
+        'nombre': '',
+        'descripcion': '',
+        'telefono': '',
+        'email': '',
+        'activo': True,
+        'materiales_ids': [],
+    }
+
+    if request.method == 'POST':
+        nombre = (request.POST.get('nombre') or '').strip()
+        descripcion = (request.POST.get('descripcion') or '').strip()
+        telefono = (request.POST.get('telefono') or '').strip()
+        email = (request.POST.get('email') or '').strip()
+        activo = (request.POST.get('activo') or '1').strip() == '1'
+        materiales_ids = [item for item in request.POST.getlist('materiales[]') if item]
+
+        form_data.update({
+            'nombre': nombre,
+            'descripcion': descripcion,
+            'telefono': telefono,
+            'email': email,
+            'activo': activo,
+            'materiales_ids': materiales_ids,
+        })
+
+        if not nombre:
+            messages.error(request, 'El nombre del proveedor es obligatorio.')
+        elif Proveedor.objects.filter(nombre__iexact=nombre).exists():
+            messages.error(request, 'Ya existe un proveedor con ese nombre.')
+        else:
+            with transaction.atomic():
+                proveedor = Proveedor.objects.create(
+                    nombre=nombre,
+                    descripcion=descripcion,
+                    telefono=telefono,
+                    email=email,
+                    activo=activo,
+                )
+
+                materiales_validos = Material.objects.filter(id__in=materiales_ids, activo=True)
+                if materiales_validos.exists():
+                    proveedor.materiales.set(materiales_validos)
+
+            messages.success(request, f'Proveedor {proveedor.nombre} creado correctamente.')
+            return redirect('proveedores_alta')
+
+    return render(
+        request,
+        'inventario/proveedores.html',
+        {
+            'materiales_catalogo': materiales_catalogo,
+            'proveedores_recientes': proveedores_recientes,
+            'form_data': form_data,
+        },
+    )
+
+
+@login_required(login_url='login')
 def inventario_almacen(request):
     _ensure_almacenes_base()
 
@@ -766,10 +1195,8 @@ def inventario_almacen(request):
     )
 
     movimientos_filtrados = RecepcionMaterialDetalle.objects.all()
-    salidas_linea_filtradas = SalidaLineaDetalle.objects.all()
 
     movimientos_posteriores = RecepcionMaterialDetalle.objects.none()
-    salidas_posteriores = SalidaLineaDetalle.objects.none()
     historico_almacenes = {}
     if fecha_historial:
         movimientos_posteriores = RecepcionMaterialDetalle.objects.filter(
@@ -778,32 +1205,21 @@ def inventario_almacen(request):
             estatus=RecepcionMaterialDetalle.EstatusDetalle.ACEPTADO,
         ).values('ubicacion_destino', 'material_id').annotate(total_recibido=Sum('cantidad_recibida'))
 
-        salidas_posteriores = SalidaLineaDetalle.objects.filter(
-            salida__fecha_salida__gt=fecha_historial,
-            almacen_origen__isnull=False,
-        ).values('almacen_origen__codigo', 'material_id').annotate(total_salida=Sum('cantidad_enviada'))
-
         recibidos_map = {
             (item['ubicacion_destino'], item['material_id']): item['total_recibido']
             for item in movimientos_posteriores
         }
-        salidas_map = {
-            (item['almacen_origen__codigo'], item['material_id']): item['total_salida']
-            for item in salidas_posteriores
-        }
 
         historico_almacenes = {
             'recibidos': recibidos_map,
-            'salidas': salidas_map,
+            'salidas': {},
         }
 
     if fecha_inicio:
         movimientos_filtrados = movimientos_filtrados.filter(recepcion__fecha_recepcion__gte=fecha_inicio)
-        salidas_linea_filtradas = salidas_linea_filtradas.filter(salida__fecha_salida__gte=fecha_inicio)
 
     if fecha_fin:
         movimientos_filtrados = movimientos_filtrados.filter(recepcion__fecha_recepcion__lte=fecha_fin)
-        salidas_linea_filtradas = salidas_linea_filtradas.filter(salida__fecha_salida__lte=fecha_fin)
 
     movimientos_por_almacen = {
         item['ubicacion_destino']: item
@@ -839,13 +1255,7 @@ def inventario_almacen(request):
         )
     }
 
-    linea_por_almacen = {
-        item['almacen_origen__codigo']: item
-        for item in salidas_linea_filtradas.values('almacen_origen__codigo').annotate(
-            movimientos_linea=Count('id'),
-            cantidad_linea=Sum('cantidad_enviada'),
-        )
-    }
+    linea_por_almacen = {}
 
     timeline_queryset = movimientos_filtrados.values('recepcion__fecha_recepcion').annotate(
         material_ok=Sum(
@@ -896,17 +1306,6 @@ def inventario_almacen(request):
         ),
     ).order_by('recepcion__fecha_recepcion', 'ubicacion_destino')
 
-    timeline_linea_queryset = salidas_linea_filtradas.values('salida__fecha_salida').annotate(
-        mandado_linea=Sum('cantidad_enviada')
-    ).order_by('salida__fecha_salida')
-
-    timeline_linea_almacen_queryset = salidas_linea_filtradas.values(
-        'salida__fecha_salida',
-        'almacen_origen__codigo',
-    ).annotate(
-        mandado_linea=Sum('cantidad_enviada')
-    ).order_by('salida__fecha_salida', 'almacen_origen__codigo')
-
     timeline_almacenes_por_fecha = defaultdict(list)
     for item in timeline_almacen_queryset:
         fecha = item['recepcion__fecha_recepcion']
@@ -919,35 +1318,7 @@ def inventario_almacen(request):
             'material_malo': _decimal_to_float(item['material_malo']),
             'mandado_linea': 0.0,
         })
-
-    for item in timeline_linea_almacen_queryset:
-        fecha = item['salida__fecha_salida']
-        if not fecha:
-            continue
-
-        fecha_key = fecha.strftime('%Y-%m-%d')
-        codigo = item['almacen_origen__codigo']
-        mandado_linea = _decimal_to_float(item['mandado_linea'])
-        almacen_existente = next(
-            (almacen for almacen in timeline_almacenes_por_fecha[fecha_key] if almacen['codigo'] == codigo),
-            None,
-        )
-
-        if almacen_existente:
-            almacen_existente['mandado_linea'] = mandado_linea
-        else:
-            timeline_almacenes_por_fecha[fecha_key].append({
-                'codigo': codigo,
-                'material_ok': 0.0,
-                'material_malo': 0.0,
-                'mandado_linea': mandado_linea,
-            })
-
-    timeline_linea_map = {
-        item['salida__fecha_salida'].strftime('%Y-%m-%d'): _decimal_to_float(item['mandado_linea'])
-        for item in timeline_linea_queryset
-        if item['salida__fecha_salida']
-    }
+    timeline_linea_map = {}
 
     timeline_map = {
         item['recepcion__fecha_recepcion'].strftime('%Y-%m-%d'): {
@@ -1006,10 +1377,10 @@ def inventario_almacen(request):
         ),
     )
 
-    resumen_linea = salidas_linea_filtradas.aggregate(
-        movimientos_linea=Count('id'),
-        cantidad_linea=Sum('cantidad_enviada'),
-    )
+    resumen_linea = {
+        'movimientos_linea': 0,
+        'cantidad_linea': Decimal('0'),
+    }
 
     resumen_inspeccion = movimientos_filtrados.aggregate(
         material_ok=Count('id', filter=Q(estatus=RecepcionMaterialDetalle.EstatusDetalle.ACEPTADO)),
@@ -1180,6 +1551,82 @@ def inventario_almacen(request):
 def historial_recepciones(request):
     recepciones = RecepcionMaterial.objects.select_related('creado_por').prefetch_related('detalles')
     return render(request, 'inventario/historial_recepciones.html', {'recepciones': recepciones})
+
+
+@login_required(login_url='login')
+def historial_almacen(request):
+    almacen_codigo = (request.GET.get('almacen') or '').strip().upper()
+    fecha_movimiento_raw = (request.GET.get('fecha') or '').strip()
+    tipo_movimiento = (request.GET.get('tipo') or '').strip().upper()
+    fecha_movimiento = _parse_iso_date(fecha_movimiento_raw)
+
+    if tipo_movimiento not in {'', 'ENTRADA', 'SALIDA'}:
+        tipo_movimiento = ''
+
+    almacenes_catalogo = Almacen.objects.filter(activo=True).order_by('codigo')
+
+    movimientos = []
+
+    entradas_qs = (
+        RecepcionMaterialDetalle.objects
+        .select_related('recepcion', 'recepcion__creado_por', 'material')
+        .exclude(ubicacion_destino='')
+    )
+    if almacen_codigo:
+        entradas_qs = entradas_qs.filter(ubicacion_destino=almacen_codigo)
+    if fecha_movimiento:
+        entradas_qs = entradas_qs.filter(recepcion__fecha_recepcion=fecha_movimiento)
+
+    if tipo_movimiento in {'', 'ENTRADA'}:
+        for detalle in entradas_qs:
+            movimientos.append({
+                'fecha': detalle.recepcion.fecha_recepcion,
+                'tipo': 'ENTRADA',
+                'almacen': detalle.ubicacion_destino,
+                'sku': detalle.sku,
+                'material': detalle.descripcion,
+                'lote': detalle.lote or '-',
+                'cantidad': detalle.cantidad_recibida,
+                'referencia': f"REC-{detalle.recepcion_id}",
+                'usuario': detalle.recepcion.creado_por.get_full_name() or detalle.recepcion.creado_por.username,
+            })
+
+    salidas_qs = (
+        SalidaLineaDetalle.objects
+        .select_related('salida', 'salida__creado_por', 'almacen_origen', 'material')
+    )
+    if almacen_codigo:
+        salidas_qs = salidas_qs.filter(almacen_origen__codigo=almacen_codigo)
+    if fecha_movimiento:
+        salidas_qs = salidas_qs.filter(salida__fecha_salida=fecha_movimiento)
+
+    if tipo_movimiento in {'', 'SALIDA'}:
+        for detalle in salidas_qs:
+            movimientos.append({
+                'fecha': detalle.salida.fecha_salida,
+                'tipo': 'SALIDA',
+                'almacen': detalle.almacen_origen.codigo if detalle.almacen_origen else '-',
+                'sku': detalle.sku,
+                'material': detalle.descripcion,
+                'lote': detalle.lote or '-',
+                'cantidad': detalle.cantidad_enviada,
+                'referencia': f"SAL-{detalle.salida_id}",
+                'usuario': detalle.salida.creado_por.get_full_name() or detalle.salida.creado_por.username,
+            })
+
+    movimientos.sort(key=lambda item: (item['fecha'], item['referencia']), reverse=True)
+
+    return render(
+        request,
+        'inventario/historial_almacen.html',
+        {
+            'almacenes_catalogo': almacenes_catalogo,
+            'almacen_seleccionado': almacen_codigo,
+            'fecha_seleccionada': fecha_movimiento_raw,
+            'tipo_seleccionado': tipo_movimiento,
+            'movimientos': movimientos,
+        },
+    )
 
 
 @login_required(login_url='login')
