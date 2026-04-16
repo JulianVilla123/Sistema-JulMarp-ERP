@@ -17,7 +17,10 @@ from .models import (
     Almacen,
     InventarioAlmacen,
     Material,
+    OrdenCompra,
+    OrdenCompraDetalle,
     Proveedor,
+    ProveedorMaterialPrecio,
     RecepcionMaterial,
     RecepcionMaterialDetalle,
     SalidaLinea,
@@ -38,6 +41,16 @@ ALMACENES_BASE = [
     ('ALM-003', 'Almacen Componentes Electronicos'),
     ('ALM-004', 'Almacen Empaque y Consumibles'),
     ('ALM-005', 'Almacen Cuarentena y Retenido'),
+]
+
+ORDEN_CONDICIONES_PAGO = [
+    'Contado',
+    'Crédito 15 días',
+    'Crédito 30 días',
+    'Crédito 45 días',
+    'Crédito 60 días',
+    'Anticipo 50% / Contraentrega 50%',
+    'Transferencia bancaria',
 ]
 
 
@@ -96,6 +109,48 @@ def _parse_iso_date(value):
         return date.fromisoformat(value)
     except ValueError:
         return None
+
+
+def _next_orden_compra_folio():
+    current_year = date.today().year
+    prefix = f"OC-{current_year}-"
+    last_folio = (
+        OrdenCompra.objects
+        .filter(folio__startswith=prefix)
+        .order_by('-id')
+        .values_list('folio', flat=True)
+        .first()
+    )
+
+    seq = 1
+    if last_folio:
+        match = re.match(rf"^{re.escape(prefix)}(\d+)$", last_folio)
+        if match:
+            seq = int(match.group(1)) + 1
+
+    return f"{prefix}{seq:04d}"
+
+
+def _ordenes_transiciones_permitidas(estado_actual):
+    return {
+        OrdenCompra.EstadoOrden.BORRADOR: {
+            OrdenCompra.EstadoOrden.APROBADA,
+            OrdenCompra.EstadoOrden.CANCELADA,
+        },
+        OrdenCompra.EstadoOrden.APROBADA: {
+            OrdenCompra.EstadoOrden.ENVIADA,
+            OrdenCompra.EstadoOrden.CANCELADA,
+        },
+        OrdenCompra.EstadoOrden.ENVIADA: {
+            OrdenCompra.EstadoOrden.PARCIAL,
+            OrdenCompra.EstadoOrden.RECIBIDA,
+            OrdenCompra.EstadoOrden.CANCELADA,
+        },
+        OrdenCompra.EstadoOrden.PARCIAL: {
+            OrdenCompra.EstadoOrden.RECIBIDA,
+            OrdenCompra.EstadoOrden.CANCELADA,
+        },
+    }.get(estado_actual, set())
 
 
 def csrf_failure(request, reason='', template_name=None):
@@ -1111,6 +1166,257 @@ def transferencia_almacenes(request):
 
 @login_required(login_url='login')
 @never_cache
+def ordenes_compra(request):
+    proveedores_catalogo = Proveedor.objects.filter(activo=True).prefetch_related('materiales').order_by('nombre')
+
+    def _build_ordenes_recientes_data():
+        ordenes = (
+            OrdenCompra.objects
+            .select_related('proveedor', 'creado_por')
+            .prefetch_related('detalles')
+            .order_by('-fecha_creacion')[:10]
+        )
+
+        data = []
+        for orden in ordenes:
+            detalles = list(orden.detalles.all())
+            recibido_por_sku = {
+                item['sku']: (item['total'] or Decimal('0'))
+                for item in (
+                    RecepcionMaterialDetalle.objects
+                    .filter(
+                        recepcion__orden_compra=orden.folio,
+                        recepcion__proveedor_registrado=orden.proveedor,
+                    )
+                    .values('sku')
+                    .annotate(total=Sum('cantidad_recibida'))
+                )
+            }
+
+            total_pedido_cantidad = sum((detalle.cantidad_pedida for detalle in detalles), Decimal('0'))
+            total_pedido_importe = sum((detalle.subtotal for detalle in detalles), Decimal('0'))
+            total_recibido_cantidad = sum(recibido_por_sku.values(), Decimal('0'))
+            avance = 0
+            if total_pedido_cantidad > 0:
+                avance = int(round((float(total_recibido_cantidad) / float(total_pedido_cantidad)) * 100))
+
+            data.append({
+                'id': orden.id,
+                'folio': orden.folio,
+                'proveedor': orden.proveedor.nombre,
+                'fecha_orden': orden.fecha_orden,
+                'fecha_prometida': orden.fecha_prometida,
+                'estado': orden.estado,
+                'estado_label': orden.get_estado_display(),
+                'total_pedido_cantidad': total_pedido_cantidad,
+                'total_recibido_cantidad': total_recibido_cantidad,
+                'total_pedido_importe': total_pedido_importe,
+                'avance': min(avance, 100),
+                'lineas': len(detalles),
+            })
+
+        return data
+
+    form_data = {
+        'proveedor_id': '',
+        'fecha_orden': date.today().isoformat(),
+        'fecha_prometida': '',
+        'condiciones_pago': '',
+        'observaciones': '',
+        'lineas': [
+            {
+                'sku': '',
+                'cantidad_pedida': '',
+                'precio_unitario': '',
+            }
+        ],
+    }
+
+    if request.method == 'POST' and (request.POST.get('accion_estado') or '').strip():
+        orden_id = (request.POST.get('orden_id') or '').strip()
+        accion_estado = (request.POST.get('accion_estado') or '').strip().upper()
+        orden = OrdenCompra.objects.filter(id=orden_id).first()
+
+        if not orden:
+            messages.error(request, 'La orden seleccionada no existe.')
+            return redirect('ordenes_compra')
+
+        transiciones = _ordenes_transiciones_permitidas(orden.estado)
+        if accion_estado not in transiciones:
+            messages.error(request, f'No es posible cambiar de {orden.get_estado_display()} a {accion_estado}.')
+            return redirect('ordenes_compra')
+
+        orden.estado = accion_estado
+        orden.save(update_fields=['estado'])
+        messages.success(request, f'La orden {orden.folio} cambió a estado {orden.get_estado_display()}.')
+        return redirect('ordenes_compra')
+
+    if request.method == 'POST':
+        proveedor_id = (request.POST.get('proveedor') or '').strip()
+        fecha_orden_raw = (request.POST.get('fecha_orden') or '').strip()
+        fecha_prometida_raw = (request.POST.get('fecha_prometida') or '').strip()
+        condiciones_pago = (request.POST.get('condiciones_pago') or '').strip()
+        observaciones = (request.POST.get('observaciones') or '').strip()
+        accion = (request.POST.get('accion') or 'borrador').strip().lower()
+
+        skus = request.POST.getlist('sku[]')
+        cantidades = request.POST.getlist('cantidad_pedida[]')
+        precios = request.POST.getlist('precio_unitario[]')
+
+        form_data.update({
+            'proveedor_id': proveedor_id,
+            'fecha_orden': fecha_orden_raw,
+            'fecha_prometida': fecha_prometida_raw,
+            'condiciones_pago': condiciones_pago,
+            'observaciones': observaciones,
+            'lineas': [],
+        })
+
+        proveedor_obj = Proveedor.objects.filter(id=proveedor_id, activo=True).prefetch_related('materiales').first()
+        fecha_orden = _parse_iso_date(fecha_orden_raw)
+        fecha_prometida = _parse_iso_date(fecha_prometida_raw) if fecha_prometida_raw else None
+
+        if not proveedor_obj:
+            messages.error(request, 'Selecciona un proveedor válido.')
+        elif not fecha_orden:
+            messages.error(request, 'La fecha de la orden es obligatoria.')
+        elif fecha_prometida and fecha_prometida < fecha_orden:
+            messages.error(request, 'La fecha prometida no puede ser menor a la fecha de la orden.')
+        elif condiciones_pago and condiciones_pago not in ORDEN_CONDICIONES_PAGO:
+            messages.error(request, 'Selecciona una condición de pago válida del catálogo.')
+        else:
+            materiales_permitidos = {
+                material.sku.upper(): material
+                for material in proveedor_obj.materiales.filter(activo=True)
+            }
+            lineas = []
+            total_rows = max(len(skus), len(cantidades), len(precios))
+
+            for idx in range(total_rows):
+                sku = (skus[idx] if idx < len(skus) else '').strip().upper()
+                cantidad_texto = (cantidades[idx] if idx < len(cantidades) else '').strip()
+                precio_texto = (precios[idx] if idx < len(precios) else '').strip()
+
+                row_has_data = any([sku, cantidad_texto, precio_texto])
+                if not row_has_data:
+                    continue
+
+                form_data['lineas'].append({
+                    'sku': sku,
+                    'cantidad_pedida': cantidad_texto,
+                    'precio_unitario': precio_texto,
+                })
+
+                if not sku or not cantidad_texto:
+                    messages.error(request, f'En la fila {idx + 1}, SKU y cantidad son obligatorios.')
+                    lineas = []
+                    break
+
+                material_obj = materiales_permitidos.get(sku)
+                if not material_obj:
+                    messages.error(request, f'En la fila {idx + 1}, el material no pertenece al proveedor seleccionado.')
+                    lineas = []
+                    break
+
+                try:
+                    cantidad_pedida = Decimal(cantidad_texto.replace(',', '.'))
+                    precio_unitario = Decimal((precio_texto or '0').replace(',', '.'))
+                except InvalidOperation:
+                    messages.error(request, f'En la fila {idx + 1}, cantidad y precio deben ser numéricos válidos.')
+                    lineas = []
+                    break
+
+                if cantidad_pedida <= 0:
+                    messages.error(request, f'En la fila {idx + 1}, la cantidad debe ser mayor a cero.')
+                    lineas = []
+                    break
+
+                if precio_unitario < 0:
+                    messages.error(request, f'En la fila {idx + 1}, el precio unitario no puede ser negativo.')
+                    lineas = []
+                    break
+
+                subtotal = (cantidad_pedida * precio_unitario).quantize(Decimal('0.01'))
+                lineas.append({
+                    'material': material_obj,
+                    'sku': material_obj.sku,
+                    'descripcion': material_obj.nombre,
+                    'um': material_obj.um,
+                    'cantidad_pedida': cantidad_pedida,
+                    'precio_unitario': precio_unitario,
+                    'subtotal': subtotal,
+                })
+
+            if not form_data['lineas']:
+                form_data['lineas'] = [{'sku': '', 'cantidad_pedida': '', 'precio_unitario': ''}]
+
+            if lineas:
+                estado_destino = {
+                    'borrador': OrdenCompra.EstadoOrden.BORRADOR,
+                    'aprobar': OrdenCompra.EstadoOrden.APROBADA,
+                    'enviar': OrdenCompra.EstadoOrden.ENVIADA,
+                }.get(accion, OrdenCompra.EstadoOrden.BORRADOR)
+
+                total_estimado = sum((linea['subtotal'] for linea in lineas), Decimal('0'))
+
+                with transaction.atomic():
+                    folio = _next_orden_compra_folio()
+                    while OrdenCompra.objects.filter(folio=folio).exists():
+                        folio = _next_orden_compra_folio()
+
+                    orden = OrdenCompra.objects.create(
+                        folio=folio,
+                        proveedor=proveedor_obj,
+                        fecha_orden=fecha_orden,
+                        fecha_prometida=fecha_prometida,
+                        condiciones_pago=condiciones_pago,
+                        observaciones=observaciones,
+                        estado=estado_destino,
+                        total_estimado=total_estimado,
+                        creado_por=request.user,
+                    )
+
+                    for linea in lineas:
+                        OrdenCompraDetalle.objects.create(
+                            orden=orden,
+                            material=linea['material'],
+                            sku=linea['sku'],
+                            descripcion=linea['descripcion'],
+                            um=linea['um'],
+                            cantidad_pedida=linea['cantidad_pedida'],
+                            precio_unitario=linea['precio_unitario'],
+                            subtotal=linea['subtotal'],
+                        )
+
+                        ProveedorMaterialPrecio.objects.update_or_create(
+                            proveedor=proveedor_obj,
+                            material=linea['material'],
+                            defaults={
+                                'precio_unitario': linea['precio_unitario'],
+                            },
+                        )
+
+                messages.success(request, f'Orden de compra {orden.folio} creada en estado {orden.get_estado_display()}.')
+                return redirect('ordenes_compra')
+
+    return render(
+        request,
+        'inventario/ordenes_compra.html',
+        {
+            'proveedores_catalogo': proveedores_catalogo,
+            'ordenes_recientes': _build_ordenes_recientes_data(),
+            'opciones_condiciones_pago': ORDEN_CONDICIONES_PAGO,
+            'form_data': form_data,
+            'estado_enviada': OrdenCompra.EstadoOrden.ENVIADA,
+            'estado_parcial': OrdenCompra.EstadoOrden.PARCIAL,
+            'estado_borrador': OrdenCompra.EstadoOrden.BORRADOR,
+            'estado_aprobada': OrdenCompra.EstadoOrden.APROBADA,
+        },
+    )
+
+
+@login_required(login_url='login')
+@never_cache
 def proveedores_alta(request):
     materiales_catalogo = Material.objects.filter(activo=True).order_by('sku')
     proveedores_recientes = Proveedor.objects.prefetch_related('materiales').order_by('-fecha_creacion')[:8]
@@ -1122,6 +1428,7 @@ def proveedores_alta(request):
         'email': '',
         'activo': True,
         'materiales_ids': [],
+        'precios_materiales': {},
     }
 
     if request.method == 'POST':
@@ -1131,6 +1438,12 @@ def proveedores_alta(request):
         email = (request.POST.get('email') or '').strip()
         activo = (request.POST.get('activo') or '1').strip() == '1'
         materiales_ids = [item for item in request.POST.getlist('materiales[]') if item]
+        precios_materiales_raw = request.POST.getlist('precio_material[]')
+
+        precios_materiales_map = {}
+        for idx, material_id in enumerate(materiales_ids):
+            precio_texto = (precios_materiales_raw[idx] if idx < len(precios_materiales_raw) else '').strip()
+            precios_materiales_map[str(material_id)] = precio_texto or '0'
 
         form_data.update({
             'nombre': nombre,
@@ -1139,6 +1452,7 @@ def proveedores_alta(request):
             'email': email,
             'activo': activo,
             'materiales_ids': materiales_ids,
+            'precios_materiales': precios_materiales_map,
         })
 
         if not nombre:
@@ -1146,6 +1460,36 @@ def proveedores_alta(request):
         elif Proveedor.objects.filter(nombre__iexact=nombre).exists():
             messages.error(request, 'Ya existe un proveedor con ese nombre.')
         else:
+            precios_materiales_decimal = {}
+            for material_id, precio_texto in precios_materiales_map.items():
+                try:
+                    precio_unitario = Decimal((precio_texto or '0').replace(',', '.'))
+                except InvalidOperation:
+                    messages.error(request, 'El precio unitario de materiales debe ser numérico válido.')
+                    return render(
+                        request,
+                        'inventario/proveedores.html',
+                        {
+                            'materiales_catalogo': materiales_catalogo,
+                            'proveedores_recientes': proveedores_recientes,
+                            'form_data': form_data,
+                        },
+                    )
+
+                if precio_unitario < 0:
+                    messages.error(request, 'El precio unitario de materiales no puede ser negativo.')
+                    return render(
+                        request,
+                        'inventario/proveedores.html',
+                        {
+                            'materiales_catalogo': materiales_catalogo,
+                            'proveedores_recientes': proveedores_recientes,
+                            'form_data': form_data,
+                        },
+                    )
+
+                precios_materiales_decimal[material_id] = precio_unitario
+
             with transaction.atomic():
                 proveedor = Proveedor.objects.create(
                     nombre=nombre,
@@ -1158,6 +1502,20 @@ def proveedores_alta(request):
                 materiales_validos = Material.objects.filter(id__in=materiales_ids, activo=True)
                 if materiales_validos.exists():
                     proveedor.materiales.set(materiales_validos)
+
+                    precios_bulk = []
+                    for material in materiales_validos:
+                        precio = precios_materiales_decimal.get(str(material.id), Decimal('0'))
+                        precios_bulk.append(
+                            ProveedorMaterialPrecio(
+                                proveedor=proveedor,
+                                material=material,
+                                precio_unitario=precio,
+                            )
+                        )
+
+                    if precios_bulk:
+                        ProveedorMaterialPrecio.objects.bulk_create(precios_bulk)
 
             messages.success(request, f'Proveedor {proveedor.nombre} creado correctamente.')
             return redirect('proveedores_alta')
@@ -1700,8 +2058,31 @@ def api_materiales_proveedor(request, proveedor_id):
     except Proveedor.DoesNotExist:
         return JsonResponse({'error': 'Proveedor no encontrado'}, status=404)
     
+    precios_map = {
+        item['material_id']: item['precio_unitario']
+        for item in (
+            ProveedorMaterialPrecio.objects
+            .filter(proveedor=proveedor)
+            .values('material_id', 'precio_unitario')
+        )
+    }
+
+    ultimos_precios_oc = {
+        item['material_id']: item['precio_unitario']
+        for item in (
+            OrdenCompraDetalle.objects
+            .filter(
+                orden__proveedor=proveedor,
+                precio_unitario__gt=0,
+            )
+            .order_by('-id')
+            .values('material_id', 'precio_unitario')
+        )
+        if item['material_id'] not in precios_map
+    }
+
     # Obtener los materiales del proveedor
-    materiales = proveedor.materiales.filter(activo=True).values('sku', 'nombre', 'descripcion', 'um')
+    materiales = proveedor.materiales.filter(activo=True).values('id', 'sku', 'nombre', 'descripcion', 'um')
     
     # Construir el JSON en el formato esperado por el frontend
     materiales_dict = {
@@ -1710,6 +2091,7 @@ def api_materiales_proveedor(request, proveedor_id):
             'nombre': m['nombre'],
             'descripcion': m['descripcion'],
             'um': m['um'],
+            'precio_unitario': float(precios_map.get(m['id']) or ultimos_precios_oc.get(m['id']) or 0),
         }
         for m in materiales
     }

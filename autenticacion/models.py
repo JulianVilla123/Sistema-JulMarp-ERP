@@ -100,6 +100,34 @@ class Proveedor(models.Model):
         ordering = ['nombre']
 
 
+class ProveedorMaterialPrecio(models.Model):
+    proveedor = models.ForeignKey(
+        Proveedor,
+        on_delete=models.CASCADE,
+        related_name='precios_materiales',
+    )
+    material = models.ForeignKey(
+        Material,
+        on_delete=models.CASCADE,
+        related_name='precios_por_proveedor',
+    )
+    precio_unitario = models.DecimalField('Precio unitario', max_digits=14, decimal_places=2, default=0)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.proveedor.nombre} - {self.material.sku}: {self.precio_unitario}"
+
+    class Meta:
+        verbose_name = 'Precio material por proveedor'
+        verbose_name_plural = 'Precios de materiales por proveedor'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['proveedor', 'material'],
+                name='unique_proveedor_material_precio',
+            )
+        ]
+
+
 class Almacen(models.Model):
     codigo = models.CharField('Codigo', max_length=20, unique=True)
     nombre = models.CharField('Nombre', max_length=120, unique=True)
@@ -359,3 +387,73 @@ class TransferenciaAlmacenDetalle(models.Model):
     class Meta:
         verbose_name = 'Detalle transferencia entre almacenes'
         verbose_name_plural = 'Detalles transferencia entre almacenes'
+
+
+class OrdenCompra(models.Model):
+    class EstadoOrden(models.TextChoices):
+        BORRADOR = 'BORRADOR', 'Borrador'
+        APROBADA = 'APROBADA', 'Aprobada'
+        ENVIADA = 'ENVIADA', 'Enviada'
+        PARCIAL = 'PARCIAL', 'Parcial'
+        RECIBIDA = 'RECIBIDA', 'Recibida'
+        CANCELADA = 'CANCELADA', 'Cancelada'
+
+    folio = models.CharField('Folio', max_length=30, unique=True)
+    proveedor = models.ForeignKey(
+        Proveedor,
+        on_delete=models.PROTECT,
+        related_name='ordenes_compra',
+    )
+    fecha_orden = models.DateField('Fecha de orden')
+    fecha_prometida = models.DateField('Fecha prometida', null=True, blank=True)
+    condiciones_pago = models.CharField('Condiciones de pago', max_length=120, blank=True)
+    observaciones = models.TextField('Observaciones', blank=True)
+    estado = models.CharField(
+        'Estado',
+        max_length=12,
+        choices=EstadoOrden.choices,
+        default=EstadoOrden.BORRADOR,
+    )
+    total_estimado = models.DecimalField('Total estimado', max_digits=14, decimal_places=2, default=0)
+    creado_por = models.ForeignKey(
+        UsuarioERP,
+        on_delete=models.PROTECT,
+        related_name='ordenes_compra',
+    )
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.folio} - {self.proveedor.nombre}"
+
+    class Meta:
+        verbose_name = 'Orden de compra'
+        verbose_name_plural = 'Órdenes de compra'
+        ordering = ['-fecha_creacion']
+
+
+class OrdenCompraDetalle(models.Model):
+    orden = models.ForeignKey(
+        OrdenCompra,
+        on_delete=models.CASCADE,
+        related_name='detalles',
+    )
+    material = models.ForeignKey(
+        Material,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='ordenes_compra_detalle',
+    )
+    sku = models.CharField(max_length=50)
+    descripcion = models.CharField(max_length=255)
+    um = models.CharField('Unidad de medida', max_length=20, blank=True)
+    cantidad_pedida = models.DecimalField('Cantidad pedida', max_digits=12, decimal_places=2, default=0)
+    precio_unitario = models.DecimalField('Precio unitario', max_digits=14, decimal_places=2, default=0)
+    subtotal = models.DecimalField('Subtotal', max_digits=14, decimal_places=2, default=0)
+
+    def __str__(self):
+        return f"{self.orden.folio} - {self.sku}"
+
+    class Meta:
+        verbose_name = 'Detalle orden de compra'
+        verbose_name_plural = 'Detalles orden de compra'

@@ -1,0 +1,369 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Órdenes de Compra{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/pages/inventario.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="entrada-container">
+    <div class="entrada-header">
+        <h1>Órdenes de Compra</h1>
+        <p>Genera, aprueba y da seguimiento a compras por proveedor con trazabilidad de recepción.</p>
+    </div>
+
+    {% if messages %}
+    <ul class="messages" style="margin-bottom: 20px;">
+        {% for message in messages %}
+        <li class="{{ message.tags }}">{{ message }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    <div class="entrada-grid">
+        <section class="entrada-card entrada-card-full">
+            <h3>Nueva Orden de Compra</h3>
+            <form method="post" id="oc-form">
+                {% csrf_token %}
+                <div class="entrada-form-grid">
+                    <label>
+                        Proveedor
+                        <select name="proveedor" id="oc-proveedor" required>
+                            <option value="">Selecciona proveedor</option>
+                            {% for proveedor in proveedores_catalogo %}
+                            <option value="{{ proveedor.id }}" {% if form_data.proveedor_id == proveedor.id|stringformat:'s' %}selected{% endif %}>{{ proveedor.nombre }}</option>
+                            {% endfor %}
+                        </select>
+                    </label>
+                    <label>
+                        Fecha de orden
+                        <input type="date" name="fecha_orden" value="{{ form_data.fecha_orden }}" required>
+                    </label>
+                    <label>
+                        Fecha prometida
+                        <input type="date" name="fecha_prometida" value="{{ form_data.fecha_prometida }}">
+                    </label>
+                    <label>
+                        Condiciones de pago
+                        <select name="condiciones_pago">
+                            <option value="">Selecciona condición</option>
+                            {% for opcion in opciones_condiciones_pago %}
+                            <option value="{{ opcion }}" {% if form_data.condiciones_pago == opcion %}selected{% endif %}>{{ opcion }}</option>
+                            {% endfor %}
+                        </select>
+                    </label>
+                    <label style="grid-column: 1 / -1;">
+                        Observaciones
+                        <textarea rows="2" name="observaciones" placeholder="Notas adicionales de la orden">{{ form_data.observaciones }}</textarea>
+                    </label>
+                </div>
+
+                <section class="entrada-card entrada-card-full" style="margin-top: 16px; border-top-color: #2f5598;">
+                    <h3>Partidas de compra</h3>
+                    <div class="tabla-wrap material-captura-wrap" style="max-height: 430px;">
+                        <table class="tabla-material material-captura-table" id="oc-partidas-table" style="min-width: 980px;">
+                            <thead>
+                                <tr>
+                                    <th>SKU</th>
+                                    <th>Descripción</th>
+                                    <th>UM</th>
+                                    <th>Cantidad</th>
+                                    <th>Precio unitario</th>
+                                    <th>Subtotal</th>
+                                    <th>Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody id="oc-partidas-body">
+                                {% for linea in form_data.lineas %}
+                                <tr>
+                                    <td>
+                                        <select name="sku[]" class="oc-sku-select">
+                                            <option value="{{ linea.sku }}" selected>{{ linea.sku|default:'Selecciona material' }}</option>
+                                        </select>
+                                    </td>
+                                    <td><input type="text" class="oc-desc" readonly></td>
+                                    <td><input type="text" class="oc-um" readonly></td>
+                                    <td><input type="number" step="0.01" min="0.01" name="cantidad_pedida[]" value="{{ linea.cantidad_pedida }}"></td>
+                                    <td><input type="number" step="0.01" min="0" name="precio_unitario[]" value="{{ linea.precio_unitario }}"></td>
+                                    <td><input type="text" class="oc-subtotal" readonly value="0.00"></td>
+                                    <td><button type="button" class="btn btn-danger btn-row-remove">Quitar</button></td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td>
+                                        <select name="sku[]" class="oc-sku-select">
+                                            <option value="">Selecciona material</option>
+                                        </select>
+                                    </td>
+                                    <td><input type="text" class="oc-desc" readonly></td>
+                                    <td><input type="text" class="oc-um" readonly></td>
+                                    <td><input type="number" step="0.01" min="0.01" name="cantidad_pedida[]"></td>
+                                    <td><input type="number" step="0.01" min="0" name="precio_unitario[]"></td>
+                                    <td><input type="text" class="oc-subtotal" readonly value="0.00"></td>
+                                    <td><button type="button" class="btn btn-danger btn-row-remove">Quitar</button></td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="entrada-actions" style="margin-top: 12px;">
+                        <button type="button" class="btn btn-success" id="btn-add-partida">+ Agregar partida</button>
+                    </div>
+
+                    <div class="entrada-actions" style="justify-content: space-between; margin-top: 16px;">
+                        <strong>Total estimado: <span id="oc-total-estimado">0.00</span></strong>
+                        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                            <button class="btn btn-info" type="submit" name="accion" value="borrador">Guardar borrador</button>
+                            <button class="btn btn-primary" type="submit" name="accion" value="aprobar">Aprobar</button>
+                            <button class="btn btn-success" type="submit" name="accion" value="enviar">Enviar</button>
+                        </div>
+                    </div>
+                </section>
+            </form>
+        </section>
+
+        <section class="entrada-card entrada-card-full">
+            <h3>Órdenes Recientes</h3>
+            <div class="tabla-wrap" style="max-height: 430px;">
+                <table class="tabla-material" style="min-width: 1060px;">
+                    <thead>
+                        <tr>
+                            <th>Folio</th>
+                            <th>Proveedor</th>
+                            <th>Estado</th>
+                            <th>Fecha orden</th>
+                            <th>Fecha prometida</th>
+                            <th>Total estimado</th>
+                            <th>Pedido</th>
+                            <th>Recibido</th>
+                            <th>Avance</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for orden in ordenes_recientes %}
+                        <tr>
+                            <td>{{ orden.folio }}</td>
+                            <td>{{ orden.proveedor }}</td>
+                            <td>{{ orden.estado_label }}</td>
+                            <td>{{ orden.fecha_orden|date:'d/m/Y' }}</td>
+                            <td>{{ orden.fecha_prometida|date:'d/m/Y'|default:'-' }}</td>
+                            <td>${{ orden.total_pedido_importe|floatformat:2 }}</td>
+                            <td>{{ orden.total_pedido_cantidad|floatformat:2 }}</td>
+                            <td>{{ orden.total_recibido_cantidad|floatformat:2 }}</td>
+                            <td>
+                                <div style="display: flex; flex-direction: column; gap: 5px; min-width: 120px;">
+                                    <div style="width: 100%; height: 8px; border-radius: 10px; background: #e3e9f2; overflow: hidden;">
+                                        <div style="height: 100%; background: #2f5598; width: {{ orden.avance }}%;"></div>
+                                    </div>
+                                    <small>{{ orden.avance }}%</small>
+                                </div>
+                            </td>
+                            <td>
+                                <div style="display: flex; gap: 6px; flex-wrap: wrap; justify-content: center;">
+                                    {% if orden.estado == estado_borrador %}
+                                    <form method="post">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="orden_id" value="{{ orden.id }}">
+                                        <button class="btn btn-primary" type="submit" name="accion_estado" value="APROBADA">Aprobar</button>
+                                    </form>
+                                    {% endif %}
+
+                                    {% if orden.estado == estado_aprobada %}
+                                    <form method="post">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="orden_id" value="{{ orden.id }}">
+                                        <button class="btn btn-success" type="submit" name="accion_estado" value="ENVIADA">Enviar</button>
+                                    </form>
+                                    {% endif %}
+
+                                    {% if orden.estado == estado_enviada %}
+                                    <form method="post">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="orden_id" value="{{ orden.id }}">
+                                        <button class="btn btn-info" type="submit" name="accion_estado" value="PARCIAL">Parcial</button>
+                                    </form>
+                                    {% endif %}
+
+                                    {% if orden.estado == estado_enviada or orden.estado == estado_parcial %}
+                                    <form method="post">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="orden_id" value="{{ orden.id }}">
+                                        <button class="btn btn-success" type="submit" name="accion_estado" value="RECIBIDA">Recibida</button>
+                                    </form>
+                                    {% endif %}
+
+                                    {% if orden.estado != 'CANCELADA' and orden.estado != 'RECIBIDA' %}
+                                    <form method="post">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="orden_id" value="{{ orden.id }}">
+                                        <button class="btn btn-danger" type="submit" name="accion_estado" value="CANCELADA">Cancelar</button>
+                                    </form>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="10">No hay órdenes de compra registradas todavía.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+</div>
+
+<script>
+    (function () {
+        const proveedorSelect = document.getElementById('oc-proveedor');
+        const body = document.getElementById('oc-partidas-body');
+        const addBtn = document.getElementById('btn-add-partida');
+        const totalNode = document.getElementById('oc-total-estimado');
+        const apiMaterialesTemplate = "{% url 'api_materiales_proveedor' 0 %}";
+        let catalogo = {};
+
+        async function cargarCatalogoProveedor() {
+            const proveedorId = proveedorSelect.value;
+            catalogo = {};
+
+            if (!proveedorId) {
+                renderSkuOptions();
+                recalculateAll();
+                return;
+            }
+
+            try {
+                const apiUrl = apiMaterialesTemplate.replace('/0/', `/${proveedorId}/`);
+                const response = await fetch(apiUrl);
+                if (!response.ok) {
+                    throw new Error('No se pudieron cargar materiales.');
+                }
+                catalogo = await response.json();
+                renderSkuOptions();
+                recalculateAll();
+            } catch (error) {
+                catalogo = {};
+                renderSkuOptions();
+            }
+        }
+
+        function skuOptionsHtml(selectedSku) {
+            const selected = (selectedSku || '').trim().toUpperCase();
+            const keys = Object.keys(catalogo).sort();
+            let html = '<option value="">Selecciona material</option>';
+            keys.forEach((sku) => {
+                const material = catalogo[sku] || {};
+                const mark = sku === selected ? ' selected' : '';
+                html += `<option value="${sku}"${mark}>${sku} - ${material.nombre || ''}</option>`;
+            });
+            return html;
+        }
+
+        function fillRowInfo(row) {
+            const skuSelect = row.querySelector('.oc-sku-select');
+            const descInput = row.querySelector('.oc-desc');
+            const umInput = row.querySelector('.oc-um');
+            const priceInput = row.querySelector('input[name="precio_unitario[]"]');
+            const sku = (skuSelect.value || '').trim().toUpperCase();
+            const material = catalogo[sku] || {};
+
+            descInput.value = material.nombre || '';
+            umInput.value = material.um || '';
+
+            const prevSku = row.dataset.lastSku || '';
+            if (sku !== prevSku) {
+                const precioSugerido = Number(material.precio_unitario || 0).toFixed(2);
+                if (sku) {
+                    const precioActual = Number(priceInput.value || 0);
+                    if (!priceInput.value || Number.isNaN(precioActual) || precioActual === 0) {
+                        priceInput.value = precioSugerido;
+                    }
+                }
+                row.dataset.lastSku = sku;
+            }
+        }
+
+        function calcRowSubtotal(row) {
+            const qtyInput = row.querySelector('input[name="cantidad_pedida[]"]');
+            const priceInput = row.querySelector('input[name="precio_unitario[]"]');
+            const subtotalInput = row.querySelector('.oc-subtotal');
+            const qty = Number(qtyInput.value || 0);
+            const price = Number(priceInput.value || 0);
+            const subtotal = qty * price;
+            subtotalInput.value = subtotal.toFixed(2);
+            return subtotal;
+        }
+
+        function recalculateAll() {
+            let total = 0;
+            body.querySelectorAll('tr').forEach((row) => {
+                fillRowInfo(row);
+                total += calcRowSubtotal(row);
+            });
+            totalNode.textContent = total.toFixed(2);
+        }
+
+        function bindRowEvents(row) {
+            const skuSelect = row.querySelector('.oc-sku-select');
+            const qtyInput = row.querySelector('input[name="cantidad_pedida[]"]');
+            const priceInput = row.querySelector('input[name="precio_unitario[]"]');
+            const removeBtn = row.querySelector('.btn-row-remove');
+
+            skuSelect.addEventListener('change', recalculateAll);
+            qtyInput.addEventListener('input', recalculateAll);
+            priceInput.addEventListener('input', recalculateAll);
+
+            removeBtn.addEventListener('click', function () {
+                const totalRows = body.querySelectorAll('tr').length;
+                if (totalRows === 1) {
+                    row.querySelector('.oc-sku-select').value = '';
+                    row.querySelector('.oc-desc').value = '';
+                    row.querySelector('.oc-um').value = '';
+                    row.querySelector('input[name="cantidad_pedida[]"]').value = '';
+                    row.querySelector('input[name="precio_unitario[]"]').value = '';
+                } else {
+                    row.remove();
+                }
+                recalculateAll();
+            });
+        }
+
+        function renderSkuOptions() {
+            body.querySelectorAll('.oc-sku-select').forEach((select) => {
+                const currentValue = select.value;
+                select.innerHTML = skuOptionsHtml(currentValue);
+                if (currentValue && !catalogo[currentValue]) {
+                    select.value = '';
+                }
+            });
+        }
+
+        function addRow() {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td><select name="sku[]" class="oc-sku-select"></select></td>
+                <td><input type="text" class="oc-desc" readonly></td>
+                <td><input type="text" class="oc-um" readonly></td>
+                <td><input type="number" step="0.01" min="0.01" name="cantidad_pedida[]"></td>
+                <td><input type="number" step="0.01" min="0" name="precio_unitario[]"></td>
+                <td><input type="text" class="oc-subtotal" readonly value="0.00"></td>
+                <td><button type="button" class="btn btn-danger btn-row-remove">Quitar</button></td>
+            `;
+            body.appendChild(row);
+            renderSkuOptions();
+            bindRowEvents(row);
+            recalculateAll();
+        }
+
+        addBtn.addEventListener('click', addRow);
+        body.querySelectorAll('tr').forEach((row) => bindRowEvents(row));
+        proveedorSelect.addEventListener('change', cargarCatalogoProveedor);
+        cargarCatalogoProveedor();
+    })();
+</script>
+{% endblock %}

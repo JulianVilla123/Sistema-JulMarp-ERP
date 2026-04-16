@@ -12,10 +12,10 @@
             {% with departamento=user.departamento.nombre|default:'' %}
                 {% if departamento == 'Inventario' or departamento == 'Admin' %}
                 <li class="nav-item">
-                    <a href="{% url 'entrada_planta' %}" class="nav-link">Entrada a Planta</a>
+                    <a href="{% url 'entrada_planta' %}" class="nav-link">Importacion</a>
                 </li>
                 <li class="nav-item">
-                    <a href="{% url 'entrada_linea' %}" class="nav-link">Entrada a Línea</a>
+                    <a href="{% url 'entrada_linea' %}" class="nav-link">Distribucion</a>
                 </li>
                 <li class="nav-item dropdown">
                     <a href="#" class="nav-link dropdown-toggle">Inventario <span class="arrow">&#9660;</span></a>
@@ -33,7 +33,7 @@
                     <a href="{% url 'proveedores_alta' %}" class="nav-link">Proveedores</a>
                 </li>
                 <li class="nav-item">
-                    <a href="#" class="nav-link">Órdenes de Compra</a>
+                    <a href="{% url 'ordenes_compra' %}" class="nav-link">Órdenes de Compra</a>
                 </li>
                 {% endif %}
 

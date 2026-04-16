@@ -22,10 +22,10 @@
     </ul>
     {% endif %}
 
-    <div class="entrada-grid">
-        <section class="entrada-card">
+    <div class="entrada-grid proveedores-grid">
+        <section class="entrada-card proveedores-card proveedores-main-card">
             <h3>Datos del Proveedor</h3>
-            <form method="post">
+            <form method="post" class="proveedores-form">
                 {% csrf_token %}
                 <div class="entrada-form-grid">
                     <label>
@@ -51,27 +51,58 @@
                         Descripción
                         <textarea rows="3" name="descripcion" placeholder="Información adicional del proveedor.">{{ form_data.descripcion }}</textarea>
                     </label>
-                    <label style="grid-column: 1 / -1;">
+                    <label class="proveedores-materiales-label" style="grid-column: 1 / -1;">
                         Materiales que suministra
-                        <select name="materiales[]" multiple size="10">
+                        <select id="materiales-disponibles" class="proveedores-materiales-select" size="10">
                             {% for material in materiales_catalogo %}
-                            <option value="{{ material.id }}" {% if material.id|stringformat:'s' in form_data.materiales_ids %}selected{% endif %}>
+                            <option
+                                value="{{ material.id }}"
+                                data-sku="{{ material.sku }}"
+                                data-nombre="{{ material.nombre }}"
+                                data-um="{{ material.um }}"
+                                data-descripcion="{{ material.descripcion|default:'' }}"
+                                data-precio="0"
+                                {% if material.id|stringformat:'s' in form_data.materiales_ids %}selected{% endif %}
+                            >
                                 {{ material.sku }} - {{ material.nombre }}
                             </option>
                             {% endfor %}
                         </select>
-                        <small style="color: #6e7480;">Usa Ctrl o Cmd para seleccionar múltiples materiales.</small>
+                        <small class="proveedores-helper-text">Doble clic en un material para capturarlo en la tabla inferior.</small>
+                    </label>
+
+                    <label class="proveedores-capturados-label" style="grid-column: 1 / -1;">
+                        Materiales capturados para este proveedor
+                        <div class="tabla-wrap proveedores-capturados-wrap" style="margin-top: 8px;">
+                            <table class="tabla-material proveedores-capturados-table" id="materiales-capturados-table">
+                                <thead>
+                                    <tr>
+                                        <th>SKU</th>
+                                        <th>Nombre</th>
+                                        <th>UM</th>
+                                        <th>Descripcion</th>
+                                        <th>Precio unitario</th>
+                                        <th>Accion</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="materiales-capturados-body">
+                                    <tr id="materiales-empty-row">
+                                        <td colspan="6">Aun no has capturado materiales para este proveedor.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </label>
                 </div>
 
-                <div class="entrada-actions" style="margin-top: 16px;">
+                <div class="entrada-actions proveedores-actions" style="margin-top: 16px;">
                     <button class="btn btn-primary" type="submit">Guardar proveedor</button>
                     <a class="btn btn-info" href="{% url 'proveedores_alta' %}">Limpiar</a>
                 </div>
             </form>
         </section>
 
-        <section class="entrada-card">
+        <section class="entrada-card proveedores-recientes-card">
             <h3>Proveedores Recientes</h3>
             <div class="tabla-wrap">
                 <table class="tabla-material">
@@ -111,4 +142,100 @@
         </section>
     </div>
 </div>
+
+{{ form_data.precios_materiales|json_script:"precios-materiales-json" }}
+
+<script>
+    (function () {
+        const disponibles = document.getElementById('materiales-disponibles');
+        const capturadosBody = document.getElementById('materiales-capturados-body');
+        const emptyRow = document.getElementById('materiales-empty-row');
+        const preciosIniciales = JSON.parse(document.getElementById('precios-materiales-json').textContent || '{}');
+        const capturados = new Map();
+
+        function escapeHtml(value) {
+            return (value || '')
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;')
+                .replaceAll('"', '&quot;')
+                .replaceAll("'", '&#39;');
+        }
+
+        function refreshEmptyState() {
+            const hasRows = capturadosBody.querySelectorAll('tr[data-material-id]').length > 0;
+            emptyRow.hidden = hasRows;
+        }
+
+        function removeMaterial(materialId) {
+            const row = capturadosBody.querySelector(`tr[data-material-id="${materialId}"]`);
+            if (row) {
+                row.remove();
+            }
+
+            capturados.delete(String(materialId));
+            const option = disponibles.querySelector(`option[value="${materialId}"]`);
+            if (option) {
+                option.selected = false;
+            }
+            refreshEmptyState();
+        }
+
+        function addMaterialFromOption(option) {
+            const materialId = String(option.value || '');
+            if (!materialId || capturados.has(materialId)) {
+                return;
+            }
+
+            const sku = option.dataset.sku || '';
+            const nombre = option.dataset.nombre || '';
+            const um = option.dataset.um || '';
+            const descripcion = option.dataset.descripcion || '';
+            const precio = preciosIniciales[materialId] || option.dataset.precio || '0';
+
+            const row = document.createElement('tr');
+            row.dataset.materialId = materialId;
+            row.innerHTML = `
+                <td>${escapeHtml(sku)}</td>
+                <td>${escapeHtml(nombre)}<input type="hidden" name="materiales[]" value="${escapeHtml(materialId)}"></td>
+                <td>${escapeHtml(um)}</td>
+                <td>${escapeHtml(descripcion)}</td>
+                <td><input type="number" step="0.01" min="0" name="precio_material[]" value="${escapeHtml(precio)}"></td>
+                <td><button type="button" class="btn btn-danger btn-row-remove">Eliminar</button></td>
+            `;
+
+            const removeBtn = row.querySelector('button');
+            removeBtn.addEventListener('click', function () {
+                removeMaterial(materialId);
+            });
+
+            capturadosBody.appendChild(row);
+            capturados.set(materialId, {
+                sku: sku,
+                nombre: nombre,
+                um: um,
+                descripcion: descripcion,
+            });
+
+            option.selected = true;
+            refreshEmptyState();
+        }
+
+        disponibles.addEventListener('dblclick', function () {
+            const option = disponibles.options[disponibles.selectedIndex];
+            if (!option) {
+                return;
+            }
+            addMaterialFromOption(option);
+        });
+
+        Array.from(disponibles.options).forEach(function (option) {
+            if (option.selected) {
+                addMaterialFromOption(option);
+            }
+        });
+
+        refreshEmptyState();
+    })();
+</script>
 {% endblock %}

@@ -23,12 +23,12 @@
             <h2>Acciones rápidas de Inventario</h2>
             <div class="modules-grid">
                 <div class="module-card">
-                    <h4>Entrada de Material a Planta</h4>
+                    <h4>Importacion de Material</h4>
                     <p>Registra el ingreso de material y alimenta stock por lote.</p>
                     <a href="{% url 'entrada_planta' %}" class="btn btn-primary">Abrir módulo</a>
                 </div>
                 <div class="module-card">
-                    <h4>Entrada a Línea de Producción</h4>
+                    <h4>Distribucion a Línea de Producción</h4>
                     <p>Descuenta material desde almacén para orden de producción.</p>
                     <a href="{% url 'entrada_linea' %}" class="btn btn-primary">Abrir módulo</a>
                 </div>
@@ -41,6 +41,11 @@
                     <h4>Proveedores</h4>
                     <p>Da de alta proveedores y asigna materiales autorizados.</p>
                     <a href="{% url 'proveedores_alta' %}" class="btn btn-primary">Abrir módulo</a>
+                </div>
+                <div class="module-card">
+                    <h4>Órdenes de Compra</h4>
+                    <p>Genera órdenes por proveedor y da seguimiento a pedido vs recibido.</p>
+                    <a href="{% url 'ordenes_compra' %}" class="btn btn-primary">Abrir módulo</a>
                 </div>
             </div>
         </section>

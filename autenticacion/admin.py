@@ -5,7 +5,10 @@ from .models import (
     Departamento,
     InventarioAlmacen,
     Material,
+    OrdenCompra,
+    OrdenCompraDetalle,
     Proveedor,
+    ProveedorMaterialPrecio,
     SalidaLinea,
     SalidaLineaDetalle,
     TransferenciaAlmacen,
@@ -70,6 +73,13 @@ class ProveedorAdmin(admin.ModelAdmin):
     filter_horizontal = ('materiales',)
 
 
+@admin.register(ProveedorMaterialPrecio)
+class ProveedorMaterialPrecioAdmin(admin.ModelAdmin):
+    list_display = ('proveedor', 'material', 'precio_unitario', 'fecha_actualizacion')
+    search_fields = ('proveedor__nombre', 'material__sku', 'material__nombre')
+    list_filter = ('proveedor',)
+
+
 @admin.register(Almacen)
 class AlmacenAdmin(admin.ModelAdmin):
     list_display = ('codigo', 'nombre', 'activo')
@@ -110,3 +120,17 @@ class TransferenciaAlmacenDetalleAdmin(admin.ModelAdmin):
     list_display = ('transferencia', 'material', 'lote', 'cantidad_transferida')
     search_fields = ('transferencia__id', 'material__sku', 'descripcion', 'lote')
     list_filter = ('material',)
+
+
+@admin.register(OrdenCompra)
+class OrdenCompraAdmin(admin.ModelAdmin):
+    list_display = ('folio', 'proveedor', 'fecha_orden', 'estado', 'total_estimado', 'creado_por')
+    search_fields = ('folio', 'proveedor__nombre', 'creado_por__username')
+    list_filter = ('estado', 'proveedor')
+
+
+@admin.register(OrdenCompraDetalle)
+class OrdenCompraDetalleAdmin(admin.ModelAdmin):
+    list_display = ('orden', 'sku', 'descripcion', 'cantidad_pedida', 'precio_unitario', 'subtotal')
+    search_fields = ('orden__folio', 'sku', 'descripcion')
+    list_filter = ('orden__estado',)
