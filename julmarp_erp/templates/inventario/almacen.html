@@ -96,6 +96,7 @@
                                     <th>Lote</th>
                                     <th>UM</th>
                                     <th>Stock en almacén</th>
+                                    <th>BOM</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -107,10 +108,11 @@
                                         <td>{{ inventario.lote }}</td>
                                         <td>{{ inventario.um }}</td>
                                         <td>{{ inventario.stock_historico }}</td>
+                                        <td><a href="{% url 'bom_lista_materiales' %}?material_sku={{ inventario.sku }}" class="btn btn-info">Ver BOM</a></td>
                                     </tr>
                                     {% empty %}
                                     <tr>
-                                        <td colspan="5">No hay inventario registrado para este almacén.</td>
+                                        <td colspan="6">No hay inventario registrado para este almacén.</td>
                                     </tr>
                                     {% endfor %}
                                 {% else %}
@@ -121,10 +123,11 @@
                                         <td>{{ inventario.lote|default:'Sin lote registrado' }}</td>
                                         <td>{{ inventario.material.um|default:'-' }}</td>
                                         <td>{{ inventario.stock_actual }}</td>
+                                        <td><a href="{% url 'bom_lista_materiales' %}?material_sku={{ inventario.material.sku }}" class="btn btn-info">Ver BOM</a></td>
                                     </tr>
                                     {% empty %}
                                     <tr>
-                                        <td colspan="5">No hay inventario registrado para este almacén.</td>
+                                        <td colspan="6">No hay inventario registrado para este almacén.</td>
                                     </tr>
                                     {% endfor %}
                                 {% endif %}

@@ -15,6 +15,8 @@ import unicodedata
 from decimal import Decimal, InvalidOperation
 from .models import (
     Almacen,
+    BOM,
+    BOMDetalle,
     InventarioAlmacen,
     Material,
     OrdenCompra,
@@ -1417,9 +1419,207 @@ def ordenes_compra(request):
 
 @login_required(login_url='login')
 @never_cache
+def bom_lista_materiales(request):
+    material_sku = (request.GET.get('material_sku') or '').strip().upper()
+    material_consultado = None
+    materiales_catalogo = list(Material.objects.filter(activo=True).order_by('sku'))
+    boms_registrados = (
+        BOM.objects
+        .select_related('creado_por')
+        .prefetch_related('componentes__material')
+        .order_by('producto', 'version')
+    )
+
+    if material_sku:
+        material_consultado = Material.objects.filter(sku__iexact=material_sku, activo=True).first()
+        if material_consultado:
+            boms_registrados = boms_registrados.filter(componentes__material=material_consultado).distinct()
+        else:
+            boms_registrados = boms_registrados.none()
+
+    form_data = {
+        'codigo': '',
+        'producto': '',
+        'version': '1.0',
+        'descripcion': '',
+        'cantidad_base': '1',
+        'unidad_producto': '',
+        'activo': True,
+        'componentes': [
+            {
+                'material_id': '',
+                'cantidad': '',
+                'observaciones': '',
+            }
+        ],
+    }
+
+    if request.method == 'POST':
+        codigo = (request.POST.get('codigo') or '').strip().upper()
+        producto = (request.POST.get('producto') or '').strip()
+        version = (request.POST.get('version') or '1.0').strip()
+        descripcion = (request.POST.get('descripcion') or '').strip()
+        cantidad_base_texto = (request.POST.get('cantidad_base') or '1').strip()
+        unidad_producto = (request.POST.get('unidad_producto') or '').strip()
+        activo = (request.POST.get('activo') or '1').strip() == '1'
+
+        materiales_ids = request.POST.getlist('material_id[]')
+        cantidades = request.POST.getlist('cantidad[]')
+        observaciones_list = request.POST.getlist('observaciones[]')
+
+        form_data.update({
+            'codigo': codigo,
+            'producto': producto,
+            'version': version,
+            'descripcion': descripcion,
+            'cantidad_base': cantidad_base_texto,
+            'unidad_producto': unidad_producto,
+            'activo': activo,
+            'componentes': [],
+        })
+
+        try:
+            cantidad_base = Decimal(cantidad_base_texto.replace(',', '.'))
+        except InvalidOperation:
+            cantidad_base = None
+
+        if not codigo:
+            messages.error(request, 'El código BOM es obligatorio.')
+        elif not producto:
+            messages.error(request, 'El nombre del producto es obligatorio.')
+        elif not version:
+            messages.error(request, 'La versión del BOM es obligatoria.')
+        elif cantidad_base is None:
+            messages.error(request, 'La cantidad base debe ser numérica válida.')
+        elif cantidad_base <= 0:
+            messages.error(request, 'La cantidad base debe ser mayor a cero.')
+        elif BOM.objects.filter(codigo__iexact=codigo, version__iexact=version).exists():
+            messages.error(request, 'Ya existe un BOM con ese código y versión.')
+        else:
+            materiales_validos = {str(material.id): material for material in materiales_catalogo}
+            componentes = []
+            materiales_usados = set()
+            total_rows = max(len(materiales_ids), len(cantidades), len(observaciones_list))
+
+            for idx in range(total_rows):
+                material_id = (materiales_ids[idx] if idx < len(materiales_ids) else '').strip()
+                cantidad_texto = (cantidades[idx] if idx < len(cantidades) else '').strip()
+                observaciones = (observaciones_list[idx] if idx < len(observaciones_list) else '').strip()
+
+                row_has_data = any([material_id, cantidad_texto, observaciones])
+                if not row_has_data:
+                    continue
+
+                form_data['componentes'].append({
+                    'material_id': material_id,
+                    'cantidad': cantidad_texto,
+                    'observaciones': observaciones,
+                })
+
+                material_obj = materiales_validos.get(material_id)
+                if not material_obj:
+                    messages.error(request, f'En la fila {idx + 1}, selecciona un material válido.')
+                    componentes = []
+                    break
+
+                if material_id in materiales_usados:
+                    messages.error(request, f'En la fila {idx + 1}, el material {material_obj.sku} está duplicado.')
+                    componentes = []
+                    break
+
+                try:
+                    cantidad = Decimal(cantidad_texto.replace(',', '.'))
+                except InvalidOperation:
+                    messages.error(request, f'En la fila {idx + 1}, la cantidad requerida debe ser numérica válida.')
+                    componentes = []
+                    break
+
+                if cantidad <= 0:
+                    messages.error(request, f'En la fila {idx + 1}, la cantidad requerida debe ser mayor a cero.')
+                    componentes = []
+                    break
+
+                materiales_usados.add(material_id)
+                componentes.append({
+                    'material': material_obj,
+                    'cantidad': cantidad,
+                    'observaciones': observaciones,
+                })
+
+            if not form_data['componentes']:
+                form_data['componentes'] = [{'material_id': '', 'cantidad': '', 'observaciones': ''}]
+
+            if componentes:
+                with transaction.atomic():
+                    bom = BOM.objects.create(
+                        codigo=codigo,
+                        producto=producto,
+                        version=version,
+                        descripcion=descripcion,
+                        cantidad_base=cantidad_base,
+                        unidad_producto=unidad_producto,
+                        activo=activo,
+                        creado_por=request.user,
+                    )
+
+                    BOMDetalle.objects.bulk_create([
+                        BOMDetalle(
+                            bom=bom,
+                            material=componente['material'],
+                            cantidad=componente['cantidad'],
+                            observaciones=componente['observaciones'],
+                        )
+                        for componente in componentes
+                    ])
+
+                messages.success(request, f'BOM {bom.codigo} v{bom.version} creado correctamente.')
+                return redirect('bom_lista_materiales')
+
+    bom_resumenes = []
+    total_componentes = 0
+    for bom in boms_registrados:
+        componentes = list(bom.componentes.all())
+        componentes_count = len(componentes)
+        total_componentes += componentes_count
+        bom_resumenes.append({
+            'id': bom.id,
+            'codigo': bom.codigo,
+            'producto': bom.producto,
+            'version': bom.version,
+            'descripcion': bom.descripcion,
+            'cantidad_base': bom.cantidad_base,
+            'unidad_producto': bom.unidad_producto,
+            'activo': bom.activo,
+            'creado_por': bom.creado_por,
+            'fecha_creacion': bom.fecha_creacion,
+            'componentes_count': componentes_count,
+            'materiales': componentes,
+        })
+
+    return render(
+        request,
+        'inventario/bom.html',
+        {
+            'materiales_catalogo': materiales_catalogo,
+            'boms_registrados': bom_resumenes,
+            'form_data': form_data,
+            'material_consultado': material_consultado,
+            'material_sku_filtrado': material_sku,
+            'bom_kpis': {
+                'total_boms': len(bom_resumenes),
+                'boms_activos': sum(1 for bom in bom_resumenes if bom['activo']),
+                'total_materiales_catalogo': len(materiales_catalogo),
+                'total_componentes': total_componentes,
+            },
+        },
+    )
+
+
+@login_required(login_url='login')
+@never_cache
 def proveedores_alta(request):
     materiales_catalogo = Material.objects.filter(activo=True).order_by('sku')
-    proveedores_recientes = Proveedor.objects.prefetch_related('materiales').order_by('-fecha_creacion')[:8]
+    proveedores_recientes = Proveedor.objects.prefetch_related('materiales').order_by('nombre')
 
     form_data = {
         'nombre': '',

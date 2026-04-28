@@ -2,6 +2,8 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from .models import (
     Almacen,
+    BOM,
+    BOMDetalle,
     Departamento,
     InventarioAlmacen,
     Material,
@@ -63,6 +65,20 @@ class MaterialAdmin(admin.ModelAdmin):
         return proveedor.nombre if proveedor else 'Sin proveedor'
 
     proveedor_display.short_description = 'Proveedor'
+
+
+@admin.register(BOM)
+class BOMAdmin(admin.ModelAdmin):
+    list_display = ('codigo', 'producto', 'version', 'cantidad_base', 'unidad_producto', 'activo', 'creado_por')
+    search_fields = ('codigo', 'producto', 'descripcion')
+    list_filter = ('activo', 'version')
+
+
+@admin.register(BOMDetalle)
+class BOMDetalleAdmin(admin.ModelAdmin):
+    list_display = ('bom', 'material', 'cantidad', 'observaciones')
+    search_fields = ('bom__codigo', 'bom__producto', 'material__sku', 'material__nombre')
+    list_filter = ('bom',)
 
 
 @admin.register(Proveedor)

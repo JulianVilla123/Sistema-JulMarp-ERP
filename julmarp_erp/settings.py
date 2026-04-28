@@ -83,6 +83,8 @@ DATABASES = {
 
 AUTH_USER_MODEL = 'autenticacion.UsuarioERP'
 
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
 
 # Password validation
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators

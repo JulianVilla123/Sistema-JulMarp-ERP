@@ -27,13 +27,10 @@
                     </ul>
                 </li>
                 <li class="nav-item">
-                    <a href="#" class="nav-link">BOM</a>
+                    <a href="{% url 'bom_lista_materiales' %}" class="nav-link">BOM</a>
                 </li>
                 <li class="nav-item">
                     <a href="{% url 'proveedores_alta' %}" class="nav-link">Proveedores</a>
-                </li>
-                <li class="nav-item">
-                    <a href="{% url 'ordenes_compra' %}" class="nav-link">Órdenes de Compra</a>
                 </li>
                 {% endif %}
 
@@ -51,6 +48,7 @@
                 <li class="nav-item dropdown">
                     <a href="#" class="nav-link dropdown-toggle">Finanzas <span class="arrow">&#9660;</span></a>
                     <ul class="dropdown-menu">
+                        <li><a href="{% url 'ordenes_compra' %}">Órdenes de Compra</a></li>
                         <li><a href="#">Análisis de Costos</a></li>
                         <li><a href="#">Reportes de Ventas</a></li>
                         <li><a href="#">Gráficas Financieras</a></li>

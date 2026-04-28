@@ -1,5 +1,6 @@
 from django.urls import path
 from .views import (
+    bom_lista_materiales,
     login_usuario,
     register_usuario,
     home,
@@ -28,6 +29,7 @@ urlpatterns = [
     path('perfil/', perfil_usuario, name='perfil'),
     path('inventario/entrada-planta/', entrada_material_planta, name='entrada_planta'),
     path('inventario/entrada-linea/', entrada_material_linea, name='entrada_linea'),
+    path('inventario/bom/', bom_lista_materiales, name='bom_lista_materiales'),
     path('inventario/ordenes-compra/', ordenes_compra, name='ordenes_compra'),
     path('inventario/proveedores/', proveedores_alta, name='proveedores_alta'),
     path('inventario/transferencias-almacenes/', transferencia_almacenes, name='transferencias_almacenes'),

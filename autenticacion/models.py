@@ -77,6 +77,66 @@ class Material(models.Model):
         ordering = ['sku']
 
 
+class BOM(models.Model):
+    codigo = models.CharField('Código BOM', max_length=40)
+    producto = models.CharField('Producto', max_length=200)
+    version = models.CharField('Versión', max_length=20, default='1.0')
+    descripcion = models.TextField('Descripción', blank=True)
+    cantidad_base = models.DecimalField('Cantidad base', max_digits=12, decimal_places=2, default=1)
+    unidad_producto = models.CharField('Unidad producto', max_length=20, blank=True)
+    activo = models.BooleanField('Activo', default=True)
+    creado_por = models.ForeignKey(
+        UsuarioERP,
+        on_delete=models.PROTECT,
+        related_name='boms_creados',
+    )
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.codigo} - {self.producto} v{self.version}"
+
+    class Meta:
+        verbose_name = 'BOM'
+        verbose_name_plural = 'BOM'
+        ordering = ['producto', 'version']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['codigo', 'version'],
+                name='unique_bom_codigo_version',
+            )
+        ]
+
+
+class BOMDetalle(models.Model):
+    bom = models.ForeignKey(
+        BOM,
+        on_delete=models.CASCADE,
+        related_name='componentes',
+    )
+    material = models.ForeignKey(
+        Material,
+        on_delete=models.PROTECT,
+        related_name='bom_detalles',
+    )
+    cantidad = models.DecimalField('Cantidad requerida', max_digits=12, decimal_places=3)
+    observaciones = models.CharField('Observaciones', max_length=255, blank=True)
+
+    def __str__(self):
+        return f"{self.bom.codigo} - {self.material.sku} ({self.cantidad})"
+
+    class Meta:
+        verbose_name = 'Componente BOM'
+        verbose_name_plural = 'Componentes BOM'
+        ordering = ['material__sku']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['bom', 'material'],
+                name='unique_bom_material',
+            )
+        ]
+
+
 class Proveedor(models.Model):
     nombre = models.CharField('Nombre', max_length=200, unique=True)
     descripcion = models.TextField('Descripción', blank=True)
