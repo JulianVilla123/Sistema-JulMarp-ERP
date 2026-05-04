@@ -5,6 +5,8 @@ from .views import (
     planificacion_produccion,
     requerimiento_materiales_produccion,
         ordenes_fabricacion,
+    captura_lotes,
+    escaneo_produccion,
     login_usuario,
     register_usuario,
     home,
@@ -49,4 +51,6 @@ urlpatterns = [
     path('produccion/requerimiento-materiales/', requerimiento_materiales_produccion, name='requerimiento_materiales_produccion'),
     path('produccion/bom-mfg/', bom_mfg, name='bom_mfg'),
     path('produccion/ordenes-fabricacion/', ordenes_fabricacion, name='ordenes_fabricacion'),
+    path('produccion/captura-lotes/', captura_lotes, name='captura_lotes'),
+    path('produccion/escaneo/', escaneo_produccion, name='escaneo_produccion'),
 ]

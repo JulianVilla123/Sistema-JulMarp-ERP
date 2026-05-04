@@ -107,21 +107,136 @@
         </section>
 
     {% elif departamento == 'Producción' %}
-        <div class="modules-section">
-            <h2>Módulos disponibles</h2>
+        <!-- ── Acciones rápidas ── -->
+        <section class="modules-section premium-actions">
+            <h2>Acciones rápidas de Producción</h2>
             <div class="modules-grid">
                 <div class="module-card">
-                    <h4>Captura de Lotes de Producción</h4>
-                    <p>Registra los lotes de producción requeridos</p>
-                    <a href="#" class="btn btn-success">Acceder</a>
+                    <h4>Órdenes de Fabricación</h4>
+                    <p>Crea y ejecuta órdenes de fabricación. Registra avance real y consumo de materiales.</p>
+                    <a href="{% url 'ordenes_fabricacion' %}" class="btn btn-success">Abrir módulo</a>
                 </div>
                 <div class="module-card">
-                    <h4>Escaneo de Producción Realizada</h4>
-                    <p>Escanea y valida la producción completada</p>
-                    <a href="#" class="btn btn-success">Acceder</a>
+                    <h4>Planificación de Producción</h4>
+                    <p>Define planes de producción con fechas, línea, turno y valida disponibilidad de inventario.</p>
+                    <a href="{% url 'planificacion_produccion' %}" class="btn btn-success">Abrir módulo</a>
+                </div>
+                <div class="module-card">
+                    <h4>Captura de Lotes</h4>
+                    <p>Registra lotes terminados con folio propio, producto, turno, operador y cantidad producida.</p>
+                    <a href="{% url 'captura_lotes' %}" class="btn btn-success">Abrir módulo</a>
+                </div>
+                <div class="module-card">
+                    <h4>Escaneo de Producción</h4>
+                    <p>Busca una OF por folio y registra paquetes de producción para actualizar su avance en tiempo real.</p>
+                    <a href="{% url 'escaneo_produccion' %}" class="btn btn-success">Abrir módulo</a>
                 </div>
             </div>
-        </div>
+        </section>
+
+        <!-- ── KPIs ── -->
+        <section class="dashboard-grid" style="grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap:14px;">
+            <article class="dashboard-card" style="text-align:center; padding:18px 12px;">
+                <p style="font-size:2rem; font-weight:800; color:#1255a7; margin:0; line-height:1.1;">{{ prod_planes_activos }}</p>
+                <p style="font-size:0.72rem; text-transform:uppercase; letter-spacing:.05em; color:#7a90ad; margin:4px 0 0;">Planes activos</p>
+            </article>
+            <article class="dashboard-card" style="text-align:center; padding:18px 12px;">
+                <p style="font-size:2rem; font-weight:800; color:#0a7c42; margin:0; line-height:1.1;">{{ prod_ofs_en_proceso }}</p>
+                <p style="font-size:0.72rem; text-transform:uppercase; letter-spacing:.05em; color:#7a90ad; margin:4px 0 0;">OFs en proceso</p>
+            </article>
+            <article class="dashboard-card" style="text-align:center; padding:18px 12px;">
+                <p style="font-size:2rem; font-weight:800; color:#1f3e67; margin:0; line-height:1.1;">{{ prod_ofs_completadas_semana }}</p>
+                <p style="font-size:0.72rem; text-transform:uppercase; letter-spacing:.05em; color:#7a90ad; margin:4px 0 0;">OFs completadas (7 días)</p>
+            </article>
+            <article class="dashboard-card" style="text-align:center; padding:18px 12px;">
+                <p style="font-size:2rem; font-weight:800; color:{% if prod_eficiencia >= 90 %}#0a7c42{% elif prod_eficiencia >= 70 %}#7a5200{% else %}#9b2121{% endif %}; margin:0; line-height:1.1;">{{ prod_eficiencia }}%</p>
+                <p style="font-size:0.72rem; text-transform:uppercase; letter-spacing:.05em; color:#7a90ad; margin:4px 0 0;">Eficiencia producción</p>
+            </article>
+            <article class="dashboard-card" style="text-align:center; padding:18px 12px;">
+                <p style="font-size:2rem; font-weight:800; color:#1f3e67; margin:0; line-height:1.1;">{{ prod_boms_activos }}</p>
+                <p style="font-size:0.72rem; text-transform:uppercase; letter-spacing:.05em; color:#7a90ad; margin:4px 0 0;">BOMs MFG activos</p>
+            </article>
+            <article class="dashboard-card" style="text-align:center; padding:18px 12px;">
+                <p style="font-size:2rem; font-weight:800; color:{% if prod_reqs_pendientes > 0 %}#9b2121{% else %}#0a7c42{% endif %}; margin:0; line-height:1.1;">{{ prod_reqs_pendientes }}</p>
+                <p style="font-size:0.72rem; text-transform:uppercase; letter-spacing:.05em; color:#7a90ad; margin:4px 0 0;">Reqs. sin enviar</p>
+            </article>
+        </section>
+
+        <!-- ── Gráficas ── -->
+        <section class="dashboard-grid chart-grid">
+            <article class="dashboard-card chart-card">
+                <h3>Distribución de OFs por estado</h3>
+                <p class="chart-subtitle">Estado actual de todas las órdenes de fabricación</p>
+                <div class="chart-stage">
+                    <canvas id="chart-estados-of" height="140"></canvas>
+                </div>
+            </article>
+            <article class="dashboard-card chart-card">
+                <h3>Top productos producidos</h3>
+                <p class="chart-subtitle">Cantidad total producida por producto (OFs completadas)</p>
+                <div class="chart-stage">
+                    <canvas id="chart-top-productos" height="140"></canvas>
+                </div>
+            </article>
+        </section>
+
+        <!-- ── Tablas actividad reciente ── -->
+        <section class="dashboard-grid">
+            <article class="dashboard-card">
+                <h3>Órdenes de Fabricación recientes</h3>
+                <ul class="recent-activity-list">
+                    {% for of in prod_ofs_recientes %}
+                    <li>
+                        <div>
+                            <p>{{ of.folio }} — {{ of.bom.producto }}</p>
+                            <small>
+                                {{ of.cantidad_producida|floatformat:0 }} / {{ of.cantidad_planificada|floatformat:0 }} uds
+                                {% if of.linea_produccion %} | {{ of.linea_produccion }}{% endif %}
+                            </small>
+                        </div>
+                        <span class="activity-tag
+                            {% if of.estado == 'EN_PROCESO' %}entrada
+                            {% elif of.estado == 'COMPLETADA' %}transferencia
+                            {% elif of.estado == 'PAUSADA' %}salida_linea
+                            {% else %}{% endif %}">
+                            {{ of.get_estado_display }}
+                        </span>
+                    </li>
+                    {% empty %}
+                    <li>
+                        <div><p>Sin órdenes registradas aún</p><small>Crea tu primera OF desde el módulo</small></div>
+                        <span class="activity-tag">N/A</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </article>
+
+            <article class="dashboard-card">
+                <h3>Planes de producción recientes</h3>
+                <ul class="recent-activity-list">
+                    {% for plan in prod_planes_recientes %}
+                    <li>
+                        <div>
+                            <p>{{ plan.folio }} — {{ plan.bom.producto }}</p>
+                            <small>{{ plan.cantidad_planificada|floatformat:0 }} uds | {{ plan.fecha_inicio|date:"d/m/Y" }} → {{ plan.fecha_fin|date:"d/m/Y" }}</small>
+                        </div>
+                        <span class="activity-tag
+                            {% if plan.estado == 'EN_PROCESO' %}entrada
+                            {% elif plan.estado == 'COMPLETADO' %}transferencia
+                            {% elif plan.estado == 'APROBADO' %}salida_linea
+                            {% else %}{% endif %}">
+                            {{ plan.get_estado_display }}
+                        </span>
+                    </li>
+                    {% empty %}
+                    <li>
+                        <div><p>Sin planes registrados aún</p><small>Crea un plan de producción</small></div>
+                        <span class="activity-tag">N/A</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </article>
+        </section>
 
     {% elif departamento == 'Finanzas' %}
         <div class="modules-section">
@@ -409,4 +524,120 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 </script>
 {% endif %}
+
+{% if departamento == 'Producción' and prod_chart_data %}
+{{ prod_chart_data|json_script:"prod-chart-data" }}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    Chart.defaults.font.family = "Manrope, Segoe UI, sans-serif";
+    Chart.defaults.color = '#5b6475';
+
+    const dataNode = document.getElementById('prod-chart-data');
+    if (!dataNode || typeof Chart === 'undefined') return;
+    const chartData = JSON.parse(dataNode.textContent || '{}');
+
+    const estadosLabels = chartData.estados_labels || [];
+    const estadosValues = chartData.estados_values || [];
+    const estadosColors = ['#8b8e97', '#1255a7', '#f59e0b', '#0a7c42', '#9b2121'];
+
+    const ctxEstados = document.getElementById('chart-estados-of');
+    if (ctxEstados) {
+        new Chart(ctxEstados, {
+            type: 'doughnut',
+            data: {
+                labels: estadosLabels,
+                datasets: [{
+                    data: estadosValues,
+                    backgroundColor: estadosColors.slice(0, estadosLabels.length),
+                    borderColor: '#ffffff',
+                    borderWidth: 3,
+                    hoverOffset: 7,
+                }],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '62%',
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            color: '#374151',
+                            boxWidth: 10,
+                            usePointStyle: true,
+                            pointStyle: 'circle',
+                            padding: 14,
+                            font: { weight: 700 },
+                        },
+                    },
+                    tooltip: {
+                        backgroundColor: '#111827',
+                        titleColor: '#f9fafb',
+                        bodyColor: '#f9fafb',
+                        padding: 10,
+                        callbacks: {
+                            label(context) {
+                                const total = estadosValues.reduce((a, b) => a + Number(b || 0), 0);
+                                const pct = total > 0 ? (Number(context.raw) / total * 100).toFixed(1) : 0;
+                                return `${context.label}: ${context.raw} OFs (${pct}%)`;
+                            },
+                        },
+                    },
+                },
+            },
+        });
+    }
+
+    const topLabels = chartData.top_productos_labels || [];
+    const topValues = chartData.top_productos_values || [];
+    const ctxTop = document.getElementById('chart-top-productos');
+    if (ctxTop) {
+        const grad = ctxTop.getContext('2d').createLinearGradient(0, 0, 0, 200);
+        grad.addColorStop(0, '#1255a7');
+        grad.addColorStop(1, '#3b82f6');
+        new Chart(ctxTop, {
+            type: 'bar',
+            data: {
+                labels: topLabels,
+                datasets: [{
+                    label: 'Uds. producidas',
+                    data: topValues,
+                    backgroundColor: grad,
+                    borderRadius: 6,
+                    borderSkipped: false,
+                }],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: '#111827',
+                        titleColor: '#f9fafb',
+                        bodyColor: '#f9fafb',
+                        padding: 10,
+                    },
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: { color: '#6b7280' },
+                        grid: { color: '#e9edf3', drawBorder: false },
+                        border: { display: false },
+                    },
+                    x: {
+                        ticks: { color: '#4b5563', font: { weight: 700 } },
+                        grid: { display: false },
+                        border: { display: false },
+                    },
+                },
+            },
+        });
+    }
+});
+</script>
+{% endif %}
 {% endblock %}
+

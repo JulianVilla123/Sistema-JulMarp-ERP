@@ -815,3 +815,54 @@ class OrdenFabricacionDetalle(models.Model):
                 name='unique_of_material',
             )
         ]
+
+
+class LoteProduccion(models.Model):
+    class EstadoLote(models.TextChoices):
+        CAPTURADO = 'CAPTURADO', 'Capturado'
+        VALIDADO = 'VALIDADO', 'Validado'
+        RECHAZADO = 'RECHAZADO', 'Rechazado'
+
+    folio = models.CharField('Folio', max_length=30, unique=True)
+    bom = models.ForeignKey(
+        BOM,
+        on_delete=models.PROTECT,
+        related_name='lotes_produccion',
+        verbose_name='Producto (BOM)',
+    )
+    orden_fabricacion = models.ForeignKey(
+        OrdenFabricacion,
+        on_delete=models.PROTECT,
+        related_name='lotes_produccion',
+        null=True,
+        blank=True,
+        verbose_name='Orden de fabricación',
+    )
+    fecha_captura = models.DateField('Fecha de captura')
+    hora_captura = models.TimeField('Hora de captura')
+    linea_produccion = models.CharField('Línea de producción', max_length=120, blank=True)
+    turno = models.CharField('Turno', max_length=60, blank=True)
+    cantidad_producida = models.DecimalField('Cantidad producida', max_digits=12, decimal_places=2)
+    operador = models.CharField('Operador / Responsable', max_length=200, blank=True)
+    estado = models.CharField(
+        'Estado',
+        max_length=12,
+        choices=EstadoLote.choices,
+        default=EstadoLote.CAPTURADO,
+    )
+    observaciones = models.TextField('Observaciones', blank=True)
+    creado_por = models.ForeignKey(
+        UsuarioERP,
+        on_delete=models.PROTECT,
+        related_name='lotes_produccion',
+    )
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.folio} - {self.bom.producto} ({self.cantidad_producida})"
+
+    class Meta:
+        verbose_name = 'Lote de producción'
+        verbose_name_plural = 'Lotes de producción'
+        ordering = ['-fecha_creacion']

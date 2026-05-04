@@ -3,7 +3,7 @@ from django.shortcuts import render, redirect
 from django.contrib.auth import authenticate, login, logout, get_user_model
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from django.db import IntegrityError
 from django.db import transaction
 from django.db.models import Case, Count, DecimalField, Q, Sum, Value, When
@@ -20,6 +20,7 @@ from .models import (
     BOMDetalle,
     BOMOperacion,
     InventarioAlmacen,
+    LoteProduccion,
     Material,
     OrdenCompra,
     OrdenCompraDetalle,
@@ -278,6 +279,87 @@ def home(request):
         'usuario': usuario,
         'departamento': departamento,
     }
+
+    if departamento == 'Producción':
+        hoy = date.today()
+        fecha_inicio_semana = hoy - timedelta(days=6)
+
+        # KPIs principales
+        planes_activos = PlanProduccion.objects.filter(
+            estado__in=[PlanProduccion.EstadoPlan.APROBADO, PlanProduccion.EstadoPlan.EN_PROCESO]
+        ).count()
+        ofs_en_proceso = OrdenFabricacion.objects.filter(
+            estado=OrdenFabricacion.EstadoOF.EN_PROCESO
+        ).count()
+        ofs_completadas_semana = OrdenFabricacion.objects.filter(
+            estado=OrdenFabricacion.EstadoOF.COMPLETADA,
+            fecha_fin_real__date__gte=fecha_inicio_semana,
+            fecha_fin_real__date__lte=hoy,
+        ).count()
+        boms_activos = BOM.objects.filter(activo=True, tipo=BOM.TipoBOM.MFG).count()
+        reqs_pendientes = RequerimientoMaterialProduccion.objects.filter(
+            estado=RequerimientoMaterialProduccion.EstadoRequerimiento.BORRADOR
+        ).count()
+
+        # Eficiencia: cantidad producida vs planificada en OFs completadas recientes
+        ofs_completadas = OrdenFabricacion.objects.filter(
+            estado=OrdenFabricacion.EstadoOF.COMPLETADA,
+            fecha_fin_real__isnull=False,
+        ).order_by('-fecha_fin_real')[:20]
+        total_plan = sum(of.cantidad_planificada for of in ofs_completadas)
+        total_real = sum(of.cantidad_producida for of in ofs_completadas)
+        eficiencia = 0
+        if total_plan > 0:
+            eficiencia = min(int(round(float(total_real / total_plan) * 100)), 100)
+
+        # OFs recientes para actividad
+        ofs_recientes_home = (
+            OrdenFabricacion.objects
+            .select_related('bom', 'plan')
+            .order_by('-fecha_actualizacion')[:6]
+        )
+
+        # Planes recientes
+        planes_recientes_home = (
+            PlanProduccion.objects
+            .select_related('bom')
+            .order_by('-fecha_creacion')[:5]
+        )
+
+        # Distribución de estados de OFs para gráfica
+        estados_of = {
+            'BORRADOR': OrdenFabricacion.objects.filter(estado=OrdenFabricacion.EstadoOF.BORRADOR).count(),
+            'EN_PROCESO': ofs_en_proceso,
+            'PAUSADA': OrdenFabricacion.objects.filter(estado=OrdenFabricacion.EstadoOF.PAUSADA).count(),
+            'COMPLETADA': OrdenFabricacion.objects.filter(estado=OrdenFabricacion.EstadoOF.COMPLETADA).count(),
+            'CANCELADA': OrdenFabricacion.objects.filter(estado=OrdenFabricacion.EstadoOF.CANCELADA).count(),
+        }
+
+        # Producción por producto (top 5 OFs completadas)
+        prod_por_producto = {}
+        for of in OrdenFabricacion.objects.filter(
+            estado=OrdenFabricacion.EstadoOF.COMPLETADA
+        ).select_related('bom').order_by('-fecha_fin_real')[:50]:
+            key = of.bom.producto
+            prod_por_producto[key] = float(prod_por_producto.get(key, 0)) + float(of.cantidad_producida)
+        top_productos = sorted(prod_por_producto.items(), key=lambda x: x[1], reverse=True)[:5]
+
+        context.update({
+            'prod_planes_activos': planes_activos,
+            'prod_ofs_en_proceso': ofs_en_proceso,
+            'prod_ofs_completadas_semana': ofs_completadas_semana,
+            'prod_boms_activos': boms_activos,
+            'prod_reqs_pendientes': reqs_pendientes,
+            'prod_eficiencia': eficiencia,
+            'prod_ofs_recientes': ofs_recientes_home,
+            'prod_planes_recientes': planes_recientes_home,
+            'prod_chart_data': {
+                'estados_labels': list(estados_of.keys()),
+                'estados_values': list(estados_of.values()),
+                'top_productos_labels': [p[0] for p in top_productos],
+                'top_productos_values': [p[1] for p in top_productos],
+            },
+        })
 
     if departamento in {'Inventario', 'Admin'}:
         fecha_fin = date.today()
@@ -3147,5 +3229,315 @@ def ordenes_fabricacion(request):
         'estado_completada': OrdenFabricacion.EstadoOF.COMPLETADA,
         'estado_cancelada': OrdenFabricacion.EstadoOF.CANCELADA,
         'estado_borrador': OrdenFabricacion.EstadoOF.BORRADOR,
+    })
+
+
+# ─────────────────────────────────────────────────────────────
+#  CAPTURA DE LOTES DE PRODUCCIÓN
+# ─────────────────────────────────────────────────────────────
+TURNOS_LOTE = ['Turno 1 Mañana', 'Turno 2 Tarde', 'Turno 3 Noche']
+LINEAS_LOTE = [
+    'Linea Metalmecanica 1', 'Linea Metalmecanica 2',
+    'Linea Ensamble 1', 'Linea Ensamble 2',
+    'Linea Acabados', 'Linea Empaque', 'Linea QA',
+]
+
+
+def _next_lote_folio():
+    current_year = date.today().year
+    prefix = f"LP-{current_year}-"
+    last = (
+        LoteProduccion.objects
+        .filter(folio__startswith=prefix)
+        .order_by('-id')
+        .values_list('folio', flat=True)
+        .first()
+    )
+    seq = 1
+    if last:
+        m = re.match(rf"^{re.escape(prefix)}(\d+)$", last)
+        if m:
+            seq = int(m.group(1)) + 1
+    return f"{prefix}{seq:04d}"
+
+
+@login_required
+def captura_lotes(request):
+    if request.method == 'POST':
+        action = request.POST.get('action', '')
+
+        # ── CREAR LOTE ──
+        if action == 'crear':
+            bom_id      = request.POST.get('bom_id', '').strip()
+            of_id       = request.POST.get('of_id', '').strip()
+            fecha_raw   = request.POST.get('fecha_captura', '').strip()
+            hora_raw    = request.POST.get('hora_captura', '').strip()
+            linea       = request.POST.get('linea_produccion', '').strip()
+            turno       = request.POST.get('turno', '').strip()
+            cantidad    = request.POST.get('cantidad_producida', '').strip()
+            operador    = request.POST.get('operador', '').strip()
+            obs         = request.POST.get('observaciones', '').strip()
+
+            errors = []
+            if not bom_id:
+                errors.append('Selecciona un producto (BOM).')
+            if not fecha_raw:
+                errors.append('La fecha de captura es obligatoria.')
+            if not hora_raw:
+                errors.append('La hora de captura es obligatoria.')
+            if not cantidad:
+                errors.append('La cantidad producida es obligatoria.')
+            else:
+                try:
+                    cantidad_dec = Decimal(cantidad.replace(',', '.'))
+                    if cantidad_dec <= 0:
+                        errors.append('La cantidad debe ser mayor a 0.')
+                except Exception:
+                    errors.append('La cantidad producida no es válida.')
+                    cantidad_dec = None
+
+            if not errors:
+                try:
+                    bom_obj = BOM.objects.get(id=bom_id, activo=True)
+                except BOM.DoesNotExist:
+                    errors.append('Producto (BOM) no encontrado.')
+                    bom_obj = None
+
+                of_obj = None
+                if of_id:
+                    try:
+                        of_obj = OrdenFabricacion.objects.get(id=of_id)
+                    except OrdenFabricacion.DoesNotExist:
+                        pass
+
+                fecha_cap = _parse_iso_date(fecha_raw)
+                if not fecha_cap:
+                    errors.append('Fecha de captura inválida.')
+
+                try:
+                    hora_cap = datetime.strptime(hora_raw, '%H:%M').time()
+                except ValueError:
+                    hora_cap = None
+                    errors.append('Hora inválida (use HH:MM).')
+
+            if not errors and bom_obj and fecha_cap and hora_cap:
+                folio = _next_lote_folio()
+                LoteProduccion.objects.create(
+                    folio=folio,
+                    bom=bom_obj,
+                    orden_fabricacion=of_obj,
+                    fecha_captura=fecha_cap,
+                    hora_captura=hora_cap,
+                    linea_produccion=linea,
+                    turno=turno,
+                    cantidad_producida=cantidad_dec,
+                    operador=operador,
+                    estado=LoteProduccion.EstadoLote.CAPTURADO,
+                    observaciones=obs,
+                    creado_por=request.user,
+                )
+                # Si hay OF vinculada, actualizar cantidad_producida de la OF
+                if of_obj:
+                    of_obj.cantidad_producida = (of_obj.cantidad_producida or Decimal('0')) + cantidad_dec
+                    if of_obj.cantidad_producida >= of_obj.cantidad_planificada:
+                        of_obj.estado = OrdenFabricacion.EstadoOF.COMPLETADA
+                        if not of_obj.fecha_fin_real:
+                            of_obj.fecha_fin_real = timezone.now()
+                    of_obj.save()
+                return JsonResponse({'ok': True, 'folio': folio})
+            return JsonResponse({'ok': False, 'errors': errors})
+
+        # ── CAMBIAR ESTADO DE LOTE ──
+        if action == 'cambiar_estado':
+            lote_id  = request.POST.get('lote_id', '').strip()
+            nuevo_estado = request.POST.get('estado', '').strip()
+            estados_validos = {e.value for e in LoteProduccion.EstadoLote}
+            if nuevo_estado not in estados_validos:
+                return JsonResponse({'ok': False, 'error': 'Estado inválido.'})
+            try:
+                lote = LoteProduccion.objects.get(id=lote_id)
+                lote.estado = nuevo_estado
+                lote.save()
+                return JsonResponse({'ok': True})
+            except LoteProduccion.DoesNotExist:
+                return JsonResponse({'ok': False, 'error': 'Lote no encontrado.'})
+
+        return JsonResponse({'ok': False, 'error': 'Acción no reconocida.'})
+
+    # ── GET ──
+    lotes = (
+        LoteProduccion.objects
+        .select_related('bom', 'orden_fabricacion', 'creado_por')
+        .order_by('-fecha_captura', '-hora_captura')[:200]
+    )
+    boms_mfg = BOM.objects.filter(activo=True, tipo=BOM.TipoBOM.MFG).order_by('producto')
+    ofs_activas = (
+        OrdenFabricacion.objects
+        .filter(estado__in=[OrdenFabricacion.EstadoOF.EN_PROCESO, OrdenFabricacion.EstadoOF.BORRADOR])
+        .select_related('bom')
+        .order_by('folio')
+    )
+
+    total_lotes  = LoteProduccion.objects.count()
+    total_uds    = LoteProduccion.objects.aggregate(t=Sum('cantidad_producida'))['t'] or 0
+    lotes_hoy    = LoteProduccion.objects.filter(fecha_captura=date.today()).count()
+    lotes_validados = LoteProduccion.objects.filter(estado=LoteProduccion.EstadoLote.VALIDADO).count()
+
+    return render(request, 'produccion/captura_lotes.html', {
+        'lotes': lotes,
+        'boms_mfg': boms_mfg,
+        'ofs_activas': ofs_activas,
+        'turnos': TURNOS_LOTE,
+        'lineas': LINEAS_LOTE,
+        'total_lotes': total_lotes,
+        'total_uds': float(total_uds),
+        'lotes_hoy': lotes_hoy,
+        'lotes_validados': lotes_validados,
+        'estado_capturado': LoteProduccion.EstadoLote.CAPTURADO,
+        'estado_validado': LoteProduccion.EstadoLote.VALIDADO,
+        'estado_rechazado': LoteProduccion.EstadoLote.RECHAZADO,
+    })
+
+
+# ─────────────────────────────────────────────────────────────
+#  ESCANEO DE PRODUCCIÓN REALIZADA
+# ─────────────────────────────────────────────────────────────
+@login_required
+def escaneo_produccion(request):
+    if request.method == 'POST':
+        action = request.POST.get('action', '')
+
+        # ── BUSCAR OF POR FOLIO ──
+        if action == 'buscar_of':
+            folio = request.POST.get('folio', '').strip().upper()
+            try:
+                of = OrdenFabricacion.objects.select_related('bom', 'plan').get(folio=folio)
+                avance_pct = 0
+                if of.cantidad_planificada and of.cantidad_planificada > 0:
+                    avance_pct = min(100, int(round(float(of.cantidad_producida / of.cantidad_planificada * 100))))
+                lotes_of = list(
+                    LoteProduccion.objects.filter(orden_fabricacion=of)
+                    .order_by('-fecha_captura', '-hora_captura')
+                    .values('folio', 'fecha_captura', 'hora_captura', 'turno', 'cantidad_producida', 'estado', 'operador')
+                )
+                for lt in lotes_of:
+                    lt['fecha_captura'] = lt['fecha_captura'].isoformat()
+                    lt['hora_captura'] = lt['hora_captura'].strftime('%H:%M')
+                return JsonResponse({
+                    'ok': True,
+                    'of': {
+                        'id': of.id,
+                        'folio': of.folio,
+                        'producto': of.bom.producto,
+                        'bom_codigo': of.bom.codigo,
+                        'linea': of.linea_produccion,
+                        'turno': of.turno,
+                        'estado': of.get_estado_display(),
+                        'estado_raw': of.estado,
+                        'cantidad_planificada': float(of.cantidad_planificada),
+                        'cantidad_producida': float(of.cantidad_producida),
+                        'avance_pct': avance_pct,
+                        'fecha_inicio': of.fecha_inicio_programada.isoformat() if of.fecha_inicio_programada else '',
+                        'fecha_fin': of.fecha_fin_programada.isoformat() if of.fecha_fin_programada else '',
+                    },
+                    'lotes': lotes_of,
+                })
+            except OrdenFabricacion.DoesNotExist:
+                return JsonResponse({'ok': False, 'error': f'No se encontró la OF "{folio}".'})
+
+        # ── REGISTRAR PAQUETE DE PRODUCCIÓN ──
+        if action == 'registrar':
+            of_id      = request.POST.get('of_id', '').strip()
+            cantidad   = request.POST.get('cantidad', '').strip()
+            turno      = request.POST.get('turno', '').strip()
+            operador   = request.POST.get('operador', '').strip()
+            obs        = request.POST.get('observaciones', '').strip()
+            fecha_raw  = request.POST.get('fecha', '').strip()
+            hora_raw   = request.POST.get('hora', '').strip()
+
+            errors = []
+            try:
+                of = OrdenFabricacion.objects.select_related('bom').get(id=of_id)
+            except OrdenFabricacion.DoesNotExist:
+                return JsonResponse({'ok': False, 'error': 'OF no encontrada.'})
+
+            try:
+                cantidad_dec = Decimal(cantidad.replace(',', '.'))
+                if cantidad_dec <= 0:
+                    errors.append('La cantidad debe ser mayor a 0.')
+            except Exception:
+                errors.append('Cantidad inválida.')
+                cantidad_dec = None
+
+            fecha_cap = _parse_iso_date(fecha_raw) or date.today()
+            try:
+                hora_cap = datetime.strptime(hora_raw, '%H:%M').time()
+            except ValueError:
+                hora_cap = datetime.now().time().replace(second=0, microsecond=0)
+
+            if errors:
+                return JsonResponse({'ok': False, 'errors': errors})
+
+            folio_lote = _next_lote_folio()
+            LoteProduccion.objects.create(
+                folio=folio_lote,
+                bom=of.bom,
+                orden_fabricacion=of,
+                fecha_captura=fecha_cap,
+                hora_captura=hora_cap,
+                linea_produccion=of.linea_produccion,
+                turno=turno or of.turno,
+                cantidad_producida=cantidad_dec,
+                operador=operador,
+                estado=LoteProduccion.EstadoLote.CAPTURADO,
+                observaciones=obs,
+                creado_por=request.user,
+            )
+
+            # Actualizar OF
+            of.cantidad_producida = (of.cantidad_producida or Decimal('0')) + cantidad_dec
+            if of.cantidad_producida >= of.cantidad_planificada:
+                of.estado = OrdenFabricacion.EstadoOF.COMPLETADA
+                if not of.fecha_fin_real:
+                    of.fecha_fin_real = timezone.now()
+            elif of.estado == OrdenFabricacion.EstadoOF.BORRADOR:
+                of.estado = OrdenFabricacion.EstadoOF.EN_PROCESO
+                if not of.fecha_inicio_real:
+                    of.fecha_inicio_real = timezone.now()
+            of.save()
+
+            avance_pct = min(100, int(round(float(of.cantidad_producida / of.cantidad_planificada * 100))))
+            return JsonResponse({
+                'ok': True,
+                'folio_lote': folio_lote,
+                'cantidad_producida': float(of.cantidad_producida),
+                'avance_pct': avance_pct,
+                'estado_raw': of.estado,
+                'estado': of.get_estado_display(),
+            })
+
+        return JsonResponse({'ok': False, 'error': 'Acción no reconocida.'})
+
+    # ── GET ──
+    ofs_activas = (
+        OrdenFabricacion.objects
+        .filter(estado__in=[
+            OrdenFabricacion.EstadoOF.BORRADOR,
+            OrdenFabricacion.EstadoOF.EN_PROCESO,
+            OrdenFabricacion.EstadoOF.PAUSADA,
+        ])
+        .select_related('bom')
+        .order_by('folio')
+    )
+    ultimos_registros = (
+        LoteProduccion.objects
+        .filter(orden_fabricacion__isnull=False)
+        .select_related('bom', 'orden_fabricacion')
+        .order_by('-fecha_captura', '-hora_captura')[:30]
+    )
+    return render(request, 'produccion/escaneo_produccion.html', {
+        'ofs_activas': ofs_activas,
+        'ultimos_registros': ultimos_registros,
+        'turnos': TURNOS_LOTE,
     })
 

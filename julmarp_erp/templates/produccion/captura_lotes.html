@@ -1,0 +1,410 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Captura de Lotes de Producción{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/pages/inventario.css' %}">
+<style>
+    .cl-page { display: flex; flex-direction: column; gap: 26px; }
+
+    /* ── Tarjetas KPI ── */
+    .cl-kpi-strip {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+        gap: 14px;
+    }
+    .cl-kpi-card {
+        background: #fff;
+        border: 1px solid #dce7f5;
+        border-radius: 12px;
+        padding: 16px 14px;
+        text-align: center;
+    }
+    .cl-kpi-card .kpi-val {
+        font-size: 2rem;
+        font-weight: 800;
+        color: #1255a7;
+        line-height: 1.1;
+        margin: 0;
+    }
+    .cl-kpi-card .kpi-lbl {
+        font-size: 0.71rem;
+        text-transform: uppercase;
+        letter-spacing: .06em;
+        color: #7a90ad;
+        margin: 4px 0 0;
+    }
+
+    /* ── Card principal ── */
+    .cl-card {
+        background: #fff;
+        border: 1px solid #dce7f5;
+        border-radius: 14px;
+        padding: 22px 24px;
+    }
+    .cl-card h3 { margin: 0 0 16px; color: #1f3e67; font-size: 1.05rem; }
+
+    /* ── Formulario ── */
+    .cl-form-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        gap: 14px;
+    }
+    .cl-form-grid label {
+        display: flex; flex-direction: column; gap: 5px;
+        font-size: 0.85rem; color: #4b5e78; font-weight: 600;
+    }
+    .cl-form-grid input,
+    .cl-form-grid select,
+    .cl-form-grid textarea {
+        padding: 8px 10px;
+        border: 1px solid #c8d9ef;
+        border-radius: 8px;
+        font-size: 0.88rem;
+        background: #f8fbff;
+        color: #25364f;
+    }
+    .cl-form-grid label.full { grid-column: 1 / -1; }
+    .cl-form-actions { margin-top: 16px; display: flex; gap: 10px; flex-wrap: wrap; }
+
+    /* ── Tabla ── */
+    .cl-table-wrap { overflow-x: auto; }
+    .cl-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    .cl-table th {
+        background: #f0f5fc; color: #3a5a8c;
+        font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+        padding: 10px 12px; text-align: left; border-bottom: 2px solid #dce7f5; white-space: nowrap;
+    }
+    .cl-table td { padding: 10px 12px; border-bottom: 1px solid #eef2f8; vertical-align: middle; }
+    .cl-table tr:hover td { background: #f8fbff; }
+
+    /* ── Badges estado ── */
+    .badge-capturado { background: #e8f0fe; color: #1255a7; }
+    .badge-validado  { background: #dcfce7; color: #166534; }
+    .badge-rechazado { background: #fee2e2; color: #991b1b; }
+    .badge-estado {
+        display: inline-flex; align-items: center; gap: 4px;
+        padding: 3px 10px; border-radius: 20px; font-size: 0.72rem; font-weight: 700;
+    }
+
+    /* ── Toast ── */
+    .cl-toast {
+        position: fixed; bottom: 24px; right: 24px; z-index: 9999;
+        padding: 12px 18px; border-radius: 10px; font-size: 0.88rem;
+        font-weight: 700; background: #0a7c42; color: #fff;
+        box-shadow: 0 4px 20px rgba(0,0,0,.15);
+        opacity: 0; transform: translateY(14px);
+        transition: opacity .3s ease, transform .3s ease;
+        pointer-events: none;
+    }
+    .cl-toast.show { opacity: 1; transform: translateY(0); }
+    .cl-toast.error { background: #9b2121; }
+
+    /* ── Filtros ── */
+    .cl-filters { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+    .cl-filters input, .cl-filters select {
+        padding: 7px 10px; border: 1px solid #c8d9ef; border-radius: 8px;
+        font-size: 0.83rem; background: #f8fbff; color: #25364f; min-width: 140px;
+    }
+
+    /* ── Empty state ── */
+    .cl-empty { text-align: center; padding: 40px 20px; color: #7a90ad; }
+    .cl-empty p { font-size: 0.9rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="cl-page">
+
+    <!-- ── Encabezado ── -->
+    <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+        <div>
+            <h2 style="margin:0; color:#1f3e67; font-size:1.35rem;">Captura de Lotes de Producción</h2>
+            <p style="margin:4px 0 0; font-size:0.83rem; color:#7a90ad;">Registra lotes terminados con folio propio, producto, turno y cantidad.</p>
+        </div>
+        <button class="btn btn-success" onclick="toggleForm()">+ Nuevo Lote</button>
+    </div>
+
+    <!-- ── KPIs ── -->
+    <div class="cl-kpi-strip">
+        <div class="cl-kpi-card">
+            <p class="kpi-val">{{ total_lotes }}</p>
+            <p class="kpi-lbl">Lotes registrados</p>
+        </div>
+        <div class="cl-kpi-card">
+            <p class="kpi-val">{{ total_uds|floatformat:0 }}</p>
+            <p class="kpi-lbl">Unidades totales</p>
+        </div>
+        <div class="cl-kpi-card">
+            <p class="kpi-val">{{ lotes_hoy }}</p>
+            <p class="kpi-lbl">Lotes hoy</p>
+        </div>
+        <div class="cl-kpi-card">
+            <p class="kpi-val">{{ lotes_validados }}</p>
+            <p class="kpi-lbl">Validados</p>
+        </div>
+    </div>
+
+    <!-- ── Formulario crear lote ── -->
+    <div class="cl-card" id="form-lote" style="display:none;">
+        <h3>Registrar nuevo lote</h3>
+        <div class="cl-form-grid" id="lote-form-grid">
+            <label>
+                Producto (BOM) *
+                <select id="f-bom" required>
+                    <option value="">— Selecciona —</option>
+                    {% for bom in boms_mfg %}
+                    <option value="{{ bom.id }}" data-producto="{{ bom.producto }}">{{ bom.codigo }} — {{ bom.producto }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label>
+                OF vinculada (opcional)
+                <select id="f-of">
+                    <option value="">— Sin OF —</option>
+                    {% for of in ofs_activas %}
+                    <option value="{{ of.id }}" data-bom="{{ of.bom.id }}">{{ of.folio }} — {{ of.bom.producto }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label>
+                Fecha de captura *
+                <input type="date" id="f-fecha" required>
+            </label>
+            <label>
+                Hora *
+                <input type="time" id="f-hora" required>
+            </label>
+            <label>
+                Línea de producción
+                <select id="f-linea">
+                    <option value="">— Selecciona —</option>
+                    {% for l in lineas %}
+                    <option value="{{ l }}">{{ l }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label>
+                Turno
+                <select id="f-turno">
+                    <option value="">— Selecciona —</option>
+                    {% for t in turnos %}
+                    <option value="{{ t }}">{{ t }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label>
+                Cantidad producida *
+                <input type="number" id="f-cantidad" min="1" step="1" placeholder="0" required>
+            </label>
+            <label>
+                Operador / Responsable
+                <input type="text" id="f-operador" placeholder="Nombre del operador">
+            </label>
+            <label class="full">
+                Observaciones
+                <textarea id="f-obs" rows="2" placeholder="Notas adicionales..."></textarea>
+            </label>
+        </div>
+        <div class="cl-form-actions">
+            <button class="btn btn-success" onclick="crearLote()">Registrar Lote</button>
+            <button class="btn btn-secondary" onclick="toggleForm()">Cancelar</button>
+        </div>
+        <div id="form-errors" style="display:none; margin-top:12px; padding:10px 14px; background:#fee2e2; border-radius:8px; color:#991b1b; font-size:0.84rem;"></div>
+    </div>
+
+    <!-- ── Tabla de lotes ── -->
+    <div class="cl-card">
+        <h3>Lotes registrados</h3>
+
+        <div class="cl-filters">
+            <input type="text" id="filtro-texto" placeholder="Buscar folio, producto u operador…" oninput="filtrarTabla()">
+            <select id="filtro-estado" onchange="filtrarTabla()">
+                <option value="">Todos los estados</option>
+                <option value="CAPTURADO">Capturado</option>
+                <option value="VALIDADO">Validado</option>
+                <option value="RECHAZADO">Rechazado</option>
+            </select>
+        </div>
+
+        <div class="cl-table-wrap">
+            <table class="cl-table" id="tabla-lotes">
+                <thead>
+                    <tr>
+                        <th>Folio</th>
+                        <th>Fecha</th>
+                        <th>Producto</th>
+                        <th>OF vinculada</th>
+                        <th>Turno</th>
+                        <th>Línea</th>
+                        <th>Cantidad</th>
+                        <th>Operador</th>
+                        <th>Estado</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="tbody-lotes">
+                    {% for lote in lotes %}
+                    <tr data-estado="{{ lote.estado }}"
+                        data-texto="{{ lote.folio|lower }} {{ lote.bom.producto|lower }} {{ lote.operador|lower }}">
+                        <td><strong>{{ lote.folio }}</strong></td>
+                        <td>{{ lote.fecha_captura|date:"d/m/Y" }} {{ lote.hora_captura|time:"H:i" }}</td>
+                        <td>{{ lote.bom.producto }}</td>
+                        <td>
+                            {% if lote.orden_fabricacion %}
+                                <a href="{% url 'ordenes_fabricacion' %}" style="color:#1255a7; text-decoration:none; font-weight:600;">{{ lote.orden_fabricacion.folio }}</a>
+                            {% else %}
+                                <span style="color:#aaa;">—</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ lote.turno|default:"—" }}</td>
+                        <td>{{ lote.linea_produccion|default:"—" }}</td>
+                        <td><strong>{{ lote.cantidad_producida|floatformat:0 }}</strong></td>
+                        <td>{{ lote.operador|default:"—" }}</td>
+                        <td>
+                            <span class="badge-estado badge-{{ lote.estado|lower }}">
+                                {% if lote.estado == estado_capturado %}📋{% elif lote.estado == estado_validado %}✅{% else %}❌{% endif %}
+                                {{ lote.get_estado_display }}
+                            </span>
+                        </td>
+                        <td>
+                            {% if lote.estado == estado_capturado %}
+                            <button class="btn btn-sm" style="background:#dcfce7; color:#166534; border:1px solid #bbf7d0; font-size:0.75rem; padding:4px 10px; border-radius:6px;"
+                                onclick="cambiarEstado({{ lote.id }}, 'VALIDADO', this)">Validar</button>
+                            <button class="btn btn-sm" style="background:#fee2e2; color:#991b1b; border:1px solid #fecaca; font-size:0.75rem; padding:4px 10px; border-radius:6px; margin-left:4px;"
+                                onclick="cambiarEstado({{ lote.id }}, 'RECHAZADO', this)">Rechazar</button>
+                            {% else %}
+                            <span style="color:#aaa; font-size:0.78rem;">—</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="10" class="cl-empty">
+                            <p>Aún no hay lotes registrados. Usa el botón <strong>+ Nuevo Lote</strong> para registrar el primero.</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="cl-toast" id="cl-toast"></div>
+
+<script>
+const CSRF = '{{ csrf_token }}';
+const hoy = new Date().toISOString().split('T')[0];
+const ahoraHHMM = new Date().toTimeString().slice(0,5);
+
+document.getElementById('f-fecha').value = hoy;
+document.getElementById('f-hora').value  = ahoraHHMM;
+
+function toggleForm() {
+    const f = document.getElementById('form-lote');
+    f.style.display = f.style.display === 'none' ? 'block' : 'none';
+}
+
+// Al elegir OF, auto-selecciona el BOM correspondiente
+document.getElementById('f-of').addEventListener('change', function () {
+    const opt = this.options[this.selectedIndex];
+    const bomId = opt.dataset.bom;
+    if (bomId) {
+        document.getElementById('f-bom').value = bomId;
+    }
+});
+
+function crearLote() {
+    const errors = [];
+    const bomId   = document.getElementById('f-bom').value;
+    const ofId    = document.getElementById('f-of').value;
+    const fecha   = document.getElementById('f-fecha').value;
+    const hora    = document.getElementById('f-hora').value;
+    const linea   = document.getElementById('f-linea').value;
+    const turno   = document.getElementById('f-turno').value;
+    const cant    = document.getElementById('f-cantidad').value;
+    const op      = document.getElementById('f-operador').value.trim();
+    const obs     = document.getElementById('f-obs').value.trim();
+
+    if (!bomId) errors.push('Selecciona un producto (BOM).');
+    if (!fecha) errors.push('La fecha de captura es obligatoria.');
+    if (!hora)  errors.push('La hora es obligatoria.');
+    if (!cant || Number(cant) <= 0) errors.push('La cantidad producida debe ser mayor a 0.');
+
+    const errBox = document.getElementById('form-errors');
+    if (errors.length) {
+        errBox.innerHTML = errors.map(e => `<p style="margin:2px 0;">• ${e}</p>`).join('');
+        errBox.style.display = 'block';
+        return;
+    }
+    errBox.style.display = 'none';
+
+    fetch('{% url "captura_lotes" %}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': CSRF },
+        body: new URLSearchParams({
+            action: 'crear',
+            bom_id: bomId,
+            of_id: ofId,
+            fecha_captura: fecha,
+            hora_captura: hora,
+            linea_produccion: linea,
+            turno: turno,
+            cantidad_producida: cant,
+            operador: op,
+            observaciones: obs,
+        }),
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.ok) {
+            mostrarToast(`Lote ${data.folio} registrado correctamente.`);
+            setTimeout(() => location.reload(), 1200);
+        } else {
+            const msgs = data.errors || [data.error || 'Error al guardar.'];
+            errBox.innerHTML = msgs.map(e => `<p style="margin:2px 0;">• ${e}</p>`).join('');
+            errBox.style.display = 'block';
+        }
+    });
+}
+
+function cambiarEstado(loteId, nuevoEstado, btn) {
+    btn.disabled = true;
+    fetch('{% url "captura_lotes" %}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': CSRF },
+        body: new URLSearchParams({ action: 'cambiar_estado', lote_id: loteId, estado: nuevoEstado }),
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.ok) {
+            mostrarToast('Estado actualizado.');
+            setTimeout(() => location.reload(), 800);
+        } else {
+            mostrarToast(data.error || 'Error al cambiar estado.', true);
+            btn.disabled = false;
+        }
+    });
+}
+
+function filtrarTabla() {
+    const texto  = document.getElementById('filtro-texto').value.toLowerCase();
+    const estado = document.getElementById('filtro-estado').value;
+    document.querySelectorAll('#tbody-lotes tr[data-estado]').forEach(tr => {
+        const matchTexto  = !texto  || tr.dataset.texto.includes(texto);
+        const matchEstado = !estado || tr.dataset.estado === estado;
+        tr.style.display = (matchTexto && matchEstado) ? '' : 'none';
+    });
+}
+
+function mostrarToast(msg, error = false) {
+    const t = document.getElementById('cl-toast');
+    t.textContent = msg;
+    t.className   = 'cl-toast' + (error ? ' error' : '');
+    requestAnimationFrame(() => t.classList.add('show'));
+    setTimeout(() => t.classList.remove('show'), 2800);
+}
+</script>
+{% endblock %}

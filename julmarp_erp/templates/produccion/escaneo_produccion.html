@@ -1,0 +1,432 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Escaneo de Producción Realizada{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/pages/inventario.css' %}">
+<style>
+    .ep-page { display: flex; flex-direction: column; gap: 26px; }
+
+    /* ── Panel búsqueda ── */
+    .ep-search-panel {
+        background: #fff;
+        border: 1px solid #dce7f5;
+        border-radius: 14px;
+        padding: 22px 24px;
+    }
+    .ep-search-row {
+        display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end;
+    }
+    .ep-search-row input {
+        flex: 1; min-width: 200px; padding: 10px 14px;
+        border: 2px solid #c8d9ef; border-radius: 10px;
+        font-size: 1rem; color: #1f3e67; background: #f8fbff;
+        text-transform: uppercase;
+    }
+    .ep-search-row input:focus { border-color: #1255a7; outline: none; background: #fff; }
+    .ep-search-hint { font-size: 0.78rem; color: #7a90ad; margin-top: 6px; }
+
+    /* ── Panel OF encontrada ── */
+    .ep-of-panel {
+        background: #fff; border: 1px solid #dce7f5;
+        border-radius: 14px; padding: 22px 24px; display: none;
+    }
+    .ep-of-header {
+        display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 14px;
+        margin-bottom: 18px; padding-bottom: 14px; border-bottom: 1px solid #eef2f8;
+    }
+    .ep-of-folio { font-size: 1.3rem; font-weight: 800; color: #1f3e67; margin: 0; }
+    .ep-of-producto { font-size: 0.9rem; color: #4b5e78; margin: 4px 0 0; }
+
+    /* ── Barra de progreso ── */
+    .ep-progress-wrap { margin: 16px 0; }
+    .ep-progress-bar-bg {
+        background: #e9edf3; border-radius: 8px; height: 16px; overflow: hidden;
+    }
+    .ep-progress-fill {
+        height: 100%; border-radius: 8px;
+        background: linear-gradient(90deg, #1255a7 0%, #3b82f6 100%);
+        transition: width .5s ease;
+    }
+    .ep-progress-labels {
+        display: flex; justify-content: space-between;
+        font-size: 0.78rem; color: #7a90ad; margin-top: 4px;
+    }
+
+    /* ── Formulario registro ── */
+    .ep-reg-form {
+        display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+        gap: 14px; margin-top: 18px; padding-top: 18px; border-top: 1px solid #eef2f8;
+    }
+    .ep-reg-form label {
+        display: flex; flex-direction: column; gap: 5px;
+        font-size: 0.85rem; color: #4b5e78; font-weight: 600;
+    }
+    .ep-reg-form input, .ep-reg-form select, .ep-reg-form textarea {
+        padding: 8px 10px; border: 1px solid #c8d9ef; border-radius: 8px;
+        font-size: 0.88rem; background: #f8fbff; color: #25364f;
+    }
+    .ep-reg-form label.full { grid-column: 1 / -1; }
+    .ep-reg-actions { margin-top: 14px; display: flex; gap: 10px; flex-wrap: wrap; }
+
+    /* ── Lotes de la OF ── */
+    .ep-lotes-title {
+        font-size: 0.78rem; font-weight: 700; text-transform: uppercase;
+        letter-spacing: .06em; color: #7a90ad; margin: 18px 0 10px;
+        padding-top: 14px; border-top: 1px solid #eef2f8;
+    }
+    .ep-lotes-list { display: flex; flex-direction: column; gap: 6px; }
+    .ep-lote-row {
+        display: flex; align-items: center; justify-content: space-between;
+        background: #f8fbff; border: 1px solid #dce7f5; border-radius: 8px;
+        padding: 8px 14px; font-size: 0.84rem; flex-wrap: wrap; gap: 8px;
+    }
+    .ep-lote-folio { font-weight: 700; color: #1255a7; }
+    .ep-lote-meta  { color: #7a90ad; font-size: 0.78rem; }
+
+    /* ── Historial reciente ── */
+    .ep-hist-card {
+        background: #fff; border: 1px solid #dce7f5;
+        border-radius: 14px; padding: 22px 24px;
+    }
+    .ep-hist-card h3 { margin: 0 0 16px; color: #1f3e67; font-size: 1.05rem; }
+    .ep-hist-table { width: 100%; border-collapse: collapse; font-size: 0.84rem; }
+    .ep-hist-table th {
+        background: #f0f5fc; color: #3a5a8c; font-size: 0.72rem;
+        font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+        padding: 9px 12px; text-align: left; border-bottom: 2px solid #dce7f5;
+    }
+    .ep-hist-table td { padding: 9px 12px; border-bottom: 1px solid #eef2f8; vertical-align: middle; }
+    .ep-hist-table tr:hover td { background: #f8fbff; }
+
+    /* ── Acceso rápido OFs ── */
+    .ep-of-btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .ep-of-btn {
+        padding: 7px 14px; border: 1px solid #c8d9ef; border-radius: 8px;
+        background: #f8fbff; color: #1255a7; font-size: 0.82rem;
+        font-weight: 700; cursor: pointer; transition: background .15s;
+    }
+    .ep-of-btn:hover { background: #e8f0fe; }
+
+    /* ── Badge estado ── */
+    .badge-estado {
+        display: inline-flex; align-items: center; gap: 4px;
+        padding: 3px 10px; border-radius: 20px; font-size: 0.72rem; font-weight: 700;
+    }
+    .badge-en_proceso  { background: #dbeafe; color: #1d4ed8; }
+    .badge-borrador    { background: #f3f4f6; color: #6b7280; }
+    .badge-pausada     { background: #fef9c3; color: #92400e; }
+    .badge-completada  { background: #dcfce7; color: #166534; }
+    .badge-capturado   { background: #e8f0fe; color: #1255a7; }
+    .badge-validado    { background: #dcfce7; color: #166534; }
+
+    /* ── Toast ── */
+    .ep-toast {
+        position: fixed; bottom: 24px; right: 24px; z-index: 9999;
+        padding: 12px 18px; border-radius: 10px; font-size: 0.88rem;
+        font-weight: 700; background: #0a7c42; color: #fff;
+        box-shadow: 0 4px 20px rgba(0,0,0,.15);
+        opacity: 0; transform: translateY(14px);
+        transition: opacity .3s ease, transform .3s ease;
+        pointer-events: none;
+    }
+    .ep-toast.show { opacity: 1; transform: translateY(0); }
+    .ep-toast.error { background: #9b2121; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ep-page">
+
+    <!-- ── Encabezado ── -->
+    <div>
+        <h2 style="margin:0; color:#1f3e67; font-size:1.35rem;">Escaneo de Producción Realizada</h2>
+        <p style="margin:4px 0 0; font-size:0.83rem; color:#7a90ad;">
+            Ingresa el folio de una Orden de Fabricación (OF) para registrar paquetes de producción y actualizar su avance.
+        </p>
+    </div>
+
+    <!-- ── Panel búsqueda ── -->
+    <div class="ep-search-panel">
+        <h3 style="margin:0 0 14px; color:#1f3e67; font-size:1rem;">Buscar Orden de Fabricación</h3>
+        <div class="ep-search-row">
+            <input type="text" id="input-folio" placeholder="Ej: OF-2026-0001"
+                   onkeydown="if(event.key==='Enter') buscarOF()">
+            <button class="btn btn-primary" onclick="buscarOF()">Buscar / Escanear</button>
+        </div>
+        <p class="ep-search-hint">O selecciona una OF activa:</p>
+        <div class="ep-of-btns">
+            {% for of in ofs_activas %}
+            <button class="ep-of-btn" onclick="cargarOF('{{ of.folio }}')">{{ of.folio }}</button>
+            {% empty %}
+            <span style="font-size:0.83rem; color:#7a90ad;">No hay OFs activas en este momento.</span>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- ── Panel OF ── -->
+    <div class="ep-of-panel" id="of-panel">
+        <div class="ep-of-header">
+            <div>
+                <p class="ep-of-folio" id="of-folio-label"></p>
+                <p class="ep-of-producto" id="of-producto-label"></p>
+                <p style="font-size:0.8rem; color:#7a90ad; margin:4px 0 0;" id="of-meta-label"></p>
+            </div>
+            <span class="badge-estado" id="of-estado-badge"></span>
+        </div>
+
+        <!-- Barra progreso -->
+        <div class="ep-progress-wrap">
+            <div class="ep-progress-bar-bg">
+                <div class="ep-progress-fill" id="ep-progress-fill" style="width:0%"></div>
+            </div>
+            <div class="ep-progress-labels">
+                <span id="lbl-producido">0 producidas</span>
+                <span id="lbl-avance">0%</span>
+                <span id="lbl-planificado">0 planificadas</span>
+            </div>
+        </div>
+
+        <!-- Formulario registro paquete -->
+        <div class="ep-reg-form">
+            <label>
+                Cantidad (piezas) *
+                <input type="number" id="r-cantidad" min="1" step="1" placeholder="0">
+            </label>
+            <label>
+                Turno
+                <select id="r-turno">
+                    <option value="">— Selecciona —</option>
+                    {% for t in turnos %}
+                    <option value="{{ t }}">{{ t }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label>
+                Operador
+                <input type="text" id="r-operador" placeholder="Nombre del operador">
+            </label>
+            <label>
+                Fecha
+                <input type="date" id="r-fecha">
+            </label>
+            <label>
+                Hora
+                <input type="time" id="r-hora">
+            </label>
+            <label class="full">
+                Observaciones
+                <textarea id="r-obs" rows="2" placeholder="Notas del paquete…"></textarea>
+            </label>
+        </div>
+        <div class="ep-reg-actions">
+            <button class="btn btn-success" id="btn-registrar" onclick="registrarPaquete()">Registrar Paquete</button>
+            <button class="btn btn-secondary" onclick="cerrarPanel()">Cancelar</button>
+        </div>
+        <div id="reg-errors" style="display:none; margin-top:10px; padding:10px 14px; background:#fee2e2; border-radius:8px; color:#991b1b; font-size:0.84rem;"></div>
+
+        <!-- Lotes vinculados a esta OF -->
+        <p class="ep-lotes-title">Lotes registrados en esta OF (<span id="lotes-count">0</span>)</p>
+        <div class="ep-lotes-list" id="lotes-lista">
+            <p style="color:#7a90ad; font-size:0.84rem;">Cargando…</p>
+        </div>
+    </div>
+
+    <!-- ── Historial reciente de escaneos ── -->
+    <div class="ep-hist-card">
+        <h3>Últimos registros de producción</h3>
+        <div style="overflow-x:auto;">
+            <table class="ep-hist-table">
+                <thead>
+                    <tr>
+                        <th>Lote</th>
+                        <th>OF</th>
+                        <th>Producto</th>
+                        <th>Fecha</th>
+                        <th>Turno</th>
+                        <th>Cantidad</th>
+                        <th>Estado</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for reg in ultimos_registros %}
+                    <tr>
+                        <td><strong>{{ reg.folio }}</strong></td>
+                        <td>
+                            <span style="color:#1255a7; font-weight:600;">
+                                {{ reg.orden_fabricacion.folio }}
+                            </span>
+                        </td>
+                        <td>{{ reg.bom.producto }}</td>
+                        <td>{{ reg.fecha_captura|date:"d/m/Y" }} {{ reg.hora_captura|time:"H:i" }}</td>
+                        <td>{{ reg.turno|default:"—" }}</td>
+                        <td><strong>{{ reg.cantidad_producida|floatformat:0 }}</strong></td>
+                        <td>
+                            <span class="badge-estado badge-{{ reg.estado|lower }}">
+                                {{ reg.get_estado_display }}
+                            </span>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" style="text-align:center; color:#7a90ad; padding:30px;">
+                            Aún no hay registros de producción escaneados.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="ep-toast" id="ep-toast"></div>
+
+<script>
+const CSRF = '{{ csrf_token }}';
+let ofActual = null;
+
+document.getElementById('r-fecha').value = new Date().toISOString().split('T')[0];
+document.getElementById('r-hora').value  = new Date().toTimeString().slice(0,5);
+
+function cargarOF(folio) {
+    document.getElementById('input-folio').value = folio;
+    buscarOF();
+}
+
+function buscarOF() {
+    const folio = document.getElementById('input-folio').value.trim().toUpperCase();
+    if (!folio) { mostrarToast('Escribe el folio de la OF.', true); return; }
+
+    fetch('{% url "escaneo_produccion" %}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': CSRF },
+        body: new URLSearchParams({ action: 'buscar_of', folio }),
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (!data.ok) { mostrarToast(data.error || 'OF no encontrada.', true); return; }
+        ofActual = data.of;
+        renderPanel(data.of, data.lotes);
+    });
+}
+
+function renderPanel(of, lotes) {
+    const panel = document.getElementById('of-panel');
+    panel.style.display = 'block';
+
+    document.getElementById('of-folio-label').textContent   = of.folio;
+    document.getElementById('of-producto-label').textContent = of.producto;
+    document.getElementById('of-meta-label').textContent =
+        `Línea: ${of.linea || '—'} | Turno: ${of.turno || '—'} | ${of.fecha_inicio} → ${of.fecha_fin}`;
+
+    const badge = document.getElementById('of-estado-badge');
+    badge.textContent = of.estado;
+    badge.className   = `badge-estado badge-${of.estado_raw.toLowerCase()}`;
+
+    // Barra progreso
+    document.getElementById('ep-progress-fill').style.width = of.avance_pct + '%';
+    document.getElementById('lbl-producido').textContent    = `${of.cantidad_producida} producidas`;
+    document.getElementById('lbl-avance').textContent       = `${of.avance_pct}%`;
+    document.getElementById('lbl-planificado').textContent  = `${of.cantidad_planificada} planificadas`;
+
+    // Lotes de la OF
+    renderLotes(lotes);
+}
+
+function renderLotes(lotes) {
+    document.getElementById('lotes-count').textContent = lotes.length;
+    const lista = document.getElementById('lotes-lista');
+    if (!lotes.length) {
+        lista.innerHTML = '<p style="color:#7a90ad; font-size:0.84rem;">Sin lotes registrados todavía.</p>';
+        return;
+    }
+    lista.innerHTML = lotes.map(lt => `
+        <div class="ep-lote-row">
+            <span class="ep-lote-folio">${lt.folio}</span>
+            <span class="ep-lote-meta">${lt.fecha_captura} ${lt.hora_captura}</span>
+            <span>${lt.turno || '—'}</span>
+            <span><strong>${lt.cantidad_producida}</strong> pzas</span>
+            <span class="badge-estado badge-${lt.estado.toLowerCase()}">${lt.estado}</span>
+            <span class="ep-lote-meta">${lt.operador || '—'}</span>
+        </div>
+    `).join('');
+}
+
+function registrarPaquete() {
+    const cant = document.getElementById('r-cantidad').value;
+    const errBox = document.getElementById('reg-errors');
+    if (!ofActual) { mostrarToast('Primero busca una OF.', true); return; }
+    if (!cant || Number(cant) <= 0) {
+        errBox.textContent = 'La cantidad debe ser mayor a 0.';
+        errBox.style.display = 'block';
+        return;
+    }
+    errBox.style.display = 'none';
+
+    const btn = document.getElementById('btn-registrar');
+    btn.disabled = true;
+    btn.textContent = 'Guardando…';
+
+    fetch('{% url "escaneo_produccion" %}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': CSRF },
+        body: new URLSearchParams({
+            action: 'registrar',
+            of_id: ofActual.id,
+            cantidad: cant,
+            turno:    document.getElementById('r-turno').value,
+            operador: document.getElementById('r-operador').value.trim(),
+            fecha:    document.getElementById('r-fecha').value,
+            hora:     document.getElementById('r-hora').value,
+            observaciones: document.getElementById('r-obs').value.trim(),
+        }),
+    })
+    .then(r => r.json())
+    .then(data => {
+        btn.disabled = false;
+        btn.textContent = 'Registrar Paquete';
+        if (!data.ok) {
+            const msgs = data.errors || [data.error || 'Error al guardar.'];
+            errBox.innerHTML = msgs.map(e => `<p style="margin:2px 0">• ${e}</p>`).join('');
+            errBox.style.display = 'block';
+            return;
+        }
+        mostrarToast(`Lote ${data.folio_lote} registrado — ${data.cantidad_producida} pzas acumuladas (${data.avance_pct}%)`);
+
+        // Actualizar panel sin recargar página
+        ofActual.cantidad_producida = data.cantidad_producida;
+        ofActual.avance_pct         = data.avance_pct;
+        ofActual.estado_raw         = data.estado_raw;
+        ofActual.estado             = data.estado;
+
+        document.getElementById('ep-progress-fill').style.width = data.avance_pct + '%';
+        document.getElementById('lbl-producido').textContent   = `${data.cantidad_producida} producidas`;
+        document.getElementById('lbl-avance').textContent      = `${data.avance_pct}%`;
+        const badge = document.getElementById('of-estado-badge');
+        badge.textContent = data.estado;
+        badge.className   = `badge-estado badge-${data.estado_raw.toLowerCase()}`;
+
+        // Recargar lotes de esta OF
+        buscarOF();
+        document.getElementById('r-cantidad').value = '';
+        document.getElementById('r-obs').value = '';
+    });
+}
+
+function cerrarPanel() {
+    document.getElementById('of-panel').style.display = 'none';
+    document.getElementById('input-folio').value = '';
+    ofActual = null;
+}
+
+function mostrarToast(msg, error = false) {
+    const t = document.getElementById('ep-toast');
+    t.textContent = msg;
+    t.className   = 'ep-toast' + (error ? ' error' : '');
+    requestAnimationFrame(() => t.classList.add('show'));
+    setTimeout(() => t.classList.remove('show'), 3200);
+}
+</script>
+{% endblock %}
