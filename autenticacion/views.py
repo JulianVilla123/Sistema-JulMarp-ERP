@@ -7,6 +7,7 @@ from datetime import date, timedelta
 from django.db import IntegrityError
 from django.db import transaction
 from django.db.models import Case, Count, DecimalField, Q, Sum, Value, When
+from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.cache import never_cache
 from collections import defaultdict
@@ -17,6 +18,7 @@ from .models import (
     Almacen,
     BOM,
     BOMDetalle,
+    BOMOperacion,
     InventarioAlmacen,
     Material,
     OrdenCompra,
@@ -25,6 +27,12 @@ from .models import (
     ProveedorMaterialPrecio,
     RecepcionMaterial,
     RecepcionMaterialDetalle,
+    OrdenFabricacion,
+    OrdenFabricacionDetalle,
+    PlanProduccion,
+    PlanProduccionDetalle,
+    RequerimientoMaterialProduccion,
+    RequerimientoMaterialProduccionDetalle,
     SalidaLinea,
     SalidaLineaDetalle,
     TransferenciaAlmacen,
@@ -1425,6 +1433,7 @@ def bom_lista_materiales(request):
     materiales_catalogo = list(Material.objects.filter(activo=True).order_by('sku'))
     boms_registrados = (
         BOM.objects
+        .filter(tipo=BOM.TipoBOM.MATERIALES)
         .select_related('creado_por')
         .prefetch_related('componentes__material')
         .order_by('producto', 'version')
@@ -2297,3 +2306,846 @@ def api_materiales_proveedor(request, proveedor_id):
     }
     
     return JsonResponse(materiales_dict)
+
+
+# ─── PRODUCCIÓN ──────────────────────────────────────────────────────────────
+
+@login_required(login_url='login')
+@never_cache
+def bom_mfg(request):
+    materiales_catalogo = list(Material.objects.filter(activo=True).order_by('sku'))
+    boms_mfg = (
+        BOM.objects
+        .filter(tipo=BOM.TipoBOM.MFG)
+        .select_related('creado_por')
+        .prefetch_related('componentes__material', 'operaciones')
+        .order_by('producto', 'version')
+    )
+
+    bom_kpis = {
+        'total': boms_mfg.count(),
+        'activos': boms_mfg.filter(activo=True).count(),
+        'total_materiales': Material.objects.filter(activo=True).count(),
+    }
+
+    LINEAS = ['Línea SMT-01', 'Línea SMT-02', 'Línea SMT-03']
+    UNIDADES_TIEMPO = [('min', 'Minutos'), ('hrs', 'Horas'), ('seg', 'Segundos')]
+
+    form_data = {
+        'codigo': '', 'producto': '', 'version': '1.0',
+        'descripcion': '', 'cantidad_base': '1', 'unidad_producto': '', 'activo': True,
+        'componentes': [{'material_id': '', 'cantidad': '', 'observaciones': ''}],
+        'operaciones': [{'secuencia': '1', 'nombre': '', 'descripcion': '', 'linea_produccion': '',
+                         'tiempo_estimado': '', 'unidad_tiempo': 'min', 'recurso_maquina': '', 'operadores_requeridos': '1'}],
+    }
+
+    if request.method == 'POST':
+        codigo = (request.POST.get('codigo') or '').strip().upper()
+        producto = (request.POST.get('producto') or '').strip()
+        version = (request.POST.get('version') or '1.0').strip()
+        descripcion = (request.POST.get('descripcion') or '').strip()
+        cantidad_base_texto = (request.POST.get('cantidad_base') or '1').strip()
+        unidad_producto = (request.POST.get('unidad_producto') or '').strip()
+        activo = (request.POST.get('activo') or '1').strip() == '1'
+
+        materiales_ids = request.POST.getlist('material_id[]')
+        cantidades = request.POST.getlist('cantidad[]')
+        observaciones_list = request.POST.getlist('observaciones[]')
+
+        op_secuencias = request.POST.getlist('op_secuencia[]')
+        op_nombres = request.POST.getlist('op_nombre[]')
+        op_descripciones = request.POST.getlist('op_descripcion[]')
+        op_lineas = request.POST.getlist('op_linea[]')
+        op_tiempos = request.POST.getlist('op_tiempo[]')
+        op_unidades = request.POST.getlist('op_unidad_tiempo[]')
+        op_maquinas = request.POST.getlist('op_maquina[]')
+        op_operadores = request.POST.getlist('op_operadores[]')
+
+        form_data.update({
+            'codigo': codigo, 'producto': producto, 'version': version,
+            'descripcion': descripcion, 'cantidad_base': cantidad_base_texto,
+            'unidad_producto': unidad_producto, 'activo': activo,
+            'componentes': [], 'operaciones': [],
+        })
+
+        try:
+            cantidad_base = Decimal(cantidad_base_texto.replace(',', '.'))
+        except InvalidOperation:
+            cantidad_base = None
+
+        error = None
+        if not codigo:
+            error = 'El código BOM es obligatorio.'
+        elif not producto:
+            error = 'El nombre del producto es obligatorio.'
+        elif not version:
+            error = 'La versión es obligatoria.'
+        elif cantidad_base is None or cantidad_base <= 0:
+            error = 'La cantidad base debe ser un número mayor a cero.'
+        elif BOM.objects.filter(codigo__iexact=codigo, version__iexact=version).exists():
+            error = 'Ya existe un BOM con ese código y versión.'
+
+        if error:
+            messages.error(request, error)
+            return render(request, 'produccion/bom_mfg.html', {
+                'materiales_catalogo': materiales_catalogo, 'boms_mfg': boms_mfg,
+                'bom_kpis': bom_kpis, 'lineas': LINEAS, 'unidades_tiempo': UNIDADES_TIEMPO,
+                'form_data': form_data,
+            })
+
+        materiales_validos = {str(m.id): m for m in materiales_catalogo}
+        componentes = []
+        materiales_usados = set()
+        total_rows = max(len(materiales_ids), len(cantidades), len(observaciones_list))
+
+        for idx in range(total_rows):
+            material_id = (materiales_ids[idx] if idx < len(materiales_ids) else '').strip()
+            cantidad_texto = (cantidades[idx] if idx < len(cantidades) else '').strip()
+            obs = (observaciones_list[idx] if idx < len(observaciones_list) else '').strip()
+
+            row_has_data = any([material_id, cantidad_texto, obs])
+            if not row_has_data:
+                continue
+
+            form_data['componentes'].append({'material_id': material_id, 'cantidad': cantidad_texto, 'observaciones': obs})
+
+            material_obj = materiales_validos.get(material_id)
+            if not material_obj:
+                messages.error(request, f'Fila {idx + 1}: selecciona un material válido.')
+                componentes = []
+                break
+            if material_id in materiales_usados:
+                messages.error(request, f'Fila {idx + 1}: material {material_obj.sku} duplicado.')
+                componentes = []
+                break
+            try:
+                cantidad = Decimal(cantidad_texto.replace(',', '.'))
+            except InvalidOperation:
+                messages.error(request, f'Fila {idx + 1}: la cantidad debe ser numérica.')
+                componentes = []
+                break
+            if cantidad <= 0:
+                messages.error(request, f'Fila {idx + 1}: la cantidad debe ser mayor a cero.')
+                componentes = []
+                break
+            materiales_usados.add(material_id)
+            componentes.append({'material': material_obj, 'cantidad': cantidad, 'observaciones': obs})
+
+        operaciones = []
+        if not messages.get_messages(request) or componentes is not None:
+            total_ops = max(len(op_nombres), len(op_secuencias))
+            for idx in range(total_ops):
+                nombre_op = (op_nombres[idx] if idx < len(op_nombres) else '').strip()
+                secuencia_texto = (op_secuencias[idx] if idx < len(op_secuencias) else '').strip()
+                desc_op = (op_descripciones[idx] if idx < len(op_descripciones) else '').strip()
+                linea_op = (op_lineas[idx] if idx < len(op_lineas) else '').strip()
+                tiempo_texto = (op_tiempos[idx] if idx < len(op_tiempos) else '').strip()
+                unidad_op = (op_unidades[idx] if idx < len(op_unidades) else 'min').strip()
+                maquina_op = (op_maquinas[idx] if idx < len(op_maquinas) else '').strip()
+                operadores_texto = (op_operadores[idx] if idx < len(op_operadores) else '1').strip()
+
+                row_has_data = any([nombre_op, secuencia_texto, tiempo_texto, maquina_op])
+                if not row_has_data:
+                    continue
+
+                form_data['operaciones'].append({
+                    'secuencia': secuencia_texto, 'nombre': nombre_op, 'descripcion': desc_op,
+                    'linea_produccion': linea_op, 'tiempo_estimado': tiempo_texto,
+                    'unidad_tiempo': unidad_op, 'recurso_maquina': maquina_op,
+                    'operadores_requeridos': operadores_texto,
+                })
+
+                if not nombre_op or not secuencia_texto:
+                    messages.error(request, f'Operación {idx + 1}: nombre y secuencia son obligatorios.')
+                    operaciones = []
+                    break
+                try:
+                    secuencia = int(secuencia_texto)
+                    operadores = max(1, int(operadores_texto or 1))
+                except (ValueError, InvalidOperation):
+                    messages.error(request, f'Operación {idx + 1}: secuencia y operadores deben ser numéricos.')
+                    operaciones = []
+                    break
+
+                tiempo = None
+                if tiempo_texto:
+                    tiempo_normalizado = tiempo_texto.replace(',', '.').strip()
+                    if not re.fullmatch(r'\d+', tiempo_normalizado):
+                        messages.error(request, f'Operación {idx + 1}: el tiempo debe ser un número entero (sin decimales).')
+                        operaciones = []
+                        break
+                    tiempo = Decimal(int(tiempo_normalizado))
+
+                operaciones.append({
+                    'secuencia': secuencia, 'nombre': nombre_op, 'descripcion': desc_op,
+                    'linea_produccion': linea_op, 'tiempo_estimado': tiempo,
+                    'unidad_tiempo': unidad_op, 'recurso_maquina': maquina_op,
+                    'operadores_requeridos': operadores,
+                })
+
+        if not form_data['componentes']:
+            form_data['componentes'] = [{'material_id': '', 'cantidad': '', 'observaciones': ''}]
+        if not form_data['operaciones']:
+            form_data['operaciones'] = [{'secuencia': '1', 'nombre': '', 'descripcion': '', 'linea_produccion': '',
+                                          'tiempo_estimado': '', 'unidad_tiempo': 'min', 'recurso_maquina': '', 'operadores_requeridos': '1'}]
+
+        if not list(messages.get_messages(request)) and componentes:
+            with transaction.atomic():
+                bom = BOM.objects.create(
+                    codigo=codigo, tipo=BOM.TipoBOM.MFG, producto=producto,
+                    version=version, descripcion=descripcion, cantidad_base=cantidad_base,
+                    unidad_producto=unidad_producto, activo=activo, creado_por=request.user,
+                )
+                for comp in componentes:
+                    BOMDetalle.objects.create(
+                        bom=bom, material=comp['material'],
+                        cantidad=comp['cantidad'], observaciones=comp['observaciones'],
+                    )
+                for op in operaciones:
+                    BOMOperacion.objects.create(bom=bom, **op)
+
+            messages.success(request, f'BOM MFG {bom.codigo} v{bom.version} creado correctamente.')
+            return redirect('bom_mfg')
+
+    return render(request, 'produccion/bom_mfg.html', {
+        'materiales_catalogo': materiales_catalogo,
+        'boms_mfg': boms_mfg,
+        'bom_kpis': bom_kpis,
+        'lineas': LINEAS,
+        'unidades_tiempo': UNIDADES_TIEMPO,
+        'form_data': form_data,
+    })
+
+
+def _next_plan_produccion_folio():
+    current_year = date.today().year
+    prefix = f"PP-{current_year}-"
+    last_folio = (
+        PlanProduccion.objects
+        .filter(folio__startswith=prefix)
+        .order_by('-id')
+        .values_list('folio', flat=True)
+        .first()
+    )
+    seq = 1
+    if last_folio:
+        match = re.match(rf"^{re.escape(prefix)}(\d+)$", last_folio)
+        if match:
+            seq = int(match.group(1)) + 1
+    return f"{prefix}{seq:04d}"
+
+
+def _next_requerimiento_material_folio():
+    current_year = date.today().year
+    prefix = f"RMP-{current_year}-"
+    last_folio = (
+        RequerimientoMaterialProduccion.objects
+        .filter(folio__startswith=prefix)
+        .order_by('-id')
+        .values_list('folio', flat=True)
+        .first()
+    )
+    seq = 1
+    if last_folio:
+        match = re.match(rf"^{re.escape(prefix)}(\d+)$", last_folio)
+        if match:
+            seq = int(match.group(1)) + 1
+    return f"{prefix}{seq:04d}"
+
+
+def _parse_decimal_text(value, default=Decimal('0')):
+    try:
+        return Decimal(str(value).strip().replace(',', '.'))
+    except (InvalidOperation, AttributeError):
+        return default
+
+
+def _build_material_requirements(bom_obj, cantidad_planificada):
+    if not bom_obj or bom_obj.cantidad_base <= 0:
+        return []
+
+    factor = cantidad_planificada / bom_obj.cantidad_base
+    detalles = []
+
+    for componente in bom_obj.componentes.select_related('material').all():
+        material = componente.material
+        cantidad_requerida = (componente.cantidad * factor).quantize(Decimal('0.001'))
+        stock_disponible = (material.stock_actual or Decimal('0')).quantize(Decimal('0.001'))
+
+        if cantidad_requerida > 0:
+            ratio_suministro = stock_disponible / cantidad_requerida
+            scrap_factor = Decimal('0.10') if ratio_suministro < Decimal('0.20') else Decimal('0.05')
+        else:
+            scrap_factor = Decimal('0.05')
+
+        cantidad_con_scrap = (cantidad_requerida * (Decimal('1') + scrap_factor)).quantize(Decimal('0.001'))
+        sugerida_compra = max(cantidad_con_scrap - stock_disponible, Decimal('0')).quantize(Decimal('0.001'))
+        faltante_base = max(cantidad_requerida - stock_disponible, Decimal('0')).quantize(Decimal('0.001'))
+
+        if stock_disponible >= cantidad_requerida:
+            estado = PlanProduccionDetalle.EstadoMaterial.DISPONIBLE
+            disponible = cantidad_requerida
+            faltante = Decimal('0')
+        elif stock_disponible > 0:
+            estado = PlanProduccionDetalle.EstadoMaterial.PARCIAL
+            disponible = stock_disponible
+            faltante = faltante_base
+        else:
+            estado = PlanProduccionDetalle.EstadoMaterial.REQUIERE_COMPRA
+            disponible = Decimal('0')
+            faltante = cantidad_requerida
+
+        detalles.append({
+            'material': material,
+            'cantidad_requerida': cantidad_requerida,
+            'cantidad_disponible': disponible,
+            'cantidad_faltante': faltante,
+            'estado_material': estado,
+            'stock_actual': stock_disponible,
+            'scrap_factor': scrap_factor,
+            'cantidad_con_scrap': cantidad_con_scrap,
+            'cantidad_sugerida_compra': sugerida_compra,
+        })
+
+    return detalles
+
+
+@login_required(login_url='login')
+@never_cache
+def planificacion_produccion(request):
+    boms_activos = BOM.objects.filter(activo=True, tipo=BOM.TipoBOM.MFG).prefetch_related('componentes__material', 'operaciones').order_by('producto')
+
+    def _build_planes_recientes():
+        planes = (
+            PlanProduccion.objects
+            .select_related('bom', 'creado_por')
+            .prefetch_related('detalles__material')
+            .order_by('-fecha_creacion')[:10]
+        )
+        data = []
+        for plan in planes:
+            detalles = list(plan.detalles.all())
+            total_requeridos = len(detalles)
+            requieren_compra = sum(1 for d in detalles if d.estado_material == PlanProduccionDetalle.EstadoMaterial.REQUIERE_COMPRA)
+            parciales = sum(1 for d in detalles if d.estado_material == PlanProduccionDetalle.EstadoMaterial.PARCIAL)
+            data.append({
+                'id': plan.id,
+                'folio': plan.folio,
+                'producto': plan.bom.producto,
+                'bom_codigo': plan.bom.codigo,
+                'cantidad_planificada': plan.cantidad_planificada,
+                'fecha_inicio': plan.fecha_inicio,
+                'fecha_fin': plan.fecha_fin,
+                'linea_produccion': plan.linea_produccion,
+                'turno': plan.turno,
+                'estado': plan.estado,
+                'estado_label': plan.get_estado_display(),
+                'total_materiales': total_requeridos,
+                'requieren_compra': requieren_compra,
+                'parciales': parciales,
+                'detalles': [
+                    {
+                        'sku': d.material.sku,
+                        'nombre': d.material.nombre,
+                        'um': d.material.um,
+                        'cantidad_requerida': d.cantidad_requerida,
+                        'cantidad_disponible': d.cantidad_disponible,
+                        'cantidad_faltante': d.cantidad_faltante,
+                        'estado_material': d.estado_material,
+                        'estado_material_label': d.get_estado_material_display(),
+                    }
+                    for d in detalles
+                ],
+            })
+        return data
+
+    LINEAS_PRODUCCION = ['Línea SMT-01', 'Línea SMT-02', 'Línea SMT-03']
+    TURNOS = ['Turno 1 (6:00 - 14:00)', 'Turno 2 (14:00 - 22:00)', 'Turno 3 (22:00 - 6:00)']
+
+    if request.method == 'POST':
+        bom_id = (request.POST.get('bom') or '').strip()
+        cantidad_texto = (request.POST.get('cantidad_planificada') or '').strip()
+        fecha_inicio_raw = (request.POST.get('fecha_inicio') or '').strip()
+        fecha_fin_raw = (request.POST.get('fecha_fin') or '').strip()
+        linea_produccion = (request.POST.get('linea_produccion') or '').strip()
+        turno = (request.POST.get('turno') or '').strip()
+        observaciones = (request.POST.get('observaciones') or '').strip()
+        accion = (request.POST.get('accion') or 'borrador').strip().lower()
+
+        bom_obj = BOM.objects.filter(id=bom_id, activo=True).prefetch_related('componentes__material').first()
+        fecha_inicio = _parse_iso_date(fecha_inicio_raw)
+        fecha_fin = _parse_iso_date(fecha_fin_raw)
+
+        if not bom_obj:
+            messages.error(request, 'Selecciona un BOM/producto válido del catálogo.')
+        elif not cantidad_texto:
+            messages.error(request, 'La cantidad a producir es obligatoria.')
+        elif not fecha_inicio:
+            messages.error(request, 'La fecha de inicio es obligatoria.')
+        elif not fecha_fin:
+            messages.error(request, 'La fecha de fin estimada es obligatoria.')
+        elif fecha_fin < fecha_inicio:
+            messages.error(request, 'La fecha fin no puede ser menor a la fecha de inicio.')
+        else:
+            try:
+                cantidad_planificada = Decimal(cantidad_texto.replace(',', '.'))
+            except InvalidOperation:
+                messages.error(request, 'La cantidad debe ser un número válido.')
+                return render(request, 'produccion/planificacion_produccion.html', {
+                    'boms_activos': boms_activos,
+                    'planes_recientes': _build_planes_recientes(),
+                    'lineas_produccion': LINEAS_PRODUCCION,
+                    'turnos': TURNOS,
+                })
+
+            if cantidad_planificada <= 0:
+                messages.error(request, 'La cantidad a producir debe ser mayor a cero.')
+            else:
+                detalles_plan = _build_material_requirements(bom_obj, cantidad_planificada)
+
+                faltantes = [d for d in detalles_plan if d['cantidad_faltante'] > 0]
+                if faltantes:
+                    nombres_faltantes = ', '.join(d['material'].sku for d in faltantes[:5])
+                    if len(faltantes) > 5:
+                        nombres_faltantes += f' y {len(faltantes) - 5} más'
+                    messages.error(
+                        request,
+                        f'No se puede crear el plan: inventario insuficiente para {len(faltantes)} material(es) '
+                        f'({nombres_faltantes}). Genera un Requerimiento de Materiales y envíalo a finanzas primero.'
+                    )
+                    return render(request, 'produccion/planificacion_produccion.html', {
+                        'boms_activos': boms_activos,
+                        'planes_recientes': _build_planes_recientes(),
+                        'lineas_produccion': LINEAS_PRODUCCION,
+                        'turnos': TURNOS,
+                        'bloqueo_bom_id': bom_id,
+                        'bloqueo_cantidad': cantidad_planificada,
+                    })
+
+                estado_destino = (
+                    PlanProduccion.EstadoPlan.APROBADO
+                    if accion == 'aprobar'
+                    else PlanProduccion.EstadoPlan.BORRADOR
+                )
+
+                with transaction.atomic():
+                    folio = _next_plan_produccion_folio()
+                    while PlanProduccion.objects.filter(folio=folio).exists():
+                        folio = _next_plan_produccion_folio()
+
+                    plan = PlanProduccion.objects.create(
+                        folio=folio,
+                        bom=bom_obj,
+                        cantidad_planificada=cantidad_planificada,
+                        fecha_inicio=fecha_inicio,
+                        fecha_fin=fecha_fin,
+                        linea_produccion=linea_produccion,
+                        turno=turno,
+                        observaciones=observaciones,
+                        estado=estado_destino,
+                        creado_por=request.user,
+                    )
+
+                    for detalle in detalles_plan:
+                        PlanProduccionDetalle.objects.create(
+                            plan=plan,
+                            material=detalle['material'],
+                            cantidad_requerida=detalle['cantidad_requerida'],
+                            cantidad_disponible=detalle['cantidad_disponible'],
+                            cantidad_faltante=detalle['cantidad_faltante'],
+                            estado_material=detalle['estado_material'],
+                        )
+
+                messages.success(request, f'Plan {plan.folio} creado en estado {plan.get_estado_display()}.')
+                return redirect('planificacion_produccion')
+
+    return render(request, 'produccion/planificacion_produccion.html', {
+        'boms_activos': boms_activos,
+        'planes_recientes': _build_planes_recientes(),
+        'lineas_produccion': LINEAS_PRODUCCION,
+        'turnos': TURNOS,
+    })
+
+
+@login_required(login_url='login')
+@never_cache
+def requerimiento_materiales_produccion(request):
+    bom_id = (request.GET.get('bom') or '').strip()
+    cantidad_texto = (request.GET.get('cantidad') or '').strip()
+
+    bom_obj = (
+        BOM.objects
+        .filter(id=bom_id, activo=True, tipo=BOM.TipoBOM.MFG)
+        .prefetch_related('componentes__material')
+        .first()
+    ) if bom_id else None
+
+    if cantidad_texto:
+        cantidad_planificada = _parse_decimal_text(cantidad_texto, Decimal('-1'))
+    else:
+        cantidad_planificada = Decimal('-1')
+
+    if not bom_obj or cantidad_planificada <= 0:
+        messages.error(request, 'Debes seleccionar un BOM y cantidad válida para generar requerimiento de materiales.')
+        return redirect('planificacion_produccion')
+
+    detalles = _build_material_requirements(bom_obj, cantidad_planificada)
+    hay_faltantes = any(d['cantidad_faltante'] > 0 for d in detalles)
+
+    if request.method == 'POST':
+        accion = (request.POST.get('accion') or 'guardar').strip().lower()
+        notas = (request.POST.get('notas') or '').strip()
+        cantidades_solicitadas = request.POST.getlist('cantidad_solicitada[]')
+        observaciones_items = request.POST.getlist('observacion[]')
+
+        estado_req = (
+            RequerimientoMaterialProduccion.EstadoRequerimiento.ENVIADO_FINANZAS
+            if accion == 'enviar_finanzas'
+            else RequerimientoMaterialProduccion.EstadoRequerimiento.BORRADOR
+        )
+
+        with transaction.atomic():
+            folio = _next_requerimiento_material_folio()
+            while RequerimientoMaterialProduccion.objects.filter(folio=folio).exists():
+                folio = _next_requerimiento_material_folio()
+
+            requerimiento = RequerimientoMaterialProduccion.objects.create(
+                folio=folio,
+                bom=bom_obj,
+                cantidad_planificada=cantidad_planificada,
+                notas=notas,
+                estado=estado_req,
+                creado_por=request.user,
+                fecha_envio_finanzas=timezone.now() if estado_req == RequerimientoMaterialProduccion.EstadoRequerimiento.ENVIADO_FINANZAS else None,
+            )
+
+            for idx, detalle in enumerate(detalles):
+                sugerida = detalle['cantidad_sugerida_compra']
+                solicitada_input = cantidades_solicitadas[idx] if idx < len(cantidades_solicitadas) else ''
+                solicitada = _parse_decimal_text(solicitada_input, sugerida)
+                if solicitada < 0:
+                    solicitada = Decimal('0')
+                solicitada = solicitada.quantize(Decimal('0.001'))
+                observacion = (observaciones_items[idx] if idx < len(observaciones_items) else '').strip()
+
+                RequerimientoMaterialProduccionDetalle.objects.create(
+                    requerimiento=requerimiento,
+                    material=detalle['material'],
+                    cantidad_base_requerida=detalle['cantidad_requerida'],
+                    cantidad_con_scrap=detalle['cantidad_con_scrap'],
+                    stock_actual=detalle['stock_actual'],
+                    cantidad_sugerida_compra=sugerida,
+                    cantidad_solicitada=solicitada,
+                    observaciones=observacion,
+                )
+
+        if estado_req == RequerimientoMaterialProduccion.EstadoRequerimiento.ENVIADO_FINANZAS:
+            messages.success(request, f'Requerimiento {requerimiento.folio} enviado a finanzas correctamente.')
+        else:
+            messages.success(request, f'Requerimiento {requerimiento.folio} guardado en borrador.')
+
+        from django.urls import reverse
+        return redirect(reverse('requerimiento_materiales_produccion') + f'?bom={bom_obj.id}&cantidad={cantidad_planificada}')
+
+    requerimientos_recientes = (
+        RequerimientoMaterialProduccion.objects
+        .select_related('bom', 'creado_por')
+        .prefetch_related('detalles__material')
+        .order_by('-fecha_creacion')[:8]
+    )
+
+    return render(request, 'produccion/requerimiento_materiales_produccion.html', {
+        'bom_obj': bom_obj,
+        'cantidad_planificada': cantidad_planificada,
+        'detalles': detalles,
+        'hay_faltantes': hay_faltantes,
+        'requerimientos_recientes': requerimientos_recientes,
+    })
+
+
+# ─── ÓRDENES DE FABRICACIÓN ───────────────────────────────────────────────────
+
+def _next_of_folio():
+    current_year = date.today().year
+    prefix = f"OF-{current_year}-"
+    last_folio = (
+        OrdenFabricacion.objects
+        .filter(folio__startswith=prefix)
+        .order_by('-id')
+        .values_list('folio', flat=True)
+        .first()
+    )
+    seq = 1
+    if last_folio:
+        match = re.match(rf"^{re.escape(prefix)}(\d+)$", last_folio)
+        if match:
+            seq = int(match.group(1)) + 1
+    return f"{prefix}{seq:04d}"
+
+
+def _of_transiciones_permitidas(estado_actual):
+    """Devuelve los estados destino válidos desde el estado actual."""
+    transiciones = {
+        OrdenFabricacion.EstadoOF.BORRADOR: [
+            OrdenFabricacion.EstadoOF.EN_PROCESO,
+            OrdenFabricacion.EstadoOF.CANCELADA,
+        ],
+        OrdenFabricacion.EstadoOF.EN_PROCESO: [
+            OrdenFabricacion.EstadoOF.PAUSADA,
+            OrdenFabricacion.EstadoOF.COMPLETADA,
+            OrdenFabricacion.EstadoOF.CANCELADA,
+        ],
+        OrdenFabricacion.EstadoOF.PAUSADA: [
+            OrdenFabricacion.EstadoOF.EN_PROCESO,
+            OrdenFabricacion.EstadoOF.CANCELADA,
+        ],
+        OrdenFabricacion.EstadoOF.COMPLETADA: [],
+        OrdenFabricacion.EstadoOF.CANCELADA: [],
+    }
+    return transiciones.get(estado_actual, [])
+
+
+@login_required(login_url='login')
+@never_cache
+def ordenes_fabricacion(request):
+    LINEAS_PRODUCCION = ['Línea SMT-01', 'Línea SMT-02', 'Línea SMT-03']
+    TURNOS = ['Turno 1 (6:00 - 14:00)', 'Turno 2 (14:00 - 22:00)', 'Turno 3 (22:00 - 6:00)']
+
+    boms_activos = (
+        BOM.objects
+        .filter(activo=True, tipo=BOM.TipoBOM.MFG)
+        .prefetch_related('componentes__material')
+        .order_by('producto')
+    )
+    planes_aprobados = (
+        PlanProduccion.objects
+        .filter(estado__in=[PlanProduccion.EstadoPlan.APROBADO, PlanProduccion.EstadoPlan.EN_PROCESO])
+        .select_related('bom')
+        .order_by('-fecha_creacion')
+    )
+
+    def _build_ofs_recientes():
+        ofs = (
+            OrdenFabricacion.objects
+            .select_related('bom', 'plan', 'creado_por')
+            .prefetch_related('detalles__material')
+            .order_by('-fecha_creacion')[:15]
+        )
+        data = []
+        for of in ofs:
+            detalles = list(of.detalles.all())
+            avance = 0
+            if of.cantidad_planificada > 0:
+                avance = min(int(round(float(of.cantidad_producida / of.cantidad_planificada) * 100)), 100)
+            data.append({
+                'id': of.id,
+                'folio': of.folio,
+                'producto': of.bom.producto,
+                'bom_codigo': of.bom.codigo,
+                'plan_folio': of.plan.folio if of.plan else None,
+                'cantidad_planificada': of.cantidad_planificada,
+                'cantidad_producida': of.cantidad_producida,
+                'avance': avance,
+                'linea_produccion': of.linea_produccion,
+                'turno': of.turno,
+                'estado': of.estado,
+                'estado_label': of.get_estado_display(),
+                'fecha_inicio_programada': of.fecha_inicio_programada,
+                'fecha_fin_programada': of.fecha_fin_programada,
+                'fecha_inicio_real': of.fecha_inicio_real,
+                'fecha_fin_real': of.fecha_fin_real,
+                'transiciones': [t for t in _of_transiciones_permitidas(of.estado)],
+                'detalles': [
+                    {
+                        'sku': d.material.sku,
+                        'nombre': d.material.nombre,
+                        'um': d.material.um,
+                        'cantidad_requerida': d.cantidad_requerida,
+                        'cantidad_consumida': d.cantidad_consumida,
+                    }
+                    for d in detalles
+                ],
+            })
+        return data
+
+    # ── POST: cambio de estado ─────────────────────────────────────────────────
+    if request.method == 'POST' and (request.POST.get('accion_estado') or '').strip():
+        of_id = (request.POST.get('of_id') or '').strip()
+        accion_estado = (request.POST.get('accion_estado') or '').strip()
+        of_obj = OrdenFabricacion.objects.filter(id=of_id).first()
+
+        if not of_obj:
+            messages.error(request, 'La orden de fabricación no existe.')
+            return redirect('ordenes_fabricacion')
+
+        transiciones = _of_transiciones_permitidas(of_obj.estado)
+        if accion_estado not in transiciones:
+            messages.error(
+                request,
+                f'No se puede cambiar de {of_obj.get_estado_display()} a {accion_estado}.',
+            )
+            return redirect('ordenes_fabricacion')
+
+        update_fields = ['estado', 'fecha_actualizacion']
+
+        if accion_estado == OrdenFabricacion.EstadoOF.EN_PROCESO and not of_obj.fecha_inicio_real:
+            of_obj.fecha_inicio_real = timezone.now()
+            update_fields.append('fecha_inicio_real')
+
+        if accion_estado == OrdenFabricacion.EstadoOF.COMPLETADA:
+            cantidad_producida_raw = (request.POST.get('cantidad_producida') or '').strip()
+            cantidad_producida = _parse_decimal_text(cantidad_producida_raw, of_obj.cantidad_planificada)
+            if cantidad_producida < 0:
+                cantidad_producida = Decimal('0')
+            of_obj.cantidad_producida = cantidad_producida.quantize(Decimal('0.01'))
+            of_obj.fecha_fin_real = timezone.now()
+            update_fields += ['cantidad_producida', 'fecha_fin_real']
+
+            # Actualizar consumos registrados por el usuario
+            material_ids = request.POST.getlist('consumo_material_id[]')
+            cantidades_consumidas = request.POST.getlist('consumo_cantidad[]')
+            for idx, mat_id in enumerate(material_ids):
+                cant_texto = cantidades_consumidas[idx] if idx < len(cantidades_consumidas) else ''
+                cant = _parse_decimal_text(cant_texto, Decimal('0'))
+                if cant < 0:
+                    cant = Decimal('0')
+                OrdenFabricacionDetalle.objects.filter(
+                    orden=of_obj, material_id=mat_id
+                ).update(cantidad_consumida=cant.quantize(Decimal('0.001')))
+
+            # Actualizar estado del plan asociado a EN_PROCESO si aún está en APROBADO
+            if of_obj.plan and of_obj.plan.estado == PlanProduccion.EstadoPlan.APROBADO:
+                PlanProduccion.objects.filter(id=of_obj.plan_id).update(
+                    estado=PlanProduccion.EstadoPlan.EN_PROCESO
+                )
+
+        of_obj.estado = accion_estado
+        of_obj.save(update_fields=update_fields)
+
+        # Si se completó la OF, actualizar plan a COMPLETADO si todas sus OFs están completadas
+        if accion_estado == OrdenFabricacion.EstadoOF.COMPLETADA and of_obj.plan:
+            plan = of_obj.plan
+            todas_completadas = not plan.ordenes_fabricacion.exclude(
+                estado__in=[
+                    OrdenFabricacion.EstadoOF.COMPLETADA,
+                    OrdenFabricacion.EstadoOF.CANCELADA,
+                ]
+            ).exists()
+            if todas_completadas:
+                PlanProduccion.objects.filter(id=plan.id).update(
+                    estado=PlanProduccion.EstadoPlan.COMPLETADO
+                )
+
+        messages.success(
+            request,
+            f'Orden {of_obj.folio} actualizada a estado {of_obj.get_estado_display()}.',
+        )
+        return redirect('ordenes_fabricacion')
+
+    # ── POST: crear nueva OF ───────────────────────────────────────────────────
+    if request.method == 'POST':
+        plan_id = (request.POST.get('plan_id') or '').strip()
+        bom_id = (request.POST.get('bom_id') or '').strip()
+        cantidad_texto = (request.POST.get('cantidad_planificada') or '').strip()
+        linea_produccion = (request.POST.get('linea_produccion') or '').strip()
+        turno = (request.POST.get('turno') or '').strip()
+        fecha_inicio_raw = (request.POST.get('fecha_inicio_programada') or '').strip()
+        fecha_fin_raw = (request.POST.get('fecha_fin_programada') or '').strip()
+        observaciones = (request.POST.get('observaciones') or '').strip()
+
+        plan_obj = PlanProduccion.objects.filter(
+            id=plan_id,
+            estado__in=[PlanProduccion.EstadoPlan.APROBADO, PlanProduccion.EstadoPlan.EN_PROCESO],
+        ).select_related('bom').prefetch_related('bom__componentes__material').first() if plan_id else None
+
+        bom_obj = None
+        if plan_obj:
+            bom_obj = plan_obj.bom
+            if not cantidad_texto:
+                cantidad_texto = str(plan_obj.cantidad_planificada)
+            if not fecha_inicio_raw:
+                fecha_inicio_raw = plan_obj.fecha_inicio.isoformat()
+            if not fecha_fin_raw:
+                fecha_fin_raw = plan_obj.fecha_fin.isoformat()
+            if not linea_produccion:
+                linea_produccion = plan_obj.linea_produccion
+            if not turno:
+                turno = plan_obj.turno
+        elif bom_id:
+            bom_obj = BOM.objects.filter(
+                id=bom_id, activo=True, tipo=BOM.TipoBOM.MFG
+            ).prefetch_related('componentes__material').first()
+
+        fecha_inicio = _parse_iso_date(fecha_inicio_raw)
+        fecha_fin = _parse_iso_date(fecha_fin_raw)
+
+        if not bom_obj:
+            messages.error(request, 'Selecciona un Plan de Producción aprobado o un BOM MFG válido.')
+        elif not cantidad_texto:
+            messages.error(request, 'La cantidad a producir es obligatoria.')
+        else:
+            try:
+                cantidad_planificada = Decimal(cantidad_texto.replace(',', '.'))
+            except InvalidOperation:
+                messages.error(request, 'La cantidad debe ser un número válido.')
+                return render(request, 'produccion/ordenes_fabricacion.html', {
+                    'boms_activos': boms_activos,
+                    'planes_aprobados': planes_aprobados,
+                    'ofs_recientes': _build_ofs_recientes(),
+                    'lineas_produccion': LINEAS_PRODUCCION,
+                    'turnos': TURNOS,
+                })
+
+            if cantidad_planificada <= 0:
+                messages.error(request, 'La cantidad debe ser mayor a cero.')
+            else:
+                detalles_requeridos = _build_material_requirements(bom_obj, cantidad_planificada)
+
+                with transaction.atomic():
+                    folio = _next_of_folio()
+                    while OrdenFabricacion.objects.filter(folio=folio).exists():
+                        folio = _next_of_folio()
+
+                    of_nuevo = OrdenFabricacion.objects.create(
+                        folio=folio,
+                        plan=plan_obj,
+                        bom=bom_obj,
+                        cantidad_planificada=cantidad_planificada,
+                        linea_produccion=linea_produccion,
+                        turno=turno,
+                        fecha_inicio_programada=fecha_inicio,
+                        fecha_fin_programada=fecha_fin,
+                        observaciones=observaciones,
+                        estado=OrdenFabricacion.EstadoOF.BORRADOR,
+                        creado_por=request.user,
+                    )
+
+                    for detalle in detalles_requeridos:
+                        OrdenFabricacionDetalle.objects.create(
+                            orden=of_nuevo,
+                            material=detalle['material'],
+                            cantidad_requerida=detalle['cantidad_requerida'],
+                        )
+
+                    # Actualizar estado del plan a EN_PROCESO si está en APROBADO
+                    if plan_obj and plan_obj.estado == PlanProduccion.EstadoPlan.APROBADO:
+                        PlanProduccion.objects.filter(id=plan_obj.id).update(
+                            estado=PlanProduccion.EstadoPlan.EN_PROCESO
+                        )
+
+                messages.success(request, f'Orden de fabricación {of_nuevo.folio} creada correctamente.')
+                return redirect('ordenes_fabricacion')
+
+    return render(request, 'produccion/ordenes_fabricacion.html', {
+        'boms_activos': boms_activos,
+        'planes_aprobados': planes_aprobados,
+        'ofs_recientes': _build_ofs_recientes(),
+        'lineas_produccion': LINEAS_PRODUCCION,
+        'turnos': TURNOS,
+        'estado_en_proceso': OrdenFabricacion.EstadoOF.EN_PROCESO,
+        'estado_pausada': OrdenFabricacion.EstadoOF.PAUSADA,
+        'estado_completada': OrdenFabricacion.EstadoOF.COMPLETADA,
+        'estado_cancelada': OrdenFabricacion.EstadoOF.CANCELADA,
+        'estado_borrador': OrdenFabricacion.EstadoOF.BORRADOR,
+    })
+

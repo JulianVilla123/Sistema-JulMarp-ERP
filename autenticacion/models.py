@@ -78,7 +78,17 @@ class Material(models.Model):
 
 
 class BOM(models.Model):
+    class TipoBOM(models.TextChoices):
+        MATERIALES = 'MATERIALES', 'Materiales'
+        MFG = 'MFG', 'Fabricación (MFG)'
+
     codigo = models.CharField('Código BOM', max_length=40)
+    tipo = models.CharField(
+        'Tipo',
+        max_length=12,
+        choices=TipoBOM.choices,
+        default=TipoBOM.MATERIALES,
+    )
     producto = models.CharField('Producto', max_length=200)
     version = models.CharField('Versión', max_length=20, default='1.0')
     descripcion = models.TextField('Descripción', blank=True)
@@ -133,6 +143,48 @@ class BOMDetalle(models.Model):
             models.UniqueConstraint(
                 fields=['bom', 'material'],
                 name='unique_bom_material',
+            )
+        ]
+
+
+class BOMOperacion(models.Model):
+    class UnidadTiempo(models.TextChoices):
+        MINUTOS = 'min', 'Minutos'
+        HORAS = 'hrs', 'Horas'
+        SEGUNDOS = 'seg', 'Segundos'
+
+    bom = models.ForeignKey(
+        BOM,
+        on_delete=models.CASCADE,
+        related_name='operaciones',
+    )
+    secuencia = models.PositiveSmallIntegerField('Secuencia', default=1)
+    nombre = models.CharField('Nombre de operación', max_length=120)
+    descripcion = models.TextField('Descripción', blank=True)
+    linea_produccion = models.CharField('Línea de producción', max_length=120, blank=True)
+    tiempo_estimado = models.DecimalField(
+        'Tiempo estimado', max_digits=8, decimal_places=2, null=True, blank=True
+    )
+    unidad_tiempo = models.CharField(
+        'Unidad de tiempo',
+        max_length=4,
+        choices=UnidadTiempo.choices,
+        default=UnidadTiempo.MINUTOS,
+    )
+    recurso_maquina = models.CharField('Máquina / Equipo', max_length=120, blank=True)
+    operadores_requeridos = models.PositiveSmallIntegerField('Operadores requeridos', default=1)
+
+    def __str__(self):
+        return f"{self.bom.codigo} | Op{self.secuencia}: {self.nombre}"
+
+    class Meta:
+        verbose_name = 'Operación BOM'
+        verbose_name_plural = 'Operaciones BOM'
+        ordering = ['bom', 'secuencia']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['bom', 'secuencia'],
+                name='unique_bom_secuencia',
             )
         ]
 
@@ -517,3 +569,249 @@ class OrdenCompraDetalle(models.Model):
     class Meta:
         verbose_name = 'Detalle orden de compra'
         verbose_name_plural = 'Detalles orden de compra'
+
+
+class PlanProduccion(models.Model):
+    class EstadoPlan(models.TextChoices):
+        BORRADOR = 'BORRADOR', 'Borrador'
+        APROBADO = 'APROBADO', 'Aprobado'
+        EN_PROCESO = 'EN_PROCESO', 'En proceso'
+        COMPLETADO = 'COMPLETADO', 'Completado'
+        CANCELADO = 'CANCELADO', 'Cancelado'
+
+    folio = models.CharField('Folio', max_length=30, unique=True)
+    bom = models.ForeignKey(
+        BOM,
+        on_delete=models.PROTECT,
+        related_name='planes_produccion',
+        verbose_name='BOM / Producto',
+    )
+    cantidad_planificada = models.DecimalField(
+        'Cantidad a producir', max_digits=12, decimal_places=2
+    )
+    fecha_inicio = models.DateField('Fecha inicio')
+    fecha_fin = models.DateField('Fecha fin estimada')
+    linea_produccion = models.CharField('Línea de producción', max_length=120, blank=True)
+    turno = models.CharField('Turno', max_length=40, blank=True)
+    observaciones = models.TextField('Observaciones', blank=True)
+    estado = models.CharField(
+        'Estado',
+        max_length=12,
+        choices=EstadoPlan.choices,
+        default=EstadoPlan.BORRADOR,
+    )
+    creado_por = models.ForeignKey(
+        UsuarioERP,
+        on_delete=models.PROTECT,
+        related_name='planes_produccion',
+    )
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.folio} - {self.bom.producto}"
+
+    class Meta:
+        verbose_name = 'Plan de producción'
+        verbose_name_plural = 'Planes de producción'
+        ordering = ['-fecha_creacion']
+
+
+class PlanProduccionDetalle(models.Model):
+    class EstadoMaterial(models.TextChoices):
+        DISPONIBLE = 'DISPONIBLE', 'Disponible en inventario'
+        PARCIAL = 'PARCIAL', 'Stock parcial'
+        REQUIERE_COMPRA = 'REQUIERE_COMPRA', 'Requiere orden de compra'
+
+    plan = models.ForeignKey(
+        PlanProduccion,
+        on_delete=models.CASCADE,
+        related_name='detalles',
+    )
+    material = models.ForeignKey(
+        Material,
+        on_delete=models.PROTECT,
+        related_name='plan_produccion_detalles',
+    )
+    cantidad_requerida = models.DecimalField(
+        'Cantidad requerida', max_digits=12, decimal_places=3
+    )
+    cantidad_disponible = models.DecimalField(
+        'Cantidad disponible en inventario', max_digits=12, decimal_places=3, default=0
+    )
+    cantidad_faltante = models.DecimalField(
+        'Cantidad faltante (a comprar)', max_digits=12, decimal_places=3, default=0
+    )
+    estado_material = models.CharField(
+        'Estado de material',
+        max_length=20,
+        choices=EstadoMaterial.choices,
+        default=EstadoMaterial.DISPONIBLE,
+    )
+
+    def __str__(self):
+        return f"{self.plan.folio} - {self.material.sku}"
+
+    class Meta:
+        verbose_name = 'Detalle plan de producción'
+        verbose_name_plural = 'Detalles plan de producción'
+        ordering = ['material__sku']
+
+
+class RequerimientoMaterialProduccion(models.Model):
+    class EstadoRequerimiento(models.TextChoices):
+        BORRADOR = 'BORRADOR', 'Borrador'
+        ENVIADO_FINANZAS = 'ENVIADO_FINANZAS', 'Enviado a finanzas'
+
+    folio = models.CharField('Folio', max_length=30, unique=True)
+    bom = models.ForeignKey(
+        BOM,
+        on_delete=models.PROTECT,
+        related_name='requerimientos_materiales',
+        verbose_name='BOM / Producto',
+    )
+    cantidad_planificada = models.DecimalField('Cantidad a producir', max_digits=12, decimal_places=2)
+    notas = models.TextField('Notas', blank=True)
+    estado = models.CharField(
+        'Estado',
+        max_length=18,
+        choices=EstadoRequerimiento.choices,
+        default=EstadoRequerimiento.BORRADOR,
+    )
+    creado_por = models.ForeignKey(
+        UsuarioERP,
+        on_delete=models.PROTECT,
+        related_name='requerimientos_materiales_produccion',
+    )
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_envio_finanzas = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        return f"{self.folio} - {self.bom.producto}"
+
+    class Meta:
+        verbose_name = 'Requerimiento de material de producción'
+        verbose_name_plural = 'Requerimientos de material de producción'
+        ordering = ['-fecha_creacion']
+
+
+class RequerimientoMaterialProduccionDetalle(models.Model):
+    requerimiento = models.ForeignKey(
+        RequerimientoMaterialProduccion,
+        on_delete=models.CASCADE,
+        related_name='detalles',
+    )
+    material = models.ForeignKey(
+        Material,
+        on_delete=models.PROTECT,
+        related_name='requerimientos_produccion_detalle',
+    )
+    cantidad_base_requerida = models.DecimalField('Cantidad base requerida', max_digits=12, decimal_places=3)
+    cantidad_con_scrap = models.DecimalField('Cantidad con scrap', max_digits=12, decimal_places=3)
+    stock_actual = models.DecimalField('Stock actual', max_digits=12, decimal_places=3, default=0)
+    cantidad_sugerida_compra = models.DecimalField('Cantidad sugerida compra', max_digits=12, decimal_places=3, default=0)
+    cantidad_solicitada = models.DecimalField('Cantidad solicitada', max_digits=12, decimal_places=3, default=0)
+    observaciones = models.CharField('Observaciones', max_length=255, blank=True)
+
+    def __str__(self):
+        return f"{self.requerimiento.folio} - {self.material.sku}"
+
+    class Meta:
+        verbose_name = 'Detalle requerimiento material producción'
+        verbose_name_plural = 'Detalles requerimiento material producción'
+        ordering = ['material__sku']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['requerimiento', 'material'],
+                name='unique_req_produccion_material',
+            )
+        ]
+
+
+class OrdenFabricacion(models.Model):
+    class EstadoOF(models.TextChoices):
+        BORRADOR = 'BORRADOR', 'Borrador'
+        EN_PROCESO = 'EN_PROCESO', 'En proceso'
+        PAUSADA = 'PAUSADA', 'Pausada'
+        COMPLETADA = 'COMPLETADA', 'Completada'
+        CANCELADA = 'CANCELADA', 'Cancelada'
+
+    folio = models.CharField('Folio', max_length=30, unique=True)
+    plan = models.ForeignKey(
+        PlanProduccion,
+        on_delete=models.PROTECT,
+        related_name='ordenes_fabricacion',
+        null=True,
+        blank=True,
+        verbose_name='Plan de producción',
+    )
+    bom = models.ForeignKey(
+        BOM,
+        on_delete=models.PROTECT,
+        related_name='ordenes_fabricacion',
+        verbose_name='BOM / Producto',
+    )
+    cantidad_planificada = models.DecimalField('Cantidad planificada', max_digits=12, decimal_places=2)
+    cantidad_producida = models.DecimalField(
+        'Cantidad producida real', max_digits=12, decimal_places=2, default=0
+    )
+    linea_produccion = models.CharField('Línea de producción', max_length=120, blank=True)
+    turno = models.CharField('Turno', max_length=60, blank=True)
+    estado = models.CharField(
+        'Estado',
+        max_length=12,
+        choices=EstadoOF.choices,
+        default=EstadoOF.BORRADOR,
+    )
+    fecha_inicio_programada = models.DateField('Fecha inicio programada', null=True, blank=True)
+    fecha_fin_programada = models.DateField('Fecha fin programada', null=True, blank=True)
+    fecha_inicio_real = models.DateTimeField('Inicio real', null=True, blank=True)
+    fecha_fin_real = models.DateTimeField('Fin real', null=True, blank=True)
+    observaciones = models.TextField('Observaciones', blank=True)
+    creado_por = models.ForeignKey(
+        UsuarioERP,
+        on_delete=models.PROTECT,
+        related_name='ordenes_fabricacion',
+    )
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.folio} - {self.bom.producto}"
+
+    class Meta:
+        verbose_name = 'Orden de fabricación'
+        verbose_name_plural = 'Órdenes de fabricación'
+        ordering = ['-fecha_creacion']
+
+
+class OrdenFabricacionDetalle(models.Model):
+    orden = models.ForeignKey(
+        OrdenFabricacion,
+        on_delete=models.CASCADE,
+        related_name='detalles',
+    )
+    material = models.ForeignKey(
+        Material,
+        on_delete=models.PROTECT,
+        related_name='ordenes_fabricacion_detalle',
+    )
+    cantidad_requerida = models.DecimalField('Cantidad requerida', max_digits=12, decimal_places=3)
+    cantidad_consumida = models.DecimalField(
+        'Cantidad consumida real', max_digits=12, decimal_places=3, default=0
+    )
+    observaciones = models.CharField('Observaciones', max_length=255, blank=True)
+
+    def __str__(self):
+        return f"{self.orden.folio} - {self.material.sku}"
+
+    class Meta:
+        verbose_name = 'Detalle orden de fabricación'
+        verbose_name_plural = 'Detalles orden de fabricación'
+        ordering = ['material__sku']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['orden', 'material'],
+                name='unique_of_material',
+            )
+        ]

@@ -1,0 +1,770 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Órdenes de Fabricación{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/pages/inventario.css' %}">
+<style>
+    /* ── Layout principal ── */
+    .of-page { display: flex; flex-direction: column; gap: 28px; }
+
+    /* ── Card genérica ── */
+    .of-card {
+        background: #ffffff;
+        border: 1px solid #dce7f5;
+        border-radius: 14px;
+        padding: 22px 24px;
+    }
+    .of-card h3 {
+        margin: 0 0 16px;
+        color: #1f3e67;
+        font-size: 1.05rem;
+    }
+
+    /* ── Formulario de creación ── */
+    .of-form-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        gap: 14px;
+    }
+    .of-form-grid label { display: flex; flex-direction: column; gap: 5px; font-size: 0.85rem; color: #4b5e78; font-weight: 600; }
+    .of-form-grid input,
+    .of-form-grid select,
+    .of-form-grid textarea {
+        padding: 8px 10px;
+        border: 1px solid #c8d9ef;
+        border-radius: 8px;
+        font-size: 0.88rem;
+        background: #f8fbff;
+        color: #25364f;
+    }
+    .of-form-grid textarea { resize: vertical; min-height: 56px; }
+    .of-form-grid label.full { grid-column: 1 / -1; }
+
+    .of-form-actions { margin-top: 16px; display: flex; gap: 10px; flex-wrap: wrap; }
+
+    /* ── Separador sección ── */
+    .of-section-title {
+        font-size: 0.78rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: #7a90ad;
+        margin: 0 0 14px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid #dce7f5;
+    }
+
+    /* ── Tabla de OFs ── */
+    .of-table-wrap { overflow-x: auto; }
+    .of-table {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 900px;
+    }
+    .of-table thead th {
+        background: #edf3fb;
+        color: #334e73;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        padding: 10px 12px;
+        border-bottom: 1px solid #dce7f5;
+        white-space: nowrap;
+    }
+    .of-table tbody td {
+        padding: 10px 12px;
+        border-bottom: 1px solid #eef3fa;
+        font-size: 0.86rem;
+        color: #25364f;
+        vertical-align: middle;
+    }
+    .of-table tbody tr:hover { background: #f5f9ff; }
+
+    /* ── Chips de estado ── */
+    .of-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        border-radius: 999px;
+        padding: 4px 10px;
+        font-size: 0.74rem;
+        font-weight: 700;
+        border: 1px solid transparent;
+        white-space: nowrap;
+    }
+    .of-chip.borrador    { background: #f4f6fa; color: #556b8a; border-color: #c8d6e9; }
+    .of-chip.en-proceso  { background: #e8f4ff; color: #1255a7; border-color: #9ec7f7; }
+    .of-chip.pausada     { background: #fff8e1; color: #7a5200; border-color: #f9cf72; }
+    .of-chip.completada  { background: #e8f8ef; color: #1a6f42; border-color: #84dba8; }
+    .of-chip.cancelada   { background: #fdf2f2; color: #9b2121; border-color: #f2b8b8; }
+
+    /* ── Barra de avance ── */
+    .of-progress-wrap { display: flex; align-items: center; gap: 8px; min-width: 120px; }
+    .of-progress-bar { flex: 1; height: 7px; background: #e8eef8; border-radius: 999px; overflow: hidden; }
+    .of-progress-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #3572c6, #4e9af1); transition: width .3s; }
+    .of-progress-fill.completo { background: linear-gradient(90deg, #29a85e, #52d68a); }
+    .of-progress-pct { font-size: 0.75rem; font-weight: 700; color: #4b6080; width: 34px; text-align: right; }
+
+    /* ── Botones de acción ── */
+    .of-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+    .of-btn {
+        padding: 5px 12px;
+        border-radius: 7px;
+        font-size: 0.78rem;
+        font-weight: 700;
+        cursor: pointer;
+        border: 1px solid transparent;
+        transition: opacity .15s;
+    }
+    .of-btn:hover { opacity: .82; }
+    .of-btn.iniciar   { background: #1d5fb0; color: #fff; border-color: #1d5fb0; }
+    .of-btn.reanudar  { background: #1d5fb0; color: #fff; border-color: #1d5fb0; }
+    .of-btn.pausar    { background: #f59e0b; color: #fff; border-color: #f59e0b; }
+    .of-btn.completar { background: #16a34a; color: #fff; border-color: #16a34a; }
+    .of-btn.cancelar  { background: #dc2626; color: #fff; border-color: #dc2626; }
+    .of-btn.ver       { background: #f4f7fc; color: #334e73; border-color: #c8d6e9; }
+
+    /* ── Detalle expandible ── */
+    .of-detalle-row td { background: #f8fbff; padding: 12px 20px; }
+    .of-detalle-inner { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; }
+    .of-detalle-inner .of-mat-table { flex: 1; min-width: 340px; }
+    .of-detalle-inner .of-meta { min-width: 200px; font-size: 0.82rem; color: #4b5e78; }
+    .of-detalle-inner .of-meta b { color: #25364f; }
+    .of-mini-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+    .of-mini-table th { background: #eef3fb; color: #334e73; padding: 6px 10px; font-size: 0.73rem; text-transform: uppercase; letter-spacing: .03em; }
+    .of-mini-table td { padding: 6px 10px; border-top: 1px solid #eef3fa; color: #25364f; }
+
+    /* ── Modal completar ── */
+    .of-modal-overlay {
+        display: none;
+        position: fixed; inset: 0;
+        background: rgba(10, 28, 55, 0.55);
+        z-index: 1000;
+        align-items: center;
+        justify-content: center;
+    }
+    .of-modal-overlay.active { display: flex; }
+    .of-modal {
+        background: #fff;
+        border-radius: 16px;
+        padding: 28px 28px 22px;
+        width: 100%;
+        max-width: 680px;
+        max-height: 88vh;
+        overflow-y: auto;
+        box-shadow: 0 20px 60px rgba(0,0,20,.22);
+    }
+    .of-modal h3 { margin: 0 0 6px; color: #1f3e67; }
+    .of-modal p  { margin: 0 0 18px; color: #5f7290; font-size: 0.88rem; }
+    .of-modal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 18px; }
+    .of-modal-grid label { display: flex; flex-direction: column; gap: 5px; font-size: 0.83rem; font-weight: 600; color: #4b5e78; }
+    .of-modal-grid input {
+        padding: 8px 10px; border: 1px solid #c8d9ef; border-radius: 8px;
+        font-size: 0.88rem; background: #f8fbff; color: #25364f;
+    }
+    .of-modal-close { float: right; background: none; border: none; font-size: 1.2rem; cursor: pointer; color: #888; }
+    .of-modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px; }
+
+    /* ── Estado vacío ── */
+    .of-empty { padding: 32px; text-align: center; color: #8fa5c2; font-size: 0.9rem; }
+
+    /* ── KPIs superiores ── */
+    .of-kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 14px; margin-bottom: 6px; }
+    .of-kpi {
+        background: #f8fbff;
+        border: 1px solid #dce7f5;
+        border-radius: 12px;
+        padding: 14px 16px;
+        text-align: center;
+    }
+    .of-kpi .kpi-val { font-size: 1.6rem; font-weight: 800; color: #1f3e67; line-height: 1.2; }
+    .of-kpi .kpi-lbl { font-size: 0.73rem; color: #7a90ad; text-transform: uppercase; letter-spacing: .04em; margin-top: 2px; }
+    .of-kpi.accent .kpi-val { color: #1255a7; }
+    .of-kpi.ok .kpi-val     { color: #1a6f42; }
+    .of-kpi.warn .kpi-val   { color: #7a5200; }
+    .of-kpi.danger .kpi-val { color: #9b2121; }
+
+    /* ── Preview materiales ── */
+    .preview-card {
+        margin-top: 16px;
+        display: none;
+        border: 1px solid #d9e4f3;
+        border-radius: 12px;
+        background: #f8fbff;
+        padding: 14px;
+    }
+    .preview-card.visible { display: block; }
+    .preview-card-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .preview-card-head h4 { margin: 0; color: #1f3e67; font-size: 0.92rem; }
+    .preview-badge { background: #fff; border: 1px solid #ccd9ef; border-radius: 999px; padding: 3px 10px; font-size: 0.76rem; font-weight: 700; color: #2f5598; }
+    .preview-mini { width: 100%; border-collapse: collapse; font-size: 0.81rem; }
+    .preview-mini thead th { background: #edf3fb; color: #334e73; padding: 7px 10px; font-size: 0.73rem; text-transform: uppercase; letter-spacing: .03em; }
+    .preview-mini tbody td { padding: 7px 10px; border-top: 1px solid #eef3fa; }
+    .st-ok   { color: #1a6f42; font-weight: 700; }
+    .st-par  { color: #7a5200; font-weight: 700; }
+    .st-none { color: #9b2121; font-weight: 700; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="entrada-container">
+    <div class="entrada-header">
+        <h1>Órdenes de Fabricación</h1>
+        <p>Crea y gestiona órdenes de fabricación (OF) vinculadas a un plan de producción aprobado. Registra cantidades producidas reales y el consumo de materiales.</p>
+    </div>
+
+    {% if messages %}
+    <ul class="messages" style="margin-bottom: 20px;">
+        {% for message in messages %}
+        <li class="{{ message.tags }}">{{ message }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    <div class="of-page">
+
+        <!-- ── KPIs ── -->
+        {% with total=ofs_recientes|length %}
+        <div class="of-kpis">
+            <div class="of-kpi accent">
+                <div class="kpi-val">{{ total }}</div>
+                <div class="kpi-lbl">Total OFs (últimas 15)</div>
+            </div>
+            <div class="of-kpi ok">
+                <div class="kpi-val">{% with c=0 %}{% for of in ofs_recientes %}{% if of.estado == 'EN_PROCESO' %}{% with c=c|add:1 %}{% endwith %}{% endif %}{% endfor %}{{ ofs_recientes|length|default:0 }}{% endwith %}</div>
+                <div class="kpi-lbl">En proceso</div>
+            </div>
+            <div class="of-kpi">
+                <div class="kpi-val">{{ planes_aprobados|length }}</div>
+                <div class="kpi-lbl">Planes aprobados</div>
+            </div>
+        </div>
+        {% endwith %}
+
+        <!-- ── Formulario nueva OF ── -->
+        <div class="of-card">
+            <h3>Nueva Orden de Fabricación</h3>
+            <form method="post" id="of-form">
+                {% csrf_token %}
+                <p class="of-section-title">Origen de la orden</p>
+
+                <div class="of-form-grid">
+                    <label>
+                        Plan de producción aprobado
+                        <select name="plan_id" id="of-plan-select">
+                            <option value="">— Sin plan (usar BOM directo) —</option>
+                            {% for plan in planes_aprobados %}
+                            <option value="{{ plan.id }}"
+                                data-bom="{{ plan.bom.id }}"
+                                data-cantidad="{{ plan.cantidad_planificada }}"
+                                data-linea="{{ plan.linea_produccion }}"
+                                data-turno="{{ plan.turno }}"
+                                data-inicio="{{ plan.fecha_inicio|date:'Y-m-d' }}"
+                                data-fin="{{ plan.fecha_fin|date:'Y-m-d' }}"
+                            >
+                                {{ plan.folio }} — {{ plan.bom.producto }} ({{ plan.cantidad_planificada }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </label>
+                    <label id="bom-label-wrap">
+                        BOM MFG (si no hay plan)
+                        <select name="bom_id" id="of-bom-select">
+                            <option value="">Selecciona BOM</option>
+                            {% for bom in boms_activos %}
+                            <option value="{{ bom.id }}">{{ bom.codigo }} — {{ bom.producto }} v{{ bom.version }}</option>
+                            {% endfor %}
+                        </select>
+                    </label>
+                </div>
+
+                <p class="of-section-title" style="margin-top: 18px;">Detalles de la orden</p>
+                <div class="of-form-grid">
+                    <label>
+                        Cantidad a producir
+                        <input type="number" name="cantidad_planificada" id="of-cantidad" step="0.01" min="0.01" placeholder="Ej. 500" required>
+                    </label>
+                    <label>
+                        Línea de producción
+                        <select name="linea_produccion" id="of-linea">
+                            <option value="">Sin asignar</option>
+                            {% for linea in lineas_produccion %}
+                            <option value="{{ linea }}">{{ linea }}</option>
+                            {% endfor %}
+                        </select>
+                    </label>
+                    <label>
+                        Turno
+                        <select name="turno" id="of-turno">
+                            <option value="">Sin asignar</option>
+                            {% for turno in turnos %}
+                            <option value="{{ turno }}">{{ turno }}</option>
+                            {% endfor %}
+                        </select>
+                    </label>
+                    <label>
+                        Fecha inicio programada
+                        <input type="date" name="fecha_inicio_programada" id="of-fecha-inicio">
+                    </label>
+                    <label>
+                        Fecha fin programada
+                        <input type="date" name="fecha_fin_programada" id="of-fecha-fin">
+                    </label>
+                    <label class="full">
+                        Observaciones
+                        <textarea name="observaciones" placeholder="Notas adicionales..."></textarea>
+                    </label>
+                </div>
+
+                <!-- Vista previa materiales -->
+                <div id="of-preview-card" class="preview-card">
+                    <div class="preview-card-head">
+                        <h4>Materiales requeridos (estimado)</h4>
+                        <span id="of-preview-badge" class="preview-badge">0 materiales</span>
+                    </div>
+                    <div style="overflow-x:auto;">
+                        <table class="preview-mini">
+                            <thead>
+                                <tr>
+                                    <th>SKU</th>
+                                    <th>Material</th>
+                                    <th>UM</th>
+                                    <th>Requerido</th>
+                                    <th>Inventario</th>
+                                    <th>Estado</th>
+                                </tr>
+                            </thead>
+                            <tbody id="of-preview-tbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="of-form-actions">
+                    <button type="button" class="btn btn-info" onclick="previewMateriales()">Vista previa de materiales</button>
+                    <button type="submit" class="btn btn-primary">Crear Orden de Fabricación</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- ── Lista de OFs recientes ── -->
+        <div class="of-card">
+            <h3>Órdenes de Fabricación recientes</h3>
+            {% if ofs_recientes %}
+            <div class="of-table-wrap">
+                <table class="of-table" id="ofs-table">
+                    <thead>
+                        <tr>
+                            <th></th>
+                            <th>Folio</th>
+                            <th>Producto</th>
+                            <th>Plan</th>
+                            <th>Cantidad</th>
+                            <th>Avance</th>
+                            <th>Línea / Turno</th>
+                            <th>Fechas prog.</th>
+                            <th>Estado</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for of in ofs_recientes %}
+                    <tr>
+                        <td style="text-align:center;">
+                            <button type="button" class="of-btn ver" onclick="toggleDetalle({{ of.id }})">▼</button>
+                        </td>
+                        <td><b>{{ of.folio }}</b></td>
+                        <td>
+                            <span style="font-weight:600;">{{ of.producto }}</span>
+                            <br><span style="font-size:0.75rem;color:#7a90ad;">{{ of.bom_codigo }}</span>
+                        </td>
+                        <td>{{ of.plan_folio|default:"—" }}</td>
+                        <td style="text-align:right;">
+                            {{ of.cantidad_producida }}<span style="color:#7a90ad;"> / {{ of.cantidad_planificada }}</span>
+                        </td>
+                        <td>
+                            <div class="of-progress-wrap">
+                                <div class="of-progress-bar">
+                                    <div class="of-progress-fill {% if of.avance >= 100 %}completo{% endif %}" style="width:{{ of.avance }}%;"></div>
+                                </div>
+                                <span class="of-progress-pct">{{ of.avance }}%</span>
+                            </div>
+                        </td>
+                        <td>
+                            {{ of.linea_produccion|default:"—" }}
+                            {% if of.turno %}<br><span style="font-size:0.75rem;color:#7a90ad;">{{ of.turno }}</span>{% endif %}
+                        </td>
+                        <td style="font-size:0.8rem;">
+                            {% if of.fecha_inicio_programada %}{{ of.fecha_inicio_programada|date:"d/m/Y" }}{% else %}—{% endif %}
+                            {% if of.fecha_fin_programada %} → {{ of.fecha_fin_programada|date:"d/m/Y" }}{% endif %}
+                        </td>
+                        <td>
+                            <span class="of-chip 
+                                {% if of.estado == 'BORRADOR' %}borrador
+                                {% elif of.estado == 'EN_PROCESO' %}en-proceso
+                                {% elif of.estado == 'PAUSADA' %}pausada
+                                {% elif of.estado == 'COMPLETADA' %}completada
+                                {% elif of.estado == 'CANCELADA' %}cancelada
+                                {% endif %}">
+                                {% if of.estado == 'BORRADOR' %}⬜
+                                {% elif of.estado == 'EN_PROCESO' %}🔵
+                                {% elif of.estado == 'PAUSADA' %}🟡
+                                {% elif of.estado == 'COMPLETADA' %}🟢
+                                {% elif of.estado == 'CANCELADA' %}🔴
+                                {% endif %}
+                                {{ of.estado_label }}
+                            </span>
+                        </td>
+                        <td>
+                            <div class="of-actions">
+                                {% for trans in of.transiciones %}
+                                    {% if trans == 'EN_PROCESO' and of.estado == 'BORRADOR' %}
+                                    <form method="post" style="display:inline;">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="accion_estado" value="EN_PROCESO">
+                                        <input type="hidden" name="of_id" value="{{ of.id }}">
+                                        <button type="submit" class="of-btn iniciar">▶ Iniciar</button>
+                                    </form>
+                                    {% elif trans == 'EN_PROCESO' and of.estado == 'PAUSADA' %}
+                                    <form method="post" style="display:inline;">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="accion_estado" value="EN_PROCESO">
+                                        <input type="hidden" name="of_id" value="{{ of.id }}">
+                                        <button type="submit" class="of-btn reanudar">▶ Reanudar</button>
+                                    </form>
+                                    {% elif trans == 'PAUSADA' %}
+                                    <form method="post" style="display:inline;">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="accion_estado" value="PAUSADA">
+                                        <input type="hidden" name="of_id" value="{{ of.id }}">
+                                        <button type="submit" class="of-btn pausar">⏸ Pausar</button>
+                                    </form>
+                                    {% elif trans == 'COMPLETADA' %}
+                                    <button type="button" class="of-btn completar"
+                                        onclick="abrirModalCompletar({{ of.id }}, '{{ of.folio }}', {{ of.cantidad_planificada }}, {{ of.detalles|length }})">
+                                        ✓ Completar
+                                    </button>
+                                    {% elif trans == 'CANCELADA' %}
+                                    <form method="post" style="display:inline;" onsubmit="return confirm('¿Cancelar la orden {{ of.folio }}? Esta acción no se puede deshacer.')">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="accion_estado" value="CANCELADA">
+                                        <input type="hidden" name="of_id" value="{{ of.id }}">
+                                        <button type="submit" class="of-btn cancelar">✕ Cancelar</button>
+                                    </form>
+                                    {% endif %}
+                                {% endfor %}
+                            </div>
+                        </td>
+                    </tr>
+                    <!-- Fila detalle (expandible) -->
+                    <tr id="detalle-{{ of.id }}" class="of-detalle-row" style="display:none;">
+                        <td colspan="10">
+                            <div class="of-detalle-inner">
+                                <div class="of-mat-table">
+                                    <b style="font-size:0.82rem;color:#1f3e67;">Materiales de la OF</b>
+                                    <table class="of-mini-table" style="margin-top:8px;">
+                                        <thead>
+                                            <tr>
+                                                <th>SKU</th>
+                                                <th>Material</th>
+                                                <th>UM</th>
+                                                <th>Requerido</th>
+                                                <th>Consumido real</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for d in of.detalles %}
+                                            <tr>
+                                                <td>{{ d.sku }}</td>
+                                                <td>{{ d.nombre }}</td>
+                                                <td>{{ d.um }}</td>
+                                                <td style="text-align:right;">{{ d.cantidad_requerida }}</td>
+                                                <td style="text-align:right;">
+                                                    {% if of.estado == 'COMPLETADA' %}
+                                                        {{ d.cantidad_consumida }}
+                                                    {% else %}
+                                                        <span style="color:#aab;font-style:italic;">—</span>
+                                                    {% endif %}
+                                                </td>
+                                            </tr>
+                                            {% empty %}
+                                            <tr><td colspan="5" style="text-align:center;color:#aab;">Sin materiales registrados</td></tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div class="of-meta">
+                                    <p><b>Inicio real:</b><br>{{ of.fecha_inicio_real|date:"d/m/Y H:i"|default:"No iniciada" }}</p>
+                                    <p style="margin-top:8px;"><b>Fin real:</b><br>{{ of.fecha_fin_real|date:"d/m/Y H:i"|default:"No finalizada" }}</p>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                    <!-- Datos JSON para modal de completar -->
+                    <script type="application/json" id="of-data-{{ of.id }}">
+                    {
+                        "folio": "{{ of.folio|escapejs }}",
+                        "cantidad_planificada": {{ of.cantidad_planificada }},
+                        "detalles": [
+                            {% for d in of.detalles %}
+                            {"id": "{{ d.sku }}", "sku": "{{ d.sku }}", "nombre": "{{ d.nombre|escapejs }}", "um": "{{ d.um }}", "requerida": {{ d.cantidad_requerida }}, "material_pk": ""}{% if not forloop.last %},{% endif %}
+                            {% endfor %}
+                        ]
+                    }
+                    </script>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="of-empty">
+                <p>No hay órdenes de fabricación registradas aún.</p>
+                <p style="font-size:0.82rem;">Crea la primera OF desde el formulario de arriba usando un Plan de Producción aprobado.</p>
+            </div>
+            {% endif %}
+        </div>
+
+    </div><!-- .of-page -->
+</div><!-- .entrada-container -->
+
+<!-- ── Modal Completar OF ── -->
+<div class="of-modal-overlay" id="modal-completar">
+    <div class="of-modal">
+        <form method="post" id="form-completar">
+            {% csrf_token %}
+            <input type="hidden" name="accion_estado" value="COMPLETADA">
+            <input type="hidden" name="of_id" id="modal-of-id">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
+                <div>
+                    <h3 id="modal-titulo">Completar Orden de Fabricación</h3>
+                    <p id="modal-subtitulo">Registra la cantidad real producida y el consumo de materiales.</p>
+                </div>
+                <button type="button" class="of-modal-close" onclick="cerrarModal()">✕</button>
+            </div>
+
+            <div class="of-modal-grid">
+                <label style="grid-column:1/-1;">
+                    Cantidad producida real
+                    <input type="number" name="cantidad_producida" id="modal-cantidad" step="0.01" min="0" required>
+                </label>
+            </div>
+
+            <p style="font-size:0.83rem;font-weight:700;color:#4b5e78;margin-bottom:8px;">Consumo de materiales</p>
+            <div style="overflow-x:auto;">
+                <table class="preview-mini" id="modal-mat-table">
+                    <thead>
+                        <tr>
+                            <th>SKU</th>
+                            <th>Material</th>
+                            <th>UM</th>
+                            <th>Requerido</th>
+                            <th>Consumido real</th>
+                        </tr>
+                    </thead>
+                    <tbody id="modal-mat-tbody"></tbody>
+                </table>
+            </div>
+
+            <div class="of-modal-actions">
+                <button type="button" class="btn btn-secondary" onclick="cerrarModal()">Cancelar</button>
+                <button type="submit" class="btn btn-primary">✓ Confirmar como completada</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ── Datos de BOMs para preview ──────────────────────────────────────────────
+const bomsData = {
+    {% for bom in boms_activos %}
+    "{{ bom.id }}": {
+        "producto": "{{ bom.producto|escapejs }}",
+        "cantidad_base": {{ bom.cantidad_base }},
+        "componentes": [
+            {% for comp in bom.componentes.all %}
+            {
+                "sku": "{{ comp.material.sku|escapejs }}",
+                "nombre": "{{ comp.material.nombre|escapejs }}",
+                "um": "{{ comp.material.um|escapejs }}",
+                "cantidad": {{ comp.cantidad }},
+                "stock": {{ comp.material.stock_actual|default:0 }}
+            }{% if not forloop.last %},{% endif %}
+            {% endfor %}
+        ]
+    }{% if not forloop.last %},{% endif %}
+    {% endfor %}
+};
+
+// ── Datos de planes para autocompletar ──────────────────────────────────────
+document.getElementById('of-plan-select').addEventListener('change', function () {
+    const opt = this.options[this.selectedIndex];
+    const planId = this.value;
+    const bomSelect = document.getElementById('of-bom-select');
+    const bomWrap = document.getElementById('bom-label-wrap');
+
+    if (planId) {
+        bomSelect.value = opt.dataset.bom || '';
+        document.getElementById('of-cantidad').value = opt.dataset.cantidad || '';
+        document.getElementById('of-fecha-inicio').value = opt.dataset.inicio || '';
+        document.getElementById('of-fecha-fin').value = opt.dataset.fin || '';
+        // Seleccionar línea
+        const lineaSelect = document.getElementById('of-linea');
+        for (let i = 0; i < lineaSelect.options.length; i++) {
+            if (lineaSelect.options[i].value === opt.dataset.linea) {
+                lineaSelect.selectedIndex = i; break;
+            }
+        }
+        // Seleccionar turno
+        const turnoSelect = document.getElementById('of-turno');
+        for (let i = 0; i < turnoSelect.options.length; i++) {
+            if (turnoSelect.options[i].value === opt.dataset.turno) {
+                turnoSelect.selectedIndex = i; break;
+            }
+        }
+        bomWrap.style.opacity = '0.5';
+        bomSelect.disabled = true;
+    } else {
+        bomSelect.disabled = false;
+        bomWrap.style.opacity = '1';
+    }
+    // Ocultar preview si cambia selección
+    document.getElementById('of-preview-card').classList.remove('visible');
+});
+
+// ── Preview de materiales ────────────────────────────────────────────────────
+function previewMateriales() {
+    const planSelect = document.getElementById('of-plan-select');
+    const bomSelect = document.getElementById('of-bom-select');
+    const cantidad = parseFloat(document.getElementById('of-cantidad').value) || 0;
+
+    let bomId = '';
+    if (planSelect.value) {
+        bomId = planSelect.options[planSelect.selectedIndex].dataset.bom;
+    } else {
+        bomId = bomSelect.value;
+    }
+
+    if (!bomId || cantidad <= 0) {
+        alert('Selecciona un plan o BOM y una cantidad válida para ver la vista previa.');
+        return;
+    }
+
+    const bom = bomsData[bomId];
+    if (!bom) { alert('No se encontraron datos del BOM.'); return; }
+
+    const factor = bom.cantidad_base > 0 ? cantidad / bom.cantidad_base : 0;
+    const tbody = document.getElementById('of-preview-tbody');
+    const badge = document.getElementById('of-preview-badge');
+    tbody.innerHTML = '';
+
+    bom.componentes.forEach(comp => {
+        const requerida = (comp.cantidad * factor);
+        const stock = comp.stock;
+        let estadoHtml, estadoClass;
+        if (stock >= requerida) {
+            estadoHtml = '✓ Disponible';
+            estadoClass = 'st-ok';
+        } else if (stock > 0) {
+            estadoHtml = `⚠ Parcial (${stock.toFixed(3)} disp.)`;
+            estadoClass = 'st-par';
+        } else {
+            estadoHtml = '✗ Sin stock';
+            estadoClass = 'st-none';
+        }
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${comp.sku}</td>
+            <td>${comp.nombre}</td>
+            <td>${comp.um}</td>
+            <td style="text-align:right;">${requerida.toFixed(3)}</td>
+            <td style="text-align:right;">${stock.toFixed(3)}</td>
+            <td class="${estadoClass}">${estadoHtml}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+
+    badge.textContent = `${bom.componentes.length} material${bom.componentes.length !== 1 ? 'es' : ''}`;
+    document.getElementById('of-preview-card').classList.add('visible');
+}
+
+// ── Expandir/colapsar fila de detalles ───────────────────────────────────────
+function toggleDetalle(ofId) {
+    const row = document.getElementById('detalle-' + ofId);
+    if (row) {
+        row.style.display = row.style.display === 'none' ? 'table-row' : 'none';
+    }
+}
+
+// ── Modal Completar ───────────────────────────────────────────────────────────
+// Guardamos las OFs con sus materiales
+const ofsDetalles = {};
+{% for of in ofs_recientes %}
+ofsDetalles[{{ of.id }}] = {
+    folio: "{{ of.folio|escapejs }}",
+    cantidad_planificada: {{ of.cantidad_planificada }},
+    detalles: [
+        {% for d in of.detalles %}
+        {
+            sku: "{{ d.sku|escapejs }}",
+            nombre: "{{ d.nombre|escapejs }}",
+            um: "{{ d.um|escapejs }}",
+            requerida: {{ d.cantidad_requerida }},
+            material_id: ""
+        }{% if not forloop.last %},{% endif %}
+        {% endfor %}
+    ]
+};
+{% endfor %}
+
+// Necesitamos también los IDs de los materiales para enviar en el form
+// Los cargamos desde la tabla de OFs en el DOM
+{% for of in ofs_recientes %}
+{% for d in of.detalles %}
+// Nota: el backend acepta sku como identificador a través de material_id en el POST
+// Los inputs se llenarán en la función abrirModalCompletar
+{% endfor %}
+{% endfor %}
+
+function abrirModalCompletar(ofId, folio, cantPlanificada) {
+    const of = ofsDetalles[ofId];
+    if (!of) { alert('No se encontraron datos de la OF.'); return; }
+
+    document.getElementById('modal-of-id').value = ofId;
+    document.getElementById('modal-titulo').textContent = `Completar OF ${folio}`;
+    document.getElementById('modal-cantidad').value = cantPlanificada;
+
+    const tbody = document.getElementById('modal-mat-tbody');
+    tbody.innerHTML = '';
+
+    of.detalles.forEach((d, idx) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${d.sku}<input type="hidden" name="consumo_material_id[]" value="${d.sku}"></td>
+            <td>${d.nombre}</td>
+            <td>${d.um}</td>
+            <td style="text-align:right;">${d.requerida.toFixed(3)}</td>
+            <td>
+                <input type="number" name="consumo_cantidad[]" value="${d.requerida.toFixed(3)}"
+                    step="0.001" min="0"
+                    style="width:100px;padding:5px 8px;border:1px solid #c8d9ef;border-radius:6px;font-size:0.84rem;">
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+
+    document.getElementById('modal-completar').classList.add('active');
+}
+
+function cerrarModal() {
+    document.getElementById('modal-completar').classList.remove('active');
+}
+
+// Cerrar modal al hacer click fuera
+document.getElementById('modal-completar').addEventListener('click', function(e) {
+    if (e.target === this) cerrarModal();
+});
+</script>
+{% endblock %}

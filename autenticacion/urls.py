@@ -1,6 +1,10 @@
 from django.urls import path
 from .views import (
     bom_lista_materiales,
+    bom_mfg,
+    planificacion_produccion,
+    requerimiento_materiales_produccion,
+        ordenes_fabricacion,
     login_usuario,
     register_usuario,
     home,
@@ -41,4 +45,8 @@ urlpatterns = [
     path('qa/oqa/', qa_oqa, name='qa_oqa'),
     path('qa/customer-service/', qa_customer_service, name='qa_customer_service'),
     path('api/materiales-proveedor/<int:proveedor_id>/', api_materiales_proveedor, name='api_materiales_proveedor'),
+    path('produccion/planificacion/', planificacion_produccion, name='planificacion_produccion'),
+    path('produccion/requerimiento-materiales/', requerimiento_materiales_produccion, name='requerimiento_materiales_produccion'),
+    path('produccion/bom-mfg/', bom_mfg, name='bom_mfg'),
+    path('produccion/ordenes-fabricacion/', ordenes_fabricacion, name='ordenes_fabricacion'),
 ]

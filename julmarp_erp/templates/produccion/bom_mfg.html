@@ -1,0 +1,413 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}BOM de Fabricación (MFG){% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/pages/inventario.css' %}">
+<style>
+    .ops-table th, .ops-table td { padding: 6px 8px; font-size: 0.85rem; }
+    .ops-table input, .ops-table select { padding: 4px 6px; font-size: 0.83rem; }
+    .section-divider { border: none; border-top: 2px solid #e2e8f0; margin: 24px 0 16px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="entrada-container">
+    <div class="entrada-header">
+        <h1>BOM de Fabricación (MFG)</h1>
+        <p>Define listas de materiales + operaciones de manufactura con tiempos, líneas y recursos para cada producto terminado.</p>
+    </div>
+
+    {% if messages %}
+    <ul class="messages" style="margin-bottom: 20px;">
+        {% for message in messages %}
+        <li class="{{ message.tags }}">{{ message }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    <section class="inventario-dashboard-grid" style="margin-bottom: 20px;">
+        <article class="dashboard-kpi-card">
+            <span>BOM MFG registrados</span>
+            <strong>{{ bom_kpis.total }}</strong>
+            <small>Total de BOMs de fabricación capturados.</small>
+        </article>
+        <article class="dashboard-kpi-card">
+            <span>BOM MFG activos</span>
+            <strong>{{ bom_kpis.activos }}</strong>
+            <small>Versiones vigentes listas para producción.</small>
+        </article>
+        <article class="dashboard-kpi-card">
+            <span>Materiales disponibles</span>
+            <strong>{{ bom_kpis.total_materiales }}</strong>
+            <small>Materiales activos en catálogo para seleccionar.</small>
+        </article>
+    </section>
+
+    <div class="entrada-grid bom-grid">
+        <!-- FORMULARIO -->
+        <section class="entrada-card proveedores-card bom-main-card">
+            <h3>Nuevo BOM </h3>
+            <form method="post" id="bom-mfg-form">
+                {% csrf_token %}
+                <!-- Encabezado BOM -->
+                <div class="entrada-form-grid bom-form-grid">
+                    <label>
+                        Código BOM
+                        <input type="text" name="codigo" value="{{ form_data.codigo }}" placeholder="Ej. BOM-MFG-001" required>
+                    </label>
+                    <label>
+                        Producto / Ensamble
+                        <input type="text" name="producto" value="{{ form_data.producto }}" placeholder="Ej. Control Maestro Rev2" required>
+                    </label>
+                    <label>
+                        Versión
+                        <input type="text" name="version" value="{{ form_data.version }}" placeholder="1.0" required>
+                    </label>
+                    <label>
+                        Cantidad base
+                        <input type="number" step="0.01" min="0.01" name="cantidad_base" value="{{ form_data.cantidad_base }}" required>
+                    </label>
+                    <label>
+                        Unidad producto
+                        <input type="text" name="unidad_producto" value="{{ form_data.unidad_producto }}" placeholder="pieza, lote, kit">
+                    </label>
+                    <label>
+                        Estatus
+                        <select name="activo">
+                            <option value="1" {% if form_data.activo %}selected{% endif %}>Activo</option>
+                            <option value="0" {% if not form_data.activo %}selected{% endif %}>Inactivo</option>
+                        </select>
+                    </label>
+                    <label style="grid-column: 1 / -1;">
+                        Descripción
+                        <textarea rows="2" name="descripcion" placeholder="Describe el producto o notas de fabricación">{{ form_data.descripcion }}</textarea>
+                    </label>
+                </div>
+
+                <hr class="section-divider">
+
+                <!-- COMPONENTES -->
+                <section class="entrada-card entrada-card-full bom-components-card">
+                    <div class="inventario-dashboard-head" style="margin-bottom: 14px;">
+                        <div>
+                            <h3 style="margin-bottom: 4px;">Componentes (Materiales)</h3>
+                            <p class="inventario-filter-caption" style="margin-top: 0;">Materias primas y componentes requeridos por cantidad base.</p>
+                        </div>
+                        <button type="button" class="btn btn-success" id="btn-add-componente" onclick="(function(btn){var body=document.getElementById('bom-componentes-body');if(!body){return;}var src=body.querySelector('tr');if(!src){return;}var row=src.cloneNode(true);row.querySelectorAll('input').forEach(function(el){el.value='';});var sel=row.querySelector('select');if(sel){sel.value='';}body.appendChild(row);})(this)">+ Agregar material</button>
+                    </div>
+                    <div class="tabla-wrap material-captura-wrap bom-table-wrap">
+                        <table class="tabla-material material-captura-table bom-components-table">
+                            <thead>
+                                <tr>
+                                    <th>SKU</th>
+                                    <th>Material</th>
+                                    <th>UM</th>
+                                    <th>Cantidad</th>
+                                    <th>Observaciones</th>
+                                    <th>Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody id="bom-componentes-body">
+                                {% for comp in form_data.componentes %}
+                                <tr>
+                                    <td>
+                                        <select name="material_id[]" class="bom-material-select" onchange="(function(sel){var row=sel.closest('tr');if(!row){return;}var opt=sel.options[sel.selectedIndex];var nombre=row.querySelector('.bom-material-nombre');var um=row.querySelector('.bom-material-um');if(nombre){nombre.value=(opt && opt.dataset.nombre) ? opt.dataset.nombre : '';}if(um){um.value=(opt && opt.dataset.um) ? opt.dataset.um : '';} })(this)">
+                                            <option value="">Selecciona material</option>
+                                            {% for m in materiales_catalogo %}
+                                            <option value="{{ m.id }}" data-sku="{{ m.sku }}" data-nombre="{{ m.nombre }}" data-um="{{ m.um|default:'-' }}"
+                                                {% if comp.material_id == m.id|stringformat:'s' %}selected{% endif %}>{{ m.sku }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </td>
+                                    <td><input type="text" class="bom-material-nombre" readonly></td>
+                                    <td><input type="text" class="bom-material-um" readonly></td>
+                                    <td><input type="number" step="0.001" min="0.001" name="cantidad[]" value="{{ comp.cantidad }}"></td>
+                                    <td><input type="text" name="observaciones[]" value="{{ comp.observaciones }}" placeholder="Opcional"></td>
+                                    <td><button type="button" class="btn btn-danger btn-row-remove" onclick="(function(btn){var body=document.getElementById('bom-componentes-body');var row=btn.closest('tr');if(!body||!row){return;}if(body.querySelectorAll('tr').length===1){row.querySelectorAll('input').forEach(function(el){el.value='';});var sel=row.querySelector('select');if(sel){sel.value='';}return;}row.remove();})(this)">Quitar</button></td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <hr class="section-divider">
+
+                <!-- OPERACIONES -->
+                <section class="entrada-card entrada-card-full" style="margin-top: 0;">
+                    <div class="inventario-dashboard-head" style="margin-bottom: 14px;">
+                        <div>
+                            <h3 style="margin-bottom: 4px;">Operaciones de Manufactura</h3>
+                            <p class="inventario-filter-caption" style="margin-top: 0;">Define cada paso del proceso de fabricación con tiempos y recursos.</p>
+                        </div>
+                        <button type="button" class="btn btn-success" id="btn-add-operacion" onclick="(function(btn){var body=document.getElementById('ops-body');if(!body){return;}var src=body.querySelector('tr');if(!src){return;}var row=src.cloneNode(true);var lastInput=body.lastElementChild?body.lastElementChild.querySelector('input[name=\'op_secuencia[]\']'):null;var nextSeq=parseInt(lastInput&&lastInput.value?lastInput.value:'1',10)+1;row.querySelectorAll('input').forEach(function(el){if(el.name==='op_secuencia[]'){el.value=nextSeq;}else if(el.name==='op_operadores[]'){el.value='1';}else{el.value='';}});row.querySelectorAll('select').forEach(function(sel){sel.selectedIndex=0;});body.appendChild(row);})(this)">+ Agregar operación</button>
+                    </div>
+                    <div class="tabla-wrap" style="overflow-x: auto;">
+                        <table class="tabla-material ops-table" style="min-width: 900px;">
+                            <thead>
+                                <tr>
+                                    <th style="width: 55px;">Seq.</th>
+                                    <th style="min-width: 150px;">Operación</th>
+                                    <th style="min-width: 130px;">Línea</th>
+                                    <th style="width: 90px;">Tiempo</th>
+                                    <th style="width: 80px;">Unidad</th>
+                                    <th style="min-width: 130px;">Máquina / Equipo</th>
+                                    <th style="width: 80px;">Operadores</th>
+                                    <th style="min-width: 160px;">Descripción</th>
+                                    <th>Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody id="ops-body">
+                                {% for op in form_data.operaciones %}
+                                <tr>
+                                    <td><input type="number" name="op_secuencia[]" value="{{ op.secuencia }}" min="1" style="width: 50px;" required></td>
+                                    <td><input type="text" name="op_nombre[]" value="{{ op.nombre }}" placeholder="Ej. Ensamble PCB" required></td>
+                                    <td>
+                                        <select name="op_linea[]">
+                                            <option value="">Sin asignar</option>
+                                            {% for linea in lineas %}
+                                            <option value="{{ linea }}" {% if op.linea_produccion == linea %}selected{% endif %}>{{ linea }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </td>
+                                    <td><input type="number" name="op_tiempo[]" value="{{ op.tiempo_estimado }}" step="1" min="0" placeholder="0"></td>
+                                    <td>
+                                        <select name="op_unidad_tiempo[]">
+                                            {% for val, label in unidades_tiempo %}
+                                            <option value="{{ val }}" {% if op.unidad_tiempo == val %}selected{% endif %}>{{ label }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </td>
+                                    <td><input type="text" name="op_maquina[]" value="{{ op.recurso_maquina }}" placeholder="Ej. Soldadora SMT-1"></td>
+                                    <td><input type="number" name="op_operadores[]" value="{{ op.operadores_requeridos }}" min="1" style="width: 60px;"></td>
+                                    <td><input type="text" name="op_descripcion[]" value="{{ op.descripcion }}" placeholder="Opcional"></td>
+                                    <td><button type="button" class="btn btn-danger btn-op-remove" onclick="(function(btn){var body=document.getElementById('ops-body');var row=btn.closest('tr');if(!body||!row){return;}if(body.querySelectorAll('tr').length===1){row.querySelectorAll('input').forEach(function(el){if(el.name==='op_secuencia[]'){el.value='1';}else if(el.name==='op_operadores[]'){el.value='1';}else{el.value='';}});row.querySelectorAll('select').forEach(function(sel){sel.selectedIndex=0;});return;}row.remove();})(this)">Quitar</button></td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <div class="entrada-actions bom-actions-row" style="margin-top: 20px;">
+                    <button class="btn btn-primary" type="submit">Guardar BOM MFG</button>
+                    <a class="btn btn-info" href="{% url 'bom_mfg' %}">Limpiar</a>
+                </div>
+            </form>
+        </section>
+
+        <!-- LISTADO -->
+        <section class="entrada-card bom-list-card entrada-card-full">
+            <h3>BOM MFG Registrados</h3>
+            <div class="tabla-wrap bom-list-wrap">
+                <table class="tabla-material bom-list-table">
+                    <thead>
+                        <tr>
+                            <th>Código</th>
+                            <th>Producto</th>
+                            <th>Versión</th>
+                            <th>Base</th>
+                            <th>Materiales</th>
+                            <th>Operaciones</th>
+                            <th>Estado</th>
+                            <th>Detalle</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for bom in boms_mfg %}
+                        <tr>
+                            <td>{{ bom.codigo }}</td>
+                            <td>
+                                <strong>{{ bom.producto }}</strong><br>
+                                <small>{{ bom.descripcion|default:'Sin descripción'|truncatechars:60 }}</small>
+                            </td>
+                            <td>{{ bom.version }}</td>
+                            <td>{{ bom.cantidad_base|floatformat:2 }} {{ bom.unidad_producto|default:'unidad' }}</td>
+                            <td>{{ bom.componentes.count }}</td>
+                            <td>{{ bom.operaciones.count }}</td>
+                            <td>
+                                {% if bom.activo %}
+                                <span class="badge ok">Activo</span>
+                                {% else %}
+                                <span class="badge warn">Inactivo</span>
+                                {% endif %}
+                            </td>
+                            <td class="bom-detail-cell">
+                                <button
+                                    type="button"
+                                    class="bom-detail-trigger"
+                                    data-bom-target="bom-detail-row-{{ bom.id }}"
+                                    onclick="(function(btn){var targetId=btn.getAttribute('data-bom-target');var targetRow=document.getElementById(targetId);if(!targetRow){return;}var isOpening=!targetRow.classList.contains('is-visible');document.querySelectorAll('.bom-expand-row').forEach(function(row){row.classList.remove('is-visible');});document.querySelectorAll('.bom-detail-trigger').forEach(function(b){b.classList.remove('is-open');b.textContent='Ver detalle';});if(isOpening){targetRow.classList.add('is-visible');btn.classList.add('is-open');btn.textContent='Ocultar detalle';}})(this);"
+                                    aria-label="Ver composición del BOM {{ bom.codigo }}"
+                                >
+                                    Ver detalle
+                                </button>
+                            </td>
+                        </tr>
+                        <tr id="bom-detail-row-{{ bom.id }}" class="bom-expand-row">
+                            <td colspan="8" class="bom-expand-cell">
+                                <div class="bom-composition-content">
+                                    <div class="bom-composition-titlebar">
+                                        <strong>{{ bom.codigo }} - {{ bom.producto }}</strong>
+                                        <div class="bom-composition-meta">
+                                            <span>Version {{ bom.version }}</span>
+                                            <span>Base: {{ bom.cantidad_base|floatformat:2 }} {{ bom.unidad_producto|default:'unidad' }}</span>
+                                            <span>{% if bom.activo %}Activo{% else %}Inactivo{% endif %}</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="bom-composition-grid">
+                                        <section class="bom-composition-panel">
+                                            <header>
+                                                <h4>Materiales</h4>
+                                                <span>{{ bom.componentes.count }}</span>
+                                            </header>
+                                            <div class="bom-composition-list">
+                                                {% for comp in bom.componentes.all %}
+                                                <article class="bom-composition-item">
+                                                    <strong>{{ comp.material.sku }}</strong>
+                                                    <span>{{ comp.material.nombre }}</span>
+                                                    <small>{{ comp.cantidad|floatformat:3 }} {{ comp.material.um|default:'UM' }}{% if comp.observaciones %} | {{ comp.observaciones }}{% endif %}</small>
+                                                </article>
+                                                {% empty %}
+                                                <p class="bom-composition-empty">Sin materiales registrados.</p>
+                                                {% endfor %}
+                                            </div>
+                                        </section>
+
+                                        <section class="bom-composition-panel">
+                                            <header>
+                                                <h4>Operaciones</h4>
+                                                <span>{{ bom.operaciones.count }}</span>
+                                            </header>
+                                            <div class="bom-composition-list">
+                                                {% for op in bom.operaciones.all %}
+                                                <article class="bom-composition-item">
+                                                    <strong>Op{{ op.secuencia }} - {{ op.nombre }}</strong>
+                                                    <span>{% if op.linea_produccion %}{{ op.linea_produccion }}{% else %}Linea sin asignar{% endif %}</span>
+                                                    <small>
+                                                        {% if op.tiempo_estimado %}{{ op.tiempo_estimado }} {{ op.get_unidad_tiempo_display }}{% else %}Sin tiempo{% endif %}
+                                                        {% if op.recurso_maquina %} | Maq: {{ op.recurso_maquina }}{% endif %}
+                                                        | {{ op.operadores_requeridos }} operador{% if op.operadores_requeridos != 1 %}es{% endif %}
+                                                    </small>
+                                                    {% if op.descripcion %}<small>{{ op.descripcion }}</small>{% endif %}
+                                                </article>
+                                                {% empty %}
+                                                <p class="bom-composition-empty">Sin operaciones registradas.</p>
+                                                {% endfor %}
+                                            </div>
+                                        </section>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="8">No hay BOM MFG registrados todavía.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    function initBomMfgPage() {
+    // ── Componentes ──────────────────────────────────────────────────────────
+    const compBody = document.getElementById('bom-componentes-body');
+    const addCompBtn = document.getElementById('btn-add-componente');
+
+    function hydrateComp(row) {
+        const sel = row.querySelector('.bom-material-select');
+        const opt = sel.options[sel.selectedIndex];
+        row.querySelector('.bom-material-nombre').value = opt ? (opt.dataset.nombre || '') : '';
+        row.querySelector('.bom-material-um').value = opt ? (opt.dataset.um || '') : '';
+    }
+
+    function bindComp(row) {
+        row.querySelector('.bom-material-select').addEventListener('change', () => hydrateComp(row));
+        row.querySelector('.btn-row-remove').addEventListener('click', function () {
+            if (compBody.children.length === 1) {
+                row.querySelectorAll('input,select').forEach(el => el.value = el.type === 'select-one' ? '' : '');
+                return;
+            }
+            row.remove();
+        });
+        hydrateComp(row);
+    }
+
+    function addCompRow() {
+        const sourceRow = compBody ? compBody.querySelector('tr') : null;
+        if (!sourceRow) return;
+
+        const tmpl = sourceRow.cloneNode(true);
+        tmpl.querySelectorAll('input').forEach(el => el.value = '');
+        tmpl.querySelector('select').value = '';
+        bindComp(tmpl);
+        compBody.appendChild(tmpl);
+    }
+
+    if (compBody && addCompBtn) {
+        compBody.querySelectorAll('tr').forEach(bindComp);
+        addCompBtn.addEventListener('click', addCompRow);
+    }
+
+    // ── Operaciones ──────────────────────────────────────────────────────────
+    const opsBody = document.getElementById('ops-body');
+    const addOpBtn = document.getElementById('btn-add-operacion');
+
+    function bindOp(row) {
+        row.querySelector('.btn-op-remove').addEventListener('click', function () {
+            if (opsBody.children.length === 1) {
+                row.querySelectorAll('input').forEach(el => el.value = el.name.includes('op_secuencia') ? '1' : (el.name.includes('op_operadores') ? '1' : ''));
+                return;
+            }
+            row.remove();
+        });
+    }
+
+    function addOpRow() {
+        const sourceRow = opsBody ? opsBody.querySelector('tr') : null;
+        if (!sourceRow) return;
+
+        const tmpl = sourceRow.cloneNode(true);
+        // increment secuencia
+        const lastSeqInput = opsBody.lastElementChild ? opsBody.lastElementChild.querySelector('input[name="op_secuencia[]"]') : null;
+        const lastSeq = parseInt((lastSeqInput && lastSeqInput.value) ? lastSeqInput.value : '1', 10);
+        tmpl.querySelector('input[name="op_secuencia[]"]').value = lastSeq + 1;
+
+        tmpl.querySelectorAll('input').forEach(el => {
+            if (el.name === 'op_secuencia[]') return;
+            if (el.name === 'op_operadores[]') {
+                el.value = '1';
+                return;
+            }
+            el.value = '';
+        });
+
+        tmpl.querySelector('input[name="op_operadores[]"]').value = '1';
+        tmpl.querySelectorAll('select').forEach(sel => sel.selectedIndex = 0);
+        bindOp(tmpl);
+        opsBody.appendChild(tmpl);
+    }
+
+    if (opsBody && addOpBtn) {
+        opsBody.querySelectorAll('tr').forEach(bindOp);
+        addOpBtn.addEventListener('click', addOpRow);
+    }
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initBomMfgPage);
+    } else {
+        initBomMfgPage();
+    }
+
+})();
+</script>
+{% endblock %}
