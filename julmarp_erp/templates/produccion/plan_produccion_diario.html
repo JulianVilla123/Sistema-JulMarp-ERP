@@ -1,0 +1,448 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Plan de Producción Diario - JulMarp ERP{% endblock %}
+
+{% block extra_css %}
+<style>
+  body {
+    background-color: #f8f9fa;
+  }
+
+  .border-left-primary {
+    border-left: 4px solid #0d6efd;
+  }
+  .border-left-success {
+    border-left: 4px solid #198754;
+  }
+  .border-left-warning {
+    border-left: 4px solid #ffc107;
+  }
+  .border-left-info {
+    border-left: 4px solid #0dcaf0;
+  }
+  .border-left-secondary {
+    border-left: 4px solid #6c757d;
+  }
+
+  .card {
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    border: none;
+    margin-bottom: 1.5rem;
+  }
+
+  .card-header {
+    background-color: #f8f9fa !important;
+    font-weight: 600;
+  }
+
+  .table-sm thead th {
+    background-color: #e9ecef;
+    font-weight: 600;
+    border-top: 2px solid #dee2e6;
+  }
+
+  .badge {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.85rem;
+  }
+
+  .progress {
+    height: 25px;
+    background-color: #e9ecef;
+  }
+
+  .progress-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: 600;
+    font-size: 0.85rem;
+  }
+
+  .kpi-card {
+    padding: 1.5rem;
+    border-radius: 0.5rem;
+    background: white;
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+  }
+
+  .kpi-value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    margin: 0.5rem 0;
+  }
+
+  .kpi-label {
+    font-size: 0.9rem;
+    color: #6c757d;
+    font-weight: 500;
+  }
+
+  .filter-card {
+    background: white;
+    padding: 1.5rem;
+    border-radius: 0.5rem;
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    margin-bottom: 1.5rem;
+  }
+
+  .btn-group-custom {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 1rem;
+  }
+
+  .lote-card {
+    transition: all 0.3s ease;
+    border: 1px solid #dee2e6;
+  }
+
+  .lote-card:hover {
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+  }
+
+  .table-hover tbody tr:hover {
+    background-color: #f8f9fa;
+  }
+
+  .fw-600 {
+    font-weight: 600;
+  }
+
+  .text-md {
+    font-size: 0.95rem;
+  }
+
+  h1, h5 {
+    color: #212529;
+  }
+
+  .main-header {
+    border-bottom: 3px solid #0d6efd;
+    padding-bottom: 1rem;
+    margin-bottom: 1.5rem;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+  
+  <!-- Header Section -->
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="main-header d-flex justify-content-between align-items-center">
+        <div>
+          <h1 class="h2 mb-1">
+            <i class="bi bi-calendar-event text-primary"></i> Plan de Producción Diario
+          </h1>
+          <p class="text-muted mb-0">Lotes programados para producir</p>
+        </div>
+        <div>
+          <span class="badge bg-primary fs-6 px-3 py-2">
+            {% if fecha_seleccionada %}
+              {{ fecha_seleccionada|date:"l, d \d\e F" }}
+            {% else %}
+              Hoy
+            {% endif %}
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- KPIs Section -->
+  <div class="row mb-4">
+    <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
+      <div class="kpi-card border-left-primary">
+        <div class="kpi-value text-primary">{{ kpis.total_ofs }}</div>
+        <div class="kpi-label">Órdenes Activas</div>
+      </div>
+    </div>
+    <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
+      <div class="kpi-card border-left-success">
+        <div class="kpi-value text-success">{{ kpis.total_producido|floatformat:0 }}</div>
+        <div class="kpi-label">Unidades Producidas</div>
+      </div>
+    </div>
+    <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
+      <div class="kpi-card border-left-warning">
+        <div class="kpi-value text-warning">{{ kpis.total_pendiente|floatformat:0 }}</div>
+        <div class="kpi-label">Unidades Pendientes</div>
+      </div>
+    </div>
+    <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
+      <div class="kpi-card border-left-info">
+        <div class="kpi-value text-info">{{ kpis.eficiencia_diaria }}%</div>
+        <div class="kpi-label">Eficiencia</div>
+      </div>
+    </div>
+    <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
+      <div class="kpi-card border-left-secondary">
+        <div class="kpi-value">{{ kpis.num_lotes_capturados }}</div>
+        <div class="kpi-label">Lotes Capturados</div>
+      </div>
+    </div>
+    <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
+      <div class="kpi-card border-left-success">
+        <div class="kpi-value text-success">{{ kpis.total_planificado|floatformat:0 }}</div>
+        <div class="kpi-label">Planificado Hoy</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Filtros Section -->
+  <div class="filter-card">
+    <form method="get" class="row g-3">
+      <div class="col-md-4">
+        <label for="fecha_filter" class="form-label fw-600">
+          <i class="bi bi-calendar3"></i> Fecha
+        </label>
+        <input 
+          type="date" 
+          id="fecha_filter" 
+          name="fecha" 
+          value="{{ fecha_seleccionada_str }}" 
+          class="form-control"
+        >
+      </div>
+      <div class="col-md-6">
+        <label for="linea_filter" class="form-label fw-600">
+          <i class="bi bi-building"></i> Línea de Producción
+        </label>
+        <select id="linea_filter" name="linea" class="form-select">
+          <option value="">-- Todas las líneas --</option>
+          {% for linea in lineas_disponibles %}
+            <option value="{{ linea }}" {% if linea == linea_seleccionada %}selected{% endif %}>
+              {{ linea }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2 d-flex align-items-end">
+        <button type="submit" class="btn btn-primary w-100 fw-600">
+          <i class="bi bi-search"></i> Filtrar
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Production Plan Table -->
+  {% if plan_datos %}
+  <div class="card">
+    <div class="card-header">
+      <h5 class="mb-0">
+        <i class="bi bi-table"></i> Plan de Producción del Día
+      </h5>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover table-sm mb-0">
+          <thead>
+            <tr>
+              <th class="text-center" style="width: 8%">Orden</th>
+              <th style="width: 12%">Folio</th>
+              <th style="width: 18%">Producto</th>
+              <th class="text-center" style="width: 8%">Línea</th>
+              <th class="text-end" style="width: 10%">Planificado</th>
+              <th class="text-end" style="width: 10%">Producido</th>
+              <th class="text-end" style="width: 10%">Pendiente</th>
+              <th style="width: 14%">Avance</th>
+              <th class="text-center" style="width: 10%">Estado</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for plan in plan_datos %}
+            <tr>
+              <td class="text-center fw-600 text-primary">{{ plan.num_orden }}</td>
+              <td>
+                <span class="badge bg-secondary text-uppercase">{{ plan.folio }}</span>
+              </td>
+              <td>
+                <div class="fw-600">{{ plan.producto }}</div>
+                <div class="text-muted small">{{ plan.codigo_bom }}</div>
+              </td>
+              <td class="text-center">
+                <small class="text-muted">{{ plan.linea }}</small>
+              </td>
+              <td class="text-end fw-600">{{ plan.cantidad_planificada|floatformat:0 }}</td>
+              <td class="text-end fw-600 text-success">{{ plan.cantidad_producida|floatformat:0 }}</td>
+              <td class="text-end fw-600 text-warning">{{ plan.cantidad_pendiente|floatformat:0 }}</td>
+              <td>
+                <div class="progress">
+                  <div
+                    class="progress-bar {% if plan.avance_pct >= 75 %}bg-success{% elif plan.avance_pct >= 50 %}bg-info{% elif plan.avance_pct > 0 %}bg-warning{% else %}bg-secondary{% endif %}"
+                    role="progressbar"
+                    style="width: {{ plan.avance_pct }}%"
+                    aria-valuenow="{{ plan.avance_pct }}"
+                    aria-valuemin="0"
+                    aria-valuemax="100"
+                  >
+                    {{ plan.avance_pct }}%
+                  </div>
+                </div>
+              </td>
+              <td class="text-center">
+                {% if plan.estado == 'EN_PROCESO' %}
+                  <span class="badge bg-success">
+                    <i class="bi bi-play-fill"></i> En Proceso
+                  </span>
+                {% elif plan.estado == 'BORRADOR' %}
+                  <span class="badge bg-secondary">
+                    <i class="bi bi-file-earmark"></i> Borrador
+                  </span>
+                {% elif plan.estado == 'PAUSADA' %}
+                  <span class="badge bg-warning text-dark">
+                    <i class="bi bi-pause-fill"></i> Pausada
+                  </span>
+                {% elif plan.estado == 'COMPLETADA' %}
+                  <span class="badge bg-primary">
+                    <i class="bi bi-check-circle-fill"></i> Completada
+                  </span>
+                {% else %}
+                  <span class="badge bg-danger">
+                    <i class="bi bi-x-circle-fill"></i> {{ plan.estado_label }}
+                  </span>
+                {% endif %}
+              </td>
+            </tr>
+            {% if plan.lotes %}
+            <tr class="table-light">
+              <td colspan="9">
+                <div class="ps-4 py-3">
+                  <h6 class="mb-3 text-muted fw-600">
+                    <i class="bi bi-boxes"></i> Lotes Capturados ({{ plan.num_lotes }})
+                  </h6>
+                  <div class="row">
+                    {% for lote in plan.lotes %}
+                    <div class="col-lg-3 col-md-4 col-sm-6 mb-3">
+                      <div class="card lote-card border">
+                        <div class="card-body p-3">
+                          <div class="fw-600 text-primary mb-2">{{ lote.folio }}</div>
+                          <div class="text-muted small mb-2">
+                            <i class="bi bi-calendar"></i> {{ lote.fecha }}
+                          </div>
+                          <div class="text-muted small mb-2">
+                            <i class="bi bi-clock"></i> {{ lote.hora }}
+                          </div>
+                          <div class="text-muted small mb-2">
+                            <i class="bi bi-box"></i> Cantidad: <strong class="text-dark">{{ lote.cantidad|floatformat:0 }}</strong>
+                          </div>
+                          {% if lote.operador %}
+                          <div class="text-muted small mb-2">
+                            <i class="bi bi-person"></i> {{ lote.operador }}
+                          </div>
+                          {% endif %}
+                          <div class="mt-2">
+                            {% if lote.estado == 'CAPTURADO' %}
+                              <span class="badge bg-info">Capturado</span>
+                            {% elif lote.estado == 'VALIDADO' %}
+                              <span class="badge bg-success">Validado</span>
+                            {% else %}
+                              <span class="badge bg-secondary">{{ lote.estado_label }}</span>
+                            {% endif %}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    {% endfor %}
+                  </div>
+                </div>
+              </td>
+            </tr>
+            {% endif %}
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <div class="alert alert-info alert-dismissible fade show" role="alert">
+    <i class="bi bi-info-circle"></i> 
+    <strong>Información:</strong> No hay órdenes de fabricación activas para la fecha y filtros seleccionados.
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+  </div>
+  {% endif %}
+
+  <!-- Lotes del Día Summary -->
+  {% if lotes_del_dia %}
+  <div class="card">
+    <div class="card-header">
+      <h5 class="mb-0">
+        <i class="bi bi-calendar2-check"></i> Resumen de Lotes Capturados Hoy
+      </h5>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0">
+          <thead>
+            <tr>
+              <th>Folio Lote</th>
+              <th>Producto</th>
+              <th>Hora</th>
+              <th class="text-end">Cantidad</th>
+              <th>Línea</th>
+              <th>Operador</th>
+              <th class="text-center">Estado</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for lote in lotes_del_dia %}
+            <tr>
+              <td><span class="badge bg-secondary text-uppercase">{{ lote.folio }}</span></td>
+              <td class="fw-600">{{ lote.bom.producto }}</td>
+              <td>
+                <i class="bi bi-clock"></i> {{ lote.hora|time:"H:i" }}
+              </td>
+              <td class="text-end fw-600 text-success">{{ lote.cantidad_producida|floatformat:0 }}</td>
+              <td><small>{{ lote.linea_produccion }}</small></td>
+              <td><small>{{ lote.operador|default:"-" }}</small></td>
+              <td class="text-center">
+                {% if lote.estado == 'CAPTURADO' %}
+                  <span class="badge bg-info">Capturado</span>
+                {% elif lote.estado == 'VALIDADO' %}
+                  <span class="badge bg-success">Validado</span>
+                {% else %}
+                  <span class="badge bg-danger">{{ lote.get_estado_display }}</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Action Buttons -->
+  <div class="row mt-4 mb-4">
+    <div class="col-12">
+      <div class="btn-group-custom">
+        <a href="{% url 'captura_lotes' %}" class="btn btn-success fw-600">
+          <i class="bi bi-plus-circle"></i> Capturar Nuevo Lote
+        </a>
+        <a href="{% url 'ordenes_fabricacion' %}" class="btn btn-outline-secondary fw-600">
+          <i class="bi bi-list"></i> Ver Órdenes Fabricación
+        </a>
+        <a href="{% url 'planificacion_produccion' %}" class="btn btn-outline-secondary fw-600">
+          <i class="bi bi-calendar3"></i> Ver Planes Producción
+        </a>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  // Auto-refresh cada 30 segundos
+  setInterval(function() {
+    location.reload();
+  }, 30000);
+</script>
+{% endblock %}

@@ -36,6 +36,9 @@
 
                 {% if departamento == 'Producción' or departamento == 'Admin' %}
                 <li class="nav-item">
+                    <a href="{% url 'plan_produccion_diario' %}" class="nav-link"></i> Plan Diario</a>
+                </li>
+                <li class="nav-item">
                     <a href="{% url 'bom_mfg' %}" class="nav-link">BOM MFG</a>
                 </li>
                 <li class="nav-item">

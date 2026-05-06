@@ -2989,6 +2989,139 @@ def _of_transiciones_permitidas(estado_actual):
 
 @login_required(login_url='login')
 @never_cache
+def plan_produccion_diario(request):
+    """
+    Vista para mostrar el plan de producción diario con todos los lotes a producir
+    en formato similar al ejemplo proporcionado.
+    """
+    fecha_filtro_raw = (request.GET.get('fecha') or '').strip()
+    linea_filtro = (request.GET.get('linea') or '').strip()
+    
+    fecha_filtro = _parse_iso_date(fecha_filtro_raw) if fecha_filtro_raw else date.today()
+    
+    # Obtener órdenes de fabricación para la fecha seleccionada
+    ofs_query = OrdenFabricacion.objects.filter(
+        estado__in=[
+            OrdenFabricacion.EstadoOF.BORRADOR,
+            OrdenFabricacion.EstadoOF.EN_PROCESO,
+            OrdenFabricacion.EstadoOF.PAUSADA,
+        ]
+    ).select_related('bom', 'plan', 'creado_por').prefetch_related('detalles__material', 'lotes_produccion')
+    
+    # Filtrar por línea si está especificada
+    if linea_filtro:
+        ofs_query = ofs_query.filter(linea_produccion=linea_filtro)
+    
+    # Obtener lotes de producción para el día
+    lotes_hoy_query = LoteProduccion.objects.filter(
+        fecha_captura=fecha_filtro
+    ).select_related('bom', 'orden_fabricacion').order_by('hora_captura')
+    
+    if linea_filtro:
+        lotes_hoy_query = lotes_hoy_query.filter(linea_produccion=linea_filtro)
+    
+    lotes_hoy = list(lotes_hoy_query)
+    
+    # Construir datos para la tabla de producción
+    plan_datos = []
+    contador = 1
+    
+    for of in ofs_query.order_by('linea_produccion', 'folio'):
+        # Calcular avance
+        avance = 0
+        if of.cantidad_planificada > 0:
+            avance = min(int(round(float(of.cantidad_producida / of.cantidad_planificada) * 100)), 100)
+        
+        # Obtener lotes de esta OF
+        lotes_of = list(of.lotes_produccion.all())
+        
+        # Sumar cantidades de lotes
+        cantidad_en_lotes = sum(lote.cantidad_producida for lote in lotes_of)
+        
+        # Resto a producir
+        cantidad_pendiente = max(of.cantidad_planificada - cantidad_en_lotes, Decimal('0'))
+        
+        # Detalles de materiales
+        detalles = []
+        for det in of.detalles.all():
+            detalles.append({
+                'sku': det.material.sku,
+                'nombre': det.material.nombre,
+                'um': det.material.um,
+                'cantidad_requerida': float(det.cantidad_requerida),
+                'cantidad_consumida': float(det.cantidad_consumida or 0),
+            })
+        
+        plan_datos.append({
+            'num_orden': contador,
+            'folio': of.folio,
+            'producto': of.bom.producto,
+            'codigo_bom': of.bom.codigo,
+            'linea': of.linea_produccion or '-',
+            'turno': of.turno or '-',
+            'cantidad_planificada': float(of.cantidad_planificada),
+            'cantidad_producida': float(of.cantidad_producida or 0),
+            'cantidad_pendiente': float(cantidad_pendiente),
+            'avance_pct': avance,
+            'estado': of.estado,
+            'estado_label': of.get_estado_display(),
+            'fecha_inicio_programada': of.fecha_inicio_programada,
+            'fecha_fin_programada': of.fecha_fin_programada,
+            'num_lotes': len(lotes_of),
+            'lotes': [
+                {
+                    'folio': lote.folio,
+                    'cantidad': float(lote.cantidad_producida),
+                    'fecha': lote.fecha_captura,
+                    'hora': lote.hora_captura,
+                    'operador': lote.operador,
+                    'estado': lote.estado,
+                    'estado_label': lote.get_estado_display(),
+                }
+                for lote in sorted(lotes_of, key=lambda x: x.fecha_captura)
+            ],
+            'detalles': detalles,
+        })
+        contador += 1
+    
+    # Obtener líneas de producción para el filtro
+    lineas_disponibles = [
+        'Línea SMT-01', 'Línea SMT-02', 'Línea SMT-03',
+        'Linea Metalmecanica 1', 'Linea Metalmecanica 2',
+        'Linea Ensamble 1', 'Linea Ensamble 2',
+        'Linea Acabados', 'Linea Empaque', 'Linea QA',
+    ]
+    
+    # KPIs del día
+    total_planificado = sum(p['cantidad_planificada'] for p in plan_datos)
+    total_producido = sum(p['cantidad_producida'] for p in plan_datos)
+    total_pendiente = sum(p['cantidad_pendiente'] for p in plan_datos)
+    eficiencia_diaria = 0
+    if total_planificado > 0:
+        eficiencia_diaria = int(round((total_producido / total_planificado) * 100))
+    
+    context = {
+        'fecha_seleccionada': fecha_filtro,
+        'fecha_seleccionada_str': fecha_filtro.isoformat(),
+        'linea_seleccionada': linea_filtro,
+        'lineas_disponibles': lineas_disponibles,
+        'plan_datos': plan_datos,
+        'lotes_del_dia': lotes_hoy,
+        'kpis': {
+            'total_ofs': len(plan_datos),
+            'total_planificado': float(total_planificado),
+            'total_producido': float(total_producido),
+            'total_pendiente': float(total_pendiente),
+            'eficiencia_diaria': eficiencia_diaria,
+            'num_lotes_capturados': len(lotes_hoy),
+        }
+    }
+    
+    return render(request, 'produccion/plan_produccion_diario.html', context)
+
+
+@login_required(login_url='login')
+@never_cache
 def ordenes_fabricacion(request):
     LINEAS_PRODUCCION = ['Línea SMT-01', 'Línea SMT-02', 'Línea SMT-03']
     TURNOS = ['Turno 1 (6:00 - 14:00)', 'Turno 2 (14:00 - 22:00)', 'Turno 3 (22:00 - 6:00)']
