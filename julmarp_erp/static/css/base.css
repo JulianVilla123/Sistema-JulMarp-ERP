@@ -11,6 +11,133 @@ main {
     padding: 0;
 }
 
+.workspace-main {
+    min-height: calc(100vh - 160px);
+    background: #ffffff;
+}
+
+.workspace-main-embedded {
+    padding: 0;
+    background: #ffffff;
+}
+
+/* Safety fallback: if a page is loaded inside an iframe, force embedded layout. */
+html.embedded-frame #workspace-header,
+html.embedded-frame #workspace-navbar,
+html.embedded-frame #workspace-tabs,
+html.embedded-frame #workspace-footer {
+    display: none !important;
+}
+
+html.embedded-frame #workspace-main {
+    min-height: 100vh;
+    padding: 0;
+}
+
+.workspace-tabs {
+    background: linear-gradient(to bottom, #ffffff 0%, #f5f7fb 100%);
+    border-bottom: 2px solid #dde3ed;
+    padding: 4px 8px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    white-space: nowrap;
+    height: 52px;
+    box-shadow: inset 0 -1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.workspace-tabs-track {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 100%;
+}
+
+.workspace-tab {
+    height: 36px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px 6px 0 0;
+    background: linear-gradient(to bottom, #f3f6fb, #eef2f9);
+    color: #475569;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 0.8rem;
+    font-weight: 500;
+    flex-shrink: 0;
+    max-width: 180px;
+}
+
+.workspace-tab:hover {
+    background: linear-gradient(to bottom, #ffffff, #f8fafd);
+    color: #1e293b;
+    border-color: #b8c5d8;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.workspace-tab.is-active {
+    background: linear-gradient(to bottom, #ffffff, #fafbff);
+    color: #0f172a;
+    border-color: #7c8fd6;
+    border-bottom-color: #ffffff;
+    font-weight: 600;
+    box-shadow: 0 2px 6px rgba(124, 143, 214, 0.15);
+    position: relative;
+    z-index: 10;
+}
+
+.workspace-tab-icon {
+    color: #f59e0b;
+    font-size: 0.65rem;
+    line-height: 0;
+    opacity: 0.85;
+}
+
+.workspace-tab-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 0 1 auto;
+    text-align: left;
+}
+
+.workspace-tab-close {
+    font-size: 0.9rem;
+    color: #94a3b8;
+    line-height: 1;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: color 0.2s ease;
+}
+
+.workspace-tab-close:hover {
+    color: #dc2626;
+}
+
+.workspace-pane {
+    display: none;
+}
+
+.workspace-pane.is-active {
+    display: block;
+}
+
+.workspace-panes {
+    display: block;
+    width: 100%;
+}
+
+.workspace-frame {
+    width: 100%;
+    min-height: 420px;
+    border: none;
+    display: block;
+    background: #ffffff;
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
 /* ===== Navbar ===== */
 .main-nav {
     display: flex;

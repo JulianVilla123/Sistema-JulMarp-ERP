@@ -11,6 +11,7 @@ from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.cache import never_cache
 from collections import defaultdict
+from urllib.parse import urlencode
 import re
 import unicodedata
 from decimal import Decimal, InvalidOperation
@@ -2642,6 +2643,25 @@ def _parse_decimal_text(value, default=Decimal('0')):
         return default
 
 
+def _redirect_preserving_tab(request, route_name, extra_params=None):
+    from django.urls import reverse
+
+    params = {}
+    tab_value = (request.GET.get('tab') or request.POST.get('tab') or '').strip()
+    if tab_value:
+        params['tab'] = tab_value
+
+    if extra_params:
+        for key, value in extra_params.items():
+            if value is not None and value != '':
+                params[key] = value
+
+    target = reverse(route_name)
+    if params:
+        return redirect(f"{target}?{urlencode(params)}")
+    return redirect(target)
+
+
 def _build_material_requirements(bom_obj, cantidad_planificada):
     if not bom_obj or bom_obj.cantidad_base <= 0:
         return []
@@ -2839,7 +2859,7 @@ def planificacion_produccion(request):
                         )
 
                 messages.success(request, f'Plan {plan.folio} creado en estado {plan.get_estado_display()}.')
-                return redirect('planificacion_produccion')
+                return _redirect_preserving_tab(request, 'planificacion_produccion')
 
     return render(request, 'produccion/planificacion_produccion.html', {
         'boms_activos': boms_activos,
@@ -2869,7 +2889,7 @@ def requerimiento_materiales_produccion(request):
 
     if not bom_obj or cantidad_planificada <= 0:
         messages.error(request, 'Debes seleccionar un BOM y cantidad válida para generar requerimiento de materiales.')
-        return redirect('planificacion_produccion')
+        return _redirect_preserving_tab(request, 'planificacion_produccion')
 
     detalles = _build_material_requirements(bom_obj, cantidad_planificada)
     hay_faltantes = any(d['cantidad_faltante'] > 0 for d in detalles)
@@ -2926,8 +2946,14 @@ def requerimiento_materiales_produccion(request):
         else:
             messages.success(request, f'Requerimiento {requerimiento.folio} guardado en borrador.')
 
-        from django.urls import reverse
-        return redirect(reverse('requerimiento_materiales_produccion') + f'?bom={bom_obj.id}&cantidad={cantidad_planificada}')
+        return _redirect_preserving_tab(
+            request,
+            'requerimiento_materiales_produccion',
+            {
+                'bom': bom_obj.id,
+                'cantidad': cantidad_planificada,
+            }
+        )
 
     requerimientos_recientes = (
         RequerimientoMaterialProduccion.objects
@@ -2992,35 +3018,77 @@ def _of_transiciones_permitidas(estado_actual):
 def plan_produccion_diario(request):
     """
     Vista para mostrar el plan de producción diario con todos los lotes a producir
-    en formato similar al ejemplo proporcionado.
+    en formato similar al ejemplo proporcionado. Soporta rango de fechas.
     """
-    fecha_filtro_raw = (request.GET.get('fecha') or '').strip()
+    fecha_inicio_raw = (request.GET.get('fecha_inicio') or '').strip()
+    fecha_fin_raw = (request.GET.get('fecha_fin') or '').strip()
+    folio_filtro = (request.GET.get('folio') or '').strip()
+    bom_filtro = (request.GET.get('bom') or '').strip()
     linea_filtro = (request.GET.get('linea') or '').strip()
     
-    fecha_filtro = _parse_iso_date(fecha_filtro_raw) if fecha_filtro_raw else date.today()
+    # Establecer rango de fechas (por defecto: hoy a 7 días después)
+    fecha_hoy = date.today()
+    fecha_inicio = _parse_iso_date(fecha_inicio_raw) if fecha_inicio_raw else fecha_hoy
+    fecha_fin = _parse_iso_date(fecha_fin_raw) if fecha_fin_raw else (fecha_hoy + timedelta(days=7))
     
-    # Obtener órdenes de fabricación para la fecha seleccionada
+    # Asegurar que fecha_inicio <= fecha_fin
+    if fecha_inicio > fecha_fin:
+        fecha_inicio, fecha_fin = fecha_fin, fecha_inicio
+    
+    # Obtener órdenes de fabricación que se solapan con el rango de fechas
+    # Incluir órdenes en estados activos y completadas
     ofs_query = OrdenFabricacion.objects.filter(
         estado__in=[
             OrdenFabricacion.EstadoOF.BORRADOR,
             OrdenFabricacion.EstadoOF.EN_PROCESO,
             OrdenFabricacion.EstadoOF.PAUSADA,
+            OrdenFabricacion.EstadoOF.COMPLETADA,
         ]
     ).select_related('bom', 'plan', 'creado_por').prefetch_related('detalles__material', 'lotes_produccion')
     
     # Filtrar por línea si está especificada
     if linea_filtro:
         ofs_query = ofs_query.filter(linea_produccion=linea_filtro)
+
+    # Filtrar por folio de OF
+    if folio_filtro:
+        ofs_query = ofs_query.filter(folio__icontains=folio_filtro)
+
+    # Filtrar por modelo/código BOM
+    if bom_filtro:
+        ofs_query = ofs_query.filter(
+            Q(bom__codigo__icontains=bom_filtro) |
+            Q(bom__producto__icontains=bom_filtro)
+        )
     
-    # Obtener lotes de producción para el día
-    lotes_hoy_query = LoteProduccion.objects.filter(
-        fecha_captura=fecha_filtro
-    ).select_related('bom', 'orden_fabricacion').order_by('hora_captura')
+    # Filtrar por rango de fechas programadas
+    ofs_query = ofs_query.filter(
+        fecha_inicio_programada__lte=fecha_fin,
+        fecha_fin_programada__gte=fecha_inicio
+    )
+    
+    # Obtener lotes de producción en el rango de fechas
+    lotes_rango_query = LoteProduccion.objects.filter(
+        fecha_captura__gte=fecha_inicio,
+        fecha_captura__lte=fecha_fin
+    ).select_related('bom', 'orden_fabricacion').order_by('fecha_captura', 'hora_captura')
     
     if linea_filtro:
-        lotes_hoy_query = lotes_hoy_query.filter(linea_produccion=linea_filtro)
+        lotes_rango_query = lotes_rango_query.filter(linea_produccion=linea_filtro)
+
+    if folio_filtro:
+        lotes_rango_query = lotes_rango_query.filter(
+            Q(folio__icontains=folio_filtro) |
+            Q(orden_fabricacion__folio__icontains=folio_filtro)
+        )
+
+    if bom_filtro:
+        lotes_rango_query = lotes_rango_query.filter(
+            Q(bom__codigo__icontains=bom_filtro) |
+            Q(bom__producto__icontains=bom_filtro)
+        )
     
-    lotes_hoy = list(lotes_hoy_query)
+    lotes_rango = list(lotes_rango_query)
     
     # Construir datos para la tabla de producción
     plan_datos = []
@@ -3032,7 +3100,7 @@ def plan_produccion_diario(request):
         if of.cantidad_planificada > 0:
             avance = min(int(round(float(of.cantidad_producida / of.cantidad_planificada) * 100)), 100)
         
-        # Obtener lotes de esta OF
+        # Obtener TODOS los lotes de esta OF (no solo los del rango)
         lotes_of = list(of.lotes_produccion.all())
         
         # Sumar cantidades de lotes
@@ -3085,14 +3153,14 @@ def plan_produccion_diario(request):
         contador += 1
     
     # Obtener líneas de producción para el filtro
+    # Mantener consistencia con los catálogos vigentes del sistema (solo 3 líneas SMT).
     lineas_disponibles = [
-        'Línea SMT-01', 'Línea SMT-02', 'Línea SMT-03',
-        'Linea Metalmecanica 1', 'Linea Metalmecanica 2',
-        'Linea Ensamble 1', 'Linea Ensamble 2',
-        'Linea Acabados', 'Linea Empaque', 'Linea QA',
+        'Línea SMT-01',
+        'Línea SMT-02',
+        'Línea SMT-03',
     ]
     
-    # KPIs del día
+    # KPIs del rango de fechas
     total_planificado = sum(p['cantidad_planificada'] for p in plan_datos)
     total_producido = sum(p['cantidad_producida'] for p in plan_datos)
     total_pendiente = sum(p['cantidad_pendiente'] for p in plan_datos)
@@ -3101,19 +3169,24 @@ def plan_produccion_diario(request):
         eficiencia_diaria = int(round((total_producido / total_planificado) * 100))
     
     context = {
-        'fecha_seleccionada': fecha_filtro,
-        'fecha_seleccionada_str': fecha_filtro.isoformat(),
+        'fecha_inicio': fecha_inicio,
+        'fecha_inicio_str': fecha_inicio.isoformat(),
+        'fecha_fin': fecha_fin,
+        'fecha_fin_str': fecha_fin.isoformat(),
+        'rango_dias': (fecha_fin - fecha_inicio).days + 1,
+        'folio_seleccionado': folio_filtro,
+        'bom_seleccionado': bom_filtro,
         'linea_seleccionada': linea_filtro,
         'lineas_disponibles': lineas_disponibles,
         'plan_datos': plan_datos,
-        'lotes_del_dia': lotes_hoy,
+        'lotes_del_dia': lotes_rango,
         'kpis': {
             'total_ofs': len(plan_datos),
             'total_planificado': float(total_planificado),
             'total_producido': float(total_producido),
             'total_pendiente': float(total_pendiente),
             'eficiencia_diaria': eficiencia_diaria,
-            'num_lotes_capturados': len(lotes_hoy),
+            'num_lotes_capturados': len(lotes_rango),
         }
     }
     

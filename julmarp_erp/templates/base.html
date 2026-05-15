@@ -5,6 +5,26 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}JulMarp ERP{% endblock %}</title>
+    <script>
+        // Detect iframe context early to avoid nested navbar flashing.
+        if (window.self !== window.top) {
+            document.documentElement.classList.add('embedded-frame');
+            document.addEventListener('DOMContentLoaded', function () {
+                ['workspace-header', 'workspace-navbar', 'workspace-tabs', 'workspace-footer'].forEach(function (id) {
+                    var el = document.getElementById(id);
+                    if (el) {
+                        el.style.display = 'none';
+                    }
+                });
+
+                var main = document.getElementById('workspace-main');
+                if (main) {
+                    main.classList.remove('workspace-main');
+                    main.classList.add('workspace-main-embedded');
+                }
+            });
+        }
+    </script>
     
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -16,22 +36,235 @@
     <link rel="stylesheet" href="{% static 'css/base.css' %}">
     {% block extra_css %}{% endblock %}
 </head>
-<body class="{% block body_class %}{% endblock %}">
-    {% block header %}
-        {% include "partials/header.html" %}
-    {% endblock %}
-    {% block navbar %}
-        {% include "partials/navbar.html" %}
-    {% endblock %}
+<body class="{% block body_class %}{% endblock %}" data-workspace-enabled="{% if user.is_authenticated and request.resolver_match.url_name != 'login' and request.resolver_match.url_name != 'register' %}1{% else %}0{% endif %}" data-home-url="{% if user.is_authenticated %}{% url 'home' %}{% endif %}">
+    <div id="workspace-root">
+        <header id="workspace-header" {% if request.GET.tab == '1' %}style="display: none;"{% endif %}>
+            {% block header %}
+                {% include "partials/header.html" %}
+            {% endblock %}
+        </header>
 
-    <main>
-        {% block content %}{% endblock %}
-    </main>
+        <nav id="workspace-navbar" {% if request.GET.tab == '1' %}style="display: none;"{% endif %}>
+            {% block navbar %}
+                {% include "partials/navbar.html" %}
+            {% endblock %}
+        </nav>
 
-    {% include "partials/footer.html" %}
+        {% if user.is_authenticated and request.resolver_match.url_name != 'login' and request.resolver_match.url_name != 'register' %}
+        <div id="workspace-tabs" class="workspace-tabs" {% if request.GET.tab == '1' %}style="display: none;"{% endif %}>
+            <div class="workspace-tabs-track" id="workspace-tabs-track"></div>
+        </div>
+        {% endif %}
+
+        <main id="workspace-main" class="{% if request.GET.tab == '1' %}workspace-main-embedded{% else %}workspace-main{% endif %}">
+            <section id="workspace-pane-initial" class="workspace-pane is-active" data-tab-key="__initial__">
+                {% block content %}{% endblock %}
+            </section>
+            <section id="workspace-panes" class="workspace-panes"></section>
+        </main>
+
+        <footer id="workspace-footer" {% if request.GET.tab == '1' %}style="display: none;"{% endif %}>
+            {% include "partials/footer.html" %}
+        </footer>
+    </div>
     
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            if (document.body.getAttribute('data-workspace-enabled') !== '1') {
+                return;
+            }
+
+            // Only initialize workspace tabs on main view (not embedded)
+            if (new URLSearchParams(window.location.search).get('tab') === '1') {
+                return;
+            }
+
+            var tabsTrack = document.getElementById('workspace-tabs-track');
+            var panesContainer = document.getElementById('workspace-panes');
+            var initialPane = document.getElementById('workspace-pane-initial');
+            if (!tabsTrack || !panesContainer || !initialPane) return;
+
+            var tabs = {};
+            var activeKey = null;
+            var maxTitleLength = 26;
+            var homeUrl = document.body.getAttribute('data-home-url') || '';
+            var homeKey = homeUrl ? normalizeKey(homeUrl) : '';
+
+            function normalizeKey(url) {
+                var u = new URL(url, window.location.origin);
+                return u.pathname + u.search;
+            }
+
+            function withEmbeddedFlag(url) {
+                var u = new URL(url, window.location.origin);
+                u.searchParams.set('tab', '1');
+                return u.toString();
+            }
+
+            function isHomeUrl(url) {
+                if (!homeKey) return false;
+                return normalizeKey(url) === homeKey;
+            }
+
+            function shorten(text) {
+                var value = (text || '').trim();
+                if (value.length <= maxTitleLength) return value;
+                return value.slice(0, maxTitleLength - 1).trimEnd() + '…';
+            }
+
+            function plainTitleFromDocument() {
+                var raw = (document.title || 'Módulo').trim();
+                return raw.replace(/\s*-\s*JulMarp ERP$/i, '').trim() || 'Módulo';
+            }
+
+            function resizeActiveIframe() {
+                if (!activeKey || activeKey === '__initial__') return;
+                var entry = tabs[activeKey];
+                if (!entry) return;
+
+                var frame = entry.pane.querySelector('iframe.workspace-frame');
+                if (!frame) return;
+
+                var viewportMinHeight = Math.max(window.innerHeight - 220, 420);
+                var targetHeight = viewportMinHeight;
+
+                try {
+                    var doc = frame.contentDocument;
+                    if (doc && doc.documentElement) {
+                        var contentHeight = Math.max(
+                            doc.documentElement.scrollHeight || 0,
+                            doc.body ? doc.body.scrollHeight : 0
+                        );
+                        if (contentHeight > 0) {
+                            targetHeight = Math.max(contentHeight + 8, viewportMinHeight);
+                        }
+                    }
+                } catch (error) {
+                    targetHeight = viewportMinHeight;
+                }
+
+                frame.style.height = targetHeight + 'px';
+            }
+
+            function activateTab(key) {
+                Object.keys(tabs).forEach(function (k) {
+                    var entry = tabs[k];
+                    entry.button.classList.toggle('is-active', k === key);
+                    entry.pane.classList.toggle('is-active', k === key);
+                });
+                activeKey = key;
+                resizeActiveIframe();
+            }
+
+            function closeTab(key) {
+                var entry = tabs[key];
+                if (!entry || !entry.closable) return;
+
+                var keys = Object.keys(tabs);
+                var currentIndex = keys.indexOf(key);
+                var nextKey = '__initial__';
+                if (currentIndex > 0) {
+                    nextKey = keys[currentIndex - 1];
+                } else if (keys.length > 1) {
+                    nextKey = keys[1] === key ? '__initial__' : keys[1];
+                }
+
+                entry.button.remove();
+                entry.pane.remove();
+                delete tabs[key];
+                activateTab(tabs[nextKey] ? nextKey : '__initial__');
+            }
+
+            function createTabEntry(key, title, paneEl, closable) {
+                var tabButton = document.createElement('button');
+                tabButton.type = 'button';
+                tabButton.className = 'workspace-tab';
+                tabButton.setAttribute('role', 'tab');
+                tabButton.innerHTML =
+                    '<span class="workspace-tab-icon">★</span>' +
+                    '<span class="workspace-tab-title"></span>' +
+                    (closable ? '<span class="workspace-tab-close" aria-label="Cerrar pestaña">×</span>' : '');
+
+                tabButton.querySelector('.workspace-tab-title').textContent = shorten(title);
+
+                tabButton.addEventListener('click', function (event) {
+                    if (event.target.classList.contains('workspace-tab-close')) {
+                        closeTab(key);
+                        return;
+                    }
+                    activateTab(key);
+                });
+
+                tabsTrack.appendChild(tabButton);
+                tabs[key] = {
+                    button: tabButton,
+                    pane: paneEl,
+                    closable: !!closable,
+                };
+            }
+
+            function openModuleTab(url, title) {
+                if (isHomeUrl(url)) {
+                    activateTab('__initial__');
+                    return;
+                }
+
+                var key = normalizeKey(url);
+                if (tabs[key]) {
+                    activateTab(key);
+                    return;
+                }
+
+                var pane = document.createElement('section');
+                pane.className = 'workspace-pane';
+                pane.setAttribute('data-tab-key', key);
+
+                var frame = document.createElement('iframe');
+                frame.className = 'workspace-frame';
+                frame.referrerPolicy = 'same-origin';
+                frame.src = withEmbeddedFlag(url);
+                frame.addEventListener('load', function () {
+                    resizeActiveIframe();
+                    setTimeout(resizeActiveIframe, 120);
+                });
+
+                pane.appendChild(frame);
+                panesContainer.appendChild(pane);
+                createTabEntry(key, title, pane, true);
+                activateTab(key);
+            }
+
+            createTabEntry('__initial__', plainTitleFromDocument(), initialPane, false);
+            activateTab('__initial__');
+
+            var menuLinks = document.querySelectorAll('.main-nav .nav-menu a[href]:not([href="#"])');
+            menuLinks.forEach(function (link) {
+                link.addEventListener('click', function (event) {
+                    if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button !== 0) {
+                        return;
+                    }
+
+                    var href = link.getAttribute('href') || '';
+                    if (!href || href === '#') return;
+
+                    if (isHomeUrl(href)) {
+                        event.preventDefault();
+                        activateTab('__initial__');
+                        return;
+                    }
+
+                    event.preventDefault();
+                    openModuleTab(href, link.textContent || 'Módulo');
+                });
+            });
+
+            window.addEventListener('resize', function() {
+                resizeActiveIframe();
+            });
+        });
+    </script>
     {% block extra_js %}{% endblock %}
 </body>
 </html>

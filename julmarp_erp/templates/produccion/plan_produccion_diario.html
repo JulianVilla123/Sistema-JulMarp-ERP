@@ -136,14 +136,15 @@
       <div class="main-header d-flex justify-content-between align-items-center">
         <div>
           <h1 class="h2 mb-1">
-            <i class="bi bi-calendar-event text-primary"></i> Plan de Producción Diario
+            <i class="bi bi-calendar-event text-primary"></i> Plan de Producción
           </h1>
-          <p class="text-muted mb-0">Lotes programados para producir</p>
+          <p class="text-muted mb-0">Lotes programados para producir en el período especificado</p>
         </div>
         <div>
           <span class="badge bg-primary fs-6 px-3 py-2">
-            {% if fecha_seleccionada %}
-              {{ fecha_seleccionada|date:"l, d \d\e F" }}
+            {% if fecha_inicio %}
+              {{ fecha_inicio|date:"d/m" }} — {{ fecha_fin|date:"d/m/Y" }}
+              <small class="d-block mt-1">({{ rango_dias }} días)</small>
             {% else %}
               Hoy
             {% endif %}
@@ -153,67 +154,60 @@
     </div>
   </div>
 
-  <!-- KPIs Section -->
-  <div class="row mb-4">
-    <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
-      <div class="kpi-card border-left-primary">
-        <div class="kpi-value text-primary">{{ kpis.total_ofs }}</div>
-        <div class="kpi-label">Órdenes Activas</div>
-      </div>
-    </div>
-    <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
-      <div class="kpi-card border-left-success">
-        <div class="kpi-value text-success">{{ kpis.total_producido|floatformat:0 }}</div>
-        <div class="kpi-label">Unidades Producidas</div>
-      </div>
-    </div>
-    <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
-      <div class="kpi-card border-left-warning">
-        <div class="kpi-value text-warning">{{ kpis.total_pendiente|floatformat:0 }}</div>
-        <div class="kpi-label">Unidades Pendientes</div>
-      </div>
-    </div>
-    <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
-      <div class="kpi-card border-left-info">
-        <div class="kpi-value text-info">{{ kpis.eficiencia_diaria }}%</div>
-        <div class="kpi-label">Eficiencia</div>
-      </div>
-    </div>
-    <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
-      <div class="kpi-card border-left-secondary">
-        <div class="kpi-value">{{ kpis.num_lotes_capturados }}</div>
-        <div class="kpi-label">Lotes Capturados</div>
-      </div>
-    </div>
-    <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
-      <div class="kpi-card border-left-success">
-        <div class="kpi-value text-success">{{ kpis.total_planificado|floatformat:0 }}</div>
-        <div class="kpi-label">Planificado Hoy</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Filtros Section -->
+  <!-- Filtros Section - Mejorado -->
   <div class="filter-card">
-    <form method="get" class="row g-3">
-      <div class="col-md-4">
-        <label for="fecha_filter" class="form-label fw-600">
-          <i class="bi bi-calendar3"></i> Fecha
-        </label>
+    <form method="get" class="row g-3 align-items-end">
+      
+      <div class="col-lg-2 col-md-6">
+        <label for="fecha_inicio_filter" class="form-label fw-600">Desde</label>
         <input 
           type="date" 
-          id="fecha_filter" 
-          name="fecha" 
-          value="{{ fecha_seleccionada_str }}" 
+          id="fecha_inicio_filter" 
+          name="fecha_inicio" 
+          value="{{ fecha_inicio_str }}" 
           class="form-control"
         >
       </div>
-      <div class="col-md-6">
-        <label for="linea_filter" class="form-label fw-600">
-          <i class="bi bi-building"></i> Línea de Producción
-        </label>
+
+      <div class="col-lg-2 col-md-6">
+        <label for="fecha_fin_filter" class="form-label fw-600">Hasta</label>
+        <input 
+          type="date" 
+          id="fecha_fin_filter" 
+          name="fecha_fin" 
+          value="{{ fecha_fin_str }}" 
+          class="form-control"
+        >
+      </div>
+
+      <div class="col-lg-2 col-md-6">
+        <label for="folio_filter" class="form-label fw-600">Folio</label>
+        <input
+          type="text"
+          id="folio_filter"
+          name="folio"
+          value="{{ folio_seleccionado }}"
+          class="form-control"
+          placeholder="Ej. OF-0001"
+        >
+      </div>
+
+      <div class="col-lg-3 col-md-6">
+        <label for="bom_filter" class="form-label fw-600">Modelo de BOM</label>
+        <input
+          type="text"
+          id="bom_filter"
+          name="bom"
+          value="{{ bom_seleccionado }}"
+          class="form-control"
+          placeholder="Código o producto BOM"
+        >
+      </div>
+
+      <div class="col-lg-2 col-md-6">
+        <label for="linea_filter" class="form-label fw-600">Línea</label>
         <select id="linea_filter" name="linea" class="form-select">
-          <option value="">-- Todas las líneas --</option>
+          <option value="">— Todas las líneas —</option>
           {% for linea in lineas_disponibles %}
             <option value="{{ linea }}" {% if linea == linea_seleccionada %}selected{% endif %}>
               {{ linea }}
@@ -221,11 +215,17 @@
           {% endfor %}
         </select>
       </div>
-      <div class="col-md-2 d-flex align-items-end">
-        <button type="submit" class="btn btn-primary w-100 fw-600">
-          <i class="bi bi-search"></i> Filtrar
+
+      <!-- Botones de Acción -->
+      <div class="col-12 d-flex gap-2 justify-content-end">
+        <button type="submit" class="btn btn-primary fw-600">
+          Filtrar
         </button>
+        <a href="{% url 'plan_produccion_diario' %}" class="btn btn-outline-secondary fw-600" title="Limpiar filtros">
+          Limpiar
+        </a>
       </div>
+
     </form>
   </div>
 
@@ -234,7 +234,7 @@
   <div class="card">
     <div class="card-header">
       <h5 class="mb-0">
-        <i class="bi bi-table"></i> Plan de Producción del Día
+        <i class="bi bi-table"></i> Plan de Producción del Período
       </h5>
     </div>
     <div class="card-body p-0">
@@ -367,12 +367,14 @@
   </div>
   {% endif %}
 
-  <!-- Lotes del Día Summary -->
+  <!-- Lotes del Período Summary -->
   {% if lotes_del_dia %}
   <div class="card">
     <div class="card-header">
       <h5 class="mb-0">
-        <i class="bi bi-calendar2-check"></i> Resumen de Lotes Capturados Hoy
+        <i class="bi bi-calendar2-check"></i> 
+        Resumen de Lotes Capturados en el Período
+        <small class="text-muted fw-400">({{ lotes_del_dia|length }} lotes)</small>
       </h5>
     </div>
     <div class="card-body p-0">
@@ -382,6 +384,7 @@
             <tr>
               <th>Folio Lote</th>
               <th>Producto</th>
+              <th>Fecha</th>
               <th>Hora</th>
               <th class="text-end">Cantidad</th>
               <th>Línea</th>
@@ -394,8 +397,9 @@
             <tr>
               <td><span class="badge bg-secondary text-uppercase">{{ lote.folio }}</span></td>
               <td class="fw-600">{{ lote.bom.producto }}</td>
+              <td>{{ lote.fecha_captura|date:"d/m/Y" }}</td>
               <td>
-                <i class="bi bi-clock"></i> {{ lote.hora|time:"H:i" }}
+                <i class="bi bi-clock"></i> {{ lote.hora_captura|time:"H:i" }}
               </td>
               <td class="text-end fw-600 text-success">{{ lote.cantidad_producida|floatformat:0 }}</td>
               <td><small>{{ lote.linea_produccion }}</small></td>

@@ -5,24 +5,25 @@ body.login-page {
 }
 
 body.login-page main {
-    min-height: 100vh;
+    min-height: calc(100vh - 120px);
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 2rem;
+    padding: clamp(1rem, 3vw, 2.5rem);
 }
 
 .login-screen {
     width: 100%;
-    max-width: 1200px;
+    max-width: 1100px;
     display: grid;
-    grid-template-columns: 1.2fr 1fr;
-    gap: 2rem;
+    grid-template-columns: minmax(300px, 1.15fr) minmax(340px, 0.85fr);
+    gap: clamp(1.5rem, 4vw, 4rem);
     align-items: center;
 }
 
 .login-visual {
-    padding: 2.5rem;
+    padding: 1.5rem 1rem 1.5rem 0;
+    max-width: 520px;
 }
 
 .visual-label {
@@ -37,15 +38,15 @@ body.login-page main {
 
 .login-visual h1 {
     margin: 0;
-    font-size: clamp(3rem, 5vw, 5rem);
+    font-size: clamp(2.8rem, 5vw, 4.6rem);
     line-height: 0.95;
     color: #d5433c;
 }
 
 .login-visual p {
     margin-top: 1.5rem;
-    max-width: 420px;
-    font-size: 1.05rem;
+    max-width: 380px;
+    font-size: 1rem;
     line-height: 1.8;
     color: #5d6370;
 }
@@ -57,10 +58,10 @@ body.login-page main {
 
 .login-card {
     width: 100%;
-    max-width: 420px;
+    max-width: 400px;
     background: rgba(255, 255, 255, 0.96);
-    border-radius: 30px;
-    padding: 2.5rem;
+    border-radius: 28px;
+    padding: 2.2rem;
     box-shadow: 0 32px 90px rgba(49, 53, 68, 0.12);
     border: 1px solid rgba(255, 255, 255, 0.8);
 }
@@ -166,13 +167,22 @@ body.login-page main {
     }
 
     .login-visual {
-        padding: 1.5rem 0;
+        padding: 0 0 0.5rem;
+        max-width: none;
+    }
+
+    .login-panel {
+        justify-content: stretch;
+    }
+
+    .login-card {
+        max-width: none;
     }
 }
 
 @media (max-width: 600px) {
     .login-card {
-        padding: 1.75rem;
+        padding: 1.5rem;
     }
 
     .login-card input,

@@ -144,6 +144,140 @@
         gap: 10px;
         flex-wrap: wrap;
     }
+
+    .planes-recientes-table td {
+        vertical-align: top;
+    }
+
+    .material-resumen {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        min-width: 120px;
+    }
+
+    .material-resumen-total {
+        font-weight: 700;
+        color: #1f3e67;
+    }
+
+    .material-alerta {
+        color: #b42318;
+        font-size: 0.82rem;
+        font-weight: 700;
+    }
+
+    .material-parcial {
+        color: #b54708;
+        font-size: 0.82rem;
+        font-weight: 700;
+    }
+
+    .btn-materiales-toggle {
+        min-width: 130px;
+        font-weight: 700;
+    }
+
+    .btn-materiales-toggle.is-open {
+        background: #1f3e67;
+        border-color: #1f3e67;
+        color: #ffffff;
+    }
+
+    .plan-detalle-cell {
+        padding: 0 !important;
+        background: #f4f7fc;
+    }
+
+    .plan-detalle-panel {
+        padding: 16px;
+        border-top: 1px solid #d8e2ef;
+        background: linear-gradient(180deg, #f8fbff 0%, #f3f7fc 100%);
+    }
+
+    .plan-detalle-title {
+        display: inline-block;
+        margin-bottom: 10px;
+        color: #1f3e67;
+        font-size: 0.94rem;
+    }
+
+    .detalle-materiales-wrap {
+        border: 1px solid #d8e4f2;
+        border-radius: 12px;
+        overflow: auto;
+        background: #ffffff;
+    }
+
+    .detalle-materiales-table {
+        margin: 0;
+        min-width: 760px;
+    }
+
+    .detalle-materiales-table thead th {
+        background: #ecf3fb;
+        color: #2c4a70;
+        font-size: 0.79rem;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        white-space: nowrap;
+    }
+
+    .detalle-materiales-table tbody td {
+        border-top: 1px solid #edf2f8;
+        white-space: nowrap;
+    }
+
+    .detalle-materiales-table tbody tr:nth-child(even) {
+        background: #fafcff;
+    }
+
+    .detalle-materiales-table tbody tr:hover {
+        background: #f2f7ff;
+    }
+
+    .material-faltante {
+        color: #c81e1e;
+        font-weight: 700;
+    }
+
+    .material-sin-faltante {
+        color: #53657f;
+        font-weight: 600;
+    }
+
+    .estado-material {
+        font-weight: 700;
+        font-size: 0.84rem;
+    }
+
+    .estado-material.disponible {
+        color: #117a43;
+    }
+
+    .estado-material.parcial {
+        color: #9a5b00;
+    }
+
+    .estado-material.compra {
+        color: #b42318;
+    }
+
+    @media (max-width: 768px) {
+        .plan-detalle-panel {
+            padding: 12px;
+        }
+
+        .btn-materiales-toggle {
+            min-width: 110px;
+            padding: 8px 10px;
+            font-size: 0.82rem;
+        }
+
+        .detalle-materiales-table {
+            min-width: 680px;
+        }
+    }
 </style>
 {% endblock %}
 
@@ -268,7 +402,7 @@
             <h3>Planes de Producción Recientes</h3>
             {% if planes_recientes %}
             <div class="tabla-responsive">
-                <table class="tabla-historial">
+                <table class="tabla-historial planes-recientes-table">
                     <thead>
                         <tr>
                             <th>Folio</th>
@@ -295,26 +429,30 @@
                                 <span class="badge badge-estado badge-{{ plan.estado|lower }}">{{ plan.estado_label }}</span>
                             </td>
                             <td>
-                                <span title="Total materiales">{{ plan.total_materiales }} mat.</span>
+                                <div class="material-resumen">
+                                <span class="material-resumen-total" title="Total materiales">{{ plan.total_materiales }} mat.</span>
                                 {% if plan.requieren_compra > 0 %}
-                                <br><span style="color: #e53e3e; font-size: 0.82rem;">⚠ {{ plan.requieren_compra }} por comprar</span>
+                                <span class="material-alerta">⚠ {{ plan.requieren_compra }} por comprar</span>
                                 {% endif %}
                                 {% if plan.parciales > 0 %}
-                                <br><span style="color: #d97706; font-size: 0.82rem;">⚡ {{ plan.parciales }} parciales</span>
+                                <span class="material-parcial">⚡ {{ plan.parciales }} parciales</span>
                                 {% endif %}
+                                </div>
                             </td>
                             <td>
-                                <button type="button" class="btn btn-info btn-sm"
-                                    onclick="toggleDetalles('detalles-{{ plan.id }}')">
+                                <button type="button" class="btn btn-info btn-sm btn-materiales-toggle"
+                                    aria-expanded="false"
+                                    onclick="toggleDetalles('detalles-{{ plan.id }}', this)">
                                     Ver materiales
                                 </button>
                             </td>
                         </tr>
                         <tr id="detalles-{{ plan.id }}" style="display: none;">
-                            <td colspan="9" style="padding: 0;">
-                                <div style="padding: 12px 16px; background: #f9fafb; border-top: 1px solid #e2e8f0;">
-                                    <strong>Detalle de materiales — {{ plan.folio }}</strong>
-                                    <table class="tabla-historial" style="margin-top: 8px;">
+                            <td colspan="9" class="plan-detalle-cell">
+                                <div class="plan-detalle-panel">
+                                    <strong class="plan-detalle-title">Detalle de materiales — {{ plan.folio }}</strong>
+                                    <div class="detalle-materiales-wrap">
+                                    <table class="tabla-historial detalle-materiales-table">
                                         <thead>
                                             <tr>
                                                 <th>SKU</th>
@@ -336,24 +474,25 @@
                                                 <td>{{ det.cantidad_disponible }}</td>
                                                 <td>
                                                     {% if det.cantidad_faltante > 0 %}
-                                                    <span style="color: #e53e3e; font-weight: 600;">{{ det.cantidad_faltante }}</span>
+                                                    <span class="material-faltante">{{ det.cantidad_faltante }}</span>
                                                     {% else %}
-                                                    —
+                                                    <span class="material-sin-faltante">—</span>
                                                     {% endif %}
                                                 </td>
                                                 <td>
                                                     {% if det.estado_material == 'DISPONIBLE' %}
-                                                    <span style="color: #38a169; font-weight: 600;">✓ Disponible</span>
+                                                    <span class="estado-material disponible">✓ Disponible</span>
                                                     {% elif det.estado_material == 'PARCIAL' %}
-                                                    <span style="color: #d97706; font-weight: 600;">⚡ Parcial</span>
+                                                    <span class="estado-material parcial">⚡ Parcial</span>
                                                     {% else %}
-                                                    <span style="color: #e53e3e; font-weight: 600;">⚠ Requiere compra</span>
+                                                    <span class="estado-material compra">⚠ Requiere compra</span>
                                                     {% endif %}
                                                 </td>
                                             </tr>
                                             {% endfor %}
                                         </tbody>
                                     </table>
+                                    </div>
                                 </div>
                             </td>
                         </tr>
@@ -499,10 +638,17 @@ function irARequerimiento() {
     window.location.href = '{% url "requerimiento_materiales_produccion" %}?bom=' + bomId + '&cantidad=' + cantidad;
 }
 
-function toggleDetalles(id) {
+function toggleDetalles(id, triggerBtn) {
     const row = document.getElementById(id);
     if (row) {
-        row.style.display = row.style.display === 'none' ? 'table-row' : 'none';
+        const isOpening = row.style.display === 'none' || row.style.display === '';
+        row.style.display = isOpening ? 'table-row' : 'none';
+
+        if (triggerBtn) {
+            triggerBtn.classList.toggle('is-open', isOpening);
+            triggerBtn.setAttribute('aria-expanded', isOpening ? 'true' : 'false');
+            triggerBtn.textContent = isOpening ? 'Ocultar materiales' : 'Ver materiales';
+        }
     }
 }
 </script>
