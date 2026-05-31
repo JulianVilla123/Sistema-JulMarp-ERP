@@ -1,4 +1,4 @@
-from django.http import JsonResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render, redirect
 from django.contrib.auth import authenticate, login, logout, get_user_model
 from django.contrib.auth.decorators import login_required
@@ -7,6 +7,7 @@ from datetime import date, datetime, timedelta
 from django.db import IntegrityError
 from django.db import transaction
 from django.db.models import Case, Count, DecimalField, Q, Sum, Value, When
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.cache import never_cache
@@ -20,31 +21,142 @@ from .models import (
     BOM,
     BOMDetalle,
     BOMOperacion,
+    ClienteCompra,
+    CuentaContable,
+    CuentaPorPagarCobrar,
+    CostoHoraMaquina,
+    CostoHoraOperador,
+    CosteoProduccion,
+    DeclaracionImpuesto,
+    EstadoFinanciero,
     InventarioAlmacen,
+    InformeValidacionDefectoQA,
     LoteProduccion,
+    MovimientoContable,
     Material,
     OrdenCompra,
     OrdenCompraDetalle,
+    PolizaContable,
+    PresupuestoFinanciero,
     Proveedor,
     ProveedorMaterialPrecio,
+    ReclamoCliente,
     RecepcionMaterial,
     RecepcionMaterialDetalle,
+    RegistroScrapDefecto,
+    RegistroUsoRecursoProduccion,
+    ReporteFinanciero,
     OrdenFabricacion,
     OrdenFabricacionDetalle,
     PlanProduccion,
     PlanProduccionDetalle,
     RequerimientoMaterialProduccion,
     RequerimientoMaterialProduccionDetalle,
+    ReporteKPIProduccion,
     SalidaLinea,
     SalidaLineaDetalle,
     TransferenciaAlmacen,
     TransferenciaAlmacenDetalle,
     UsuarioERP,
 )
+from .kpi_produccion import (
+    calcular_kpis_produccion,
+    estado_kpi,
+    exportar_reporte_excel,
+    exportar_reporte_pdf,
+    generar_reporte_kpis_produccion,
+)
+from .finanzas import (
+    calcular_dashboard_finanzas,
+    consolidar_costeos_produccion,
+    exportar_reporte_financiero_excel,
+    exportar_reporte_financiero_pdf,
+    generar_estado_financiero,
+    generar_reporte_financiero,
+)
 
 # Create your views here.
 
 User = get_user_model()
+
+
+def _mark_dashboard_sync(request, scope='global'):
+    request.session['dashboard_sync_token'] = timezone.now().isoformat()
+    request.session['dashboard_sync_scope'] = scope
+    request.session.modified = True
+
+
+def _usuario_puede_administrar_clientes(user):
+    if not user.is_authenticated:
+        return False
+
+    departamento = user.departamento.nombre if user.departamento else ''
+    return departamento in {'IT', 'Admin'}
+
+
+def _usuario_puede_ver_kpis_mfg(user):
+    if not user.is_authenticated:
+        return False
+
+    departamento = user.departamento.nombre if user.departamento else ''
+    return departamento in {'Producción', 'Finanzas', 'Admin', 'IT'}
+
+
+def _usuario_puede_control_recursos_mfg(user):
+    if not user.is_authenticated:
+        return False
+
+    departamento = user.departamento.nombre if user.departamento else ''
+    return departamento in {'Producción', 'RRHH', 'Admin', 'IT'}
+
+
+def _usuario_puede_validar_defectos(user):
+    if not user.is_authenticated:
+        return False
+
+    departamento = user.departamento.nombre if user.departamento else ''
+    return departamento in {'QA', 'Calidad', 'Admin', 'IT'}
+
+
+def _usuario_puede_ver_finanzas(user):
+    if not user.is_authenticated:
+        return False
+
+    departamento = user.departamento.nombre if user.departamento else ''
+    return departamento in {'Finanzas', 'Admin', 'IT'}
+
+
+def _finance_date_range(request, default_days=29):
+    fecha_fin = timezone.localdate()
+    fecha_inicio = fecha_fin - timedelta(days=default_days)
+    fecha_inicio_raw = (request.GET.get('fecha_inicio') or request.POST.get('fecha_inicio') or '').strip()
+    fecha_fin_raw = (request.GET.get('fecha_fin') or request.POST.get('fecha_fin') or '').strip()
+
+    parsed_inicio = _parse_iso_date(fecha_inicio_raw) if fecha_inicio_raw else fecha_inicio
+    parsed_fin = _parse_iso_date(fecha_fin_raw) if fecha_fin_raw else fecha_fin
+
+    if parsed_inicio and parsed_fin and parsed_inicio > parsed_fin:
+        parsed_inicio, parsed_fin = parsed_fin, parsed_inicio
+
+    return parsed_inicio or fecha_inicio, parsed_fin or fecha_fin
+
+
+def _next_generic_folio(model_class, prefix):
+    current_year = date.today().year
+    full_prefix = f"{prefix}-{current_year}-"
+    last_folio = (
+        model_class.objects
+        .filter(folio__startswith=full_prefix)
+        .order_by('-id')
+        .values_list('folio', flat=True)
+        .first()
+    )
+    seq = 1
+    if last_folio:
+        match = re.match(rf"^{re.escape(full_prefix)}(\d+)$", last_folio)
+        if match:
+            seq = int(match.group(1)) + 1
+    return f"{full_prefix}{seq:04d}"
 
 
 ALMACENES_BASE = [
@@ -362,6 +474,119 @@ def home(request):
             },
         })
 
+    if departamento in {'QA', 'Calidad'}:
+        ahora = timezone.now()
+        fecha_inicio_semana = ahora - timedelta(days=7)
+
+        qa_sqa_pendientes = RecepcionMaterial.objects.filter(
+            estado=RecepcionMaterial.EstadoRecepcion.ENVIADA,
+            chk_calidad=False,
+        ).count()
+        qa_sqa_revisadas_semana = RecepcionMaterial.objects.filter(
+            chk_calidad=True,
+            fecha_creacion__gte=fecha_inicio_semana,
+        ).count()
+        qa_sqa_cuarentena = RecepcionMaterial.objects.filter(
+            chk_calidad=True,
+            accion_recomendada=RecepcionMaterial.AccionRecomendada.CUARENTENA,
+        ).count()
+        qa_sqa_liberadas = RecepcionMaterial.objects.filter(
+            chk_calidad=True,
+            accion_recomendada=RecepcionMaterial.AccionRecomendada.ACEPTAR_TODO,
+        ).count()
+
+        qa_oqa_pendientes = LoteProduccion.objects.filter(
+            estado=LoteProduccion.EstadoLote.CAPTURADO,
+        ).count()
+        qa_oqa_liberados_semana = LoteProduccion.objects.filter(
+            estado=LoteProduccion.EstadoLote.VALIDADO,
+            fecha_actualizacion__gte=fecha_inicio_semana,
+        ).count()
+        qa_oqa_retenidos = LoteProduccion.objects.filter(
+            estado=LoteProduccion.EstadoLote.RECHAZADO,
+        ).count()
+
+        qa_reclamos_abiertos = ReclamoCliente.objects.exclude(
+            estado_reclamo=ReclamoCliente.EstadoReclamo.CERRADO,
+        ).count()
+        qa_reclamos_criticos = ReclamoCliente.objects.filter(
+            prioridad=ReclamoCliente.PrioridadReclamo.ALTA,
+        ).exclude(
+            estado_reclamo=ReclamoCliente.EstadoReclamo.CERRADO,
+        ).count()
+        qa_reclamos_cerrados_semana = ReclamoCliente.objects.filter(
+            estado_reclamo=ReclamoCliente.EstadoReclamo.CERRADO,
+            fecha_actualizacion__gte=fecha_inicio_semana,
+        ).count()
+
+        qa_sqa_recientes = (
+            RecepcionMaterial.objects
+            .filter(chk_calidad=True)
+            .order_by('-fecha_creacion')[:6]
+        )
+        qa_oqa_recientes = (
+            LoteProduccion.objects
+            .filter(estado__in=[
+                LoteProduccion.EstadoLote.VALIDADO,
+                LoteProduccion.EstadoLote.RECHAZADO,
+            ])
+            .select_related('bom', 'orden_fabricacion')
+            .order_by('-fecha_actualizacion')[:6]
+        )
+        qa_reclamos_recientes = (
+            ReclamoCliente.objects
+            .order_by('-fecha_actualizacion')[:6]
+        )
+
+        context.update({
+            'qa_sqa_pendientes': qa_sqa_pendientes,
+            'qa_sqa_revisadas_semana': qa_sqa_revisadas_semana,
+            'qa_sqa_cuarentena': qa_sqa_cuarentena,
+            'qa_oqa_pendientes': qa_oqa_pendientes,
+            'qa_oqa_liberados_semana': qa_oqa_liberados_semana,
+            'qa_reclamos_abiertos': qa_reclamos_abiertos,
+            'qa_reclamos_criticos': qa_reclamos_criticos,
+            'qa_sqa_recientes': qa_sqa_recientes,
+            'qa_oqa_recientes': qa_oqa_recientes,
+            'qa_reclamos_recientes': qa_reclamos_recientes,
+            'qa_chart_data': {
+                'pipeline_labels': ['SQA pendientes', 'OQA pendientes', 'Reclamos abiertos'],
+                'pipeline_values': [qa_sqa_pendientes, qa_oqa_pendientes, qa_reclamos_abiertos],
+                'status_labels': ['SQA liberadas', 'SQA cuarentena', 'OQA liberados', 'OQA retenidos', 'Reclamos cerrados'],
+                'status_values': [
+                    qa_sqa_liberadas,
+                    qa_sqa_cuarentena,
+                    qa_oqa_liberados_semana,
+                    qa_oqa_retenidos,
+                    qa_reclamos_cerrados_semana,
+                ],
+            },
+        })
+
+    if departamento == 'IT':
+        clientes_activos = ClienteCompra.objects.filter(activo=True).count()
+        clientes_inactivos = ClienteCompra.objects.filter(activo=False).count()
+        clientes_recientes = ClienteCompra.objects.order_by('-fecha_actualizacion')[:6]
+
+        context.update({
+            'it_clientes_activos': clientes_activos,
+            'it_clientes_inactivos': clientes_inactivos,
+            'it_clientes_recientes': clientes_recientes,
+        })
+
+    if departamento == 'Finanzas':
+        finance_data = calcular_dashboard_finanzas()
+        context.update({
+            'fin_kpis': finance_data['kpis'],
+            'fin_alertas': finance_data['alertas'],
+            'fin_ordenes_compra_recientes': finance_data['ordenes_compra_recientes'],
+            'fin_costeos_recientes': finance_data['costeos_recientes'],
+            'fin_cuentas_recientes': finance_data['cuentas_recientes'],
+            'fin_presupuestos': finance_data['presupuestos'],
+            'fin_chart_data': finance_data['charts'],
+            'fin_produccion': finance_data['produccion'],
+        })
+
     if departamento in {'Inventario', 'Admin'}:
         fecha_fin = date.today()
         fecha_inicio = fecha_fin - timedelta(days=6)
@@ -452,6 +677,881 @@ def home(request):
         })
 
     return render(request, 'home.html', context)
+
+
+@login_required(login_url='login')
+@never_cache
+def indicadores_kpis_mfg(request):
+    if not _usuario_puede_ver_kpis_mfg(request.user):
+        messages.error(request, 'No tienes permisos para consultar los KPIs de MFG.')
+        return redirect('home')
+
+    fecha_fin = timezone.localdate()
+    fecha_inicio = fecha_fin - timedelta(days=29)
+
+    fecha_inicio_raw = (request.GET.get('fecha_inicio') or '').strip()
+    fecha_fin_raw = (request.GET.get('fecha_fin') or '').strip()
+    export = (request.GET.get('export') or '').strip().lower()
+    recalcular = request.GET.get('recalcular') == '1'
+
+    try:
+        if fecha_inicio_raw:
+            fecha_inicio = date.fromisoformat(fecha_inicio_raw)
+        if fecha_fin_raw:
+            fecha_fin = date.fromisoformat(fecha_fin_raw)
+    except ValueError:
+        messages.error(request, 'El rango de fechas no es válido. Se usó el período por defecto de 30 días.')
+        fecha_fin = timezone.localdate()
+        fecha_inicio = fecha_fin - timedelta(days=29)
+
+    if fecha_inicio > fecha_fin:
+        fecha_inicio, fecha_fin = fecha_fin, fecha_inicio
+
+    reporte = (
+        ReporteKPIProduccion.objects
+        .filter(fecha_inicio=fecha_inicio, fecha_fin=fecha_fin)
+        .order_by('-fecha_generacion')
+        .first()
+    )
+
+    if recalcular or export or reporte is None:
+        reporte = generar_reporte_kpis_produccion(
+            usuario=request.user,
+            fecha_inicio=fecha_inicio,
+            fecha_fin=fecha_fin,
+        )
+
+    if export == 'excel':
+        payload = exportar_reporte_excel(reporte)
+        response = HttpResponse(
+            payload,
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+        response['Content-Disposition'] = f'attachment; filename="kpis-mfg-{reporte.fecha_inicio}-{reporte.fecha_fin}.xlsx"'
+        return response
+
+    if export == 'pdf':
+        payload = exportar_reporte_pdf(reporte)
+        response = HttpResponse(payload, content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="kpis-mfg-{reporte.fecha_inicio}-{reporte.fecha_fin}.pdf"'
+        return response
+
+    detail = reporte.detalle or {}
+    cycle_ideal = Decimal(str(detail.get('tiempo_ciclo_ideal', 0)))
+    variacion_pct = Decimal(str(detail.get('costo_variacion_pct', 0)))
+
+    metric_cards = [
+        {
+            'code': 'oee',
+            'label': 'OEE',
+            'value': reporte.oee,
+            'unit': '%',
+            'status': estado_kpi('oee', reporte.oee),
+            'help_text': f"Disp. {reporte.disponibilidad}% | Rend. {reporte.rendimiento}% | Calidad {reporte.calidad}%",
+        },
+        {
+            'code': 'tiempo_ciclo',
+            'label': 'Tiempo de ciclo',
+            'value': reporte.tiempo_ciclo_promedio,
+            'unit': 'min/ud',
+            'status': estado_kpi('tiempo_ciclo', reporte.tiempo_ciclo_promedio, cycle_ideal),
+            'help_text': f"Ideal BOM: {cycle_ideal.quantize(Decimal('0.01'))} min/ud" if cycle_ideal > 0 else 'Sin tiempo ideal configurado en BOM.',
+        },
+        {
+            'code': 'tasa_rechazo',
+            'label': 'Tasa de rechazo',
+            'value': reporte.tasa_rechazo,
+            'unit': '%',
+            'status': estado_kpi('tasa_rechazo', reporte.tasa_rechazo),
+            'help_text': f"Unidades rechazadas: {detail.get('unidades_rechazadas', 0)}",
+        },
+        {
+            'code': 'cumplimiento_ordenes',
+            'label': 'Cumplimiento de órdenes',
+            'value': reporte.cumplimiento_ordenes,
+            'unit': '%',
+            'status': estado_kpi('cumplimiento_ordenes', reporte.cumplimiento_ordenes),
+            'help_text': f"{detail.get('ordenes_a_tiempo', 0)} / {detail.get('ordenes_completadas', 0)} OFs a tiempo",
+        },
+        {
+            'code': 'variacion_costos_pct',
+            'label': 'Costos vs plan',
+            'value': variacion_pct.quantize(Decimal('0.01')),
+            'unit': '%',
+            'status': estado_kpi('variacion_costos_pct', variacion_pct),
+            'help_text': f"Plan ${reporte.costo_planificado} | Real ${reporte.costo_real}",
+        },
+        {
+            'code': 'utilizacion_recursos',
+            'label': 'Utilización recursos',
+            'value': reporte.utilizacion_recursos,
+            'unit': '%',
+            'status': estado_kpi('utilizacion_recursos', reporte.utilizacion_recursos),
+            'help_text': f"Máquinas {reporte.utilizacion_maquinas}% | Personal {reporte.utilizacion_personal}%",
+        },
+    ]
+
+    chart_data = {
+        'metric_labels': [card['label'] for card in metric_cards],
+        'metric_values': [float(card['value']) for card in metric_cards],
+        'metric_status': [card['status'] for card in metric_cards],
+        'resource_labels': ['Máquinas', 'Personal'],
+        'resource_values': [float(reporte.utilizacion_maquinas), float(reporte.utilizacion_personal)],
+        'cost_labels': ['Planificado', 'Real', 'Variación'],
+        'cost_values': [float(reporte.costo_planificado), float(reporte.costo_real), float(reporte.variacion_costos)],
+    }
+
+    kpi_context = calcular_kpis_produccion(fecha_inicio=fecha_inicio, fecha_fin=fecha_fin)
+
+    return render(
+        request,
+        'produccion/indicadores_kpis.html',
+        {
+            'reporte': reporte,
+            'metric_cards': metric_cards,
+            'chart_data': chart_data,
+            'alertas': reporte.alertas or [],
+            'detalle': detail,
+            'ordenes_recientes': detail.get('ordenes_recientes', []),
+            'fecha_inicio': fecha_inicio,
+            'fecha_fin': fecha_fin,
+            'kpi_snapshot': kpi_context,
+        },
+    )
+
+
+@login_required(login_url='login')
+@never_cache
+def finanzas_dashboard(request):
+    if not _usuario_puede_ver_finanzas(request.user):
+        messages.error(request, 'No tienes permisos para acceder al dashboard de Finanzas.')
+        return redirect('home')
+
+    fecha_inicio, fecha_fin = _finance_date_range(request)
+    export = (request.GET.get('export') or '').strip().lower()
+    recalcular = (request.GET.get('recalcular') or '').strip() == '1'
+
+    if recalcular:
+        consolidar_costeos_produccion(usuario=request.user, fecha_inicio=fecha_inicio, fecha_fin=fecha_fin)
+
+    reporte = (
+        ReporteFinanciero.objects
+        .filter(fecha_inicio=fecha_inicio, fecha_fin=fecha_fin, tipo=ReporteFinanciero.TipoReporte.KPI)
+        .order_by('-fecha_creacion')
+        .first()
+    )
+    if recalcular or reporte is None:
+        reporte = generar_reporte_financiero(
+            usuario=request.user,
+            tipo=ReporteFinanciero.TipoReporte.KPI,
+            fecha_inicio=fecha_inicio,
+            fecha_fin=fecha_fin,
+        )
+
+    if export == 'excel':
+        payload = exportar_reporte_financiero_excel(reporte)
+        response = HttpResponse(payload, content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        response['Content-Disposition'] = f'attachment; filename="finanzas-{reporte.fecha_inicio}-{reporte.fecha_fin}.xlsx"'
+        return response
+
+    if export == 'pdf':
+        payload = exportar_reporte_financiero_pdf(reporte)
+        response = HttpResponse(payload, content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="finanzas-{reporte.fecha_inicio}-{reporte.fecha_fin}.pdf"'
+        return response
+
+    dashboard = calcular_dashboard_finanzas(fecha_inicio=fecha_inicio, fecha_fin=fecha_fin)
+    return render(
+        request,
+        'finanzas/dashboard.html',
+        {
+            'reporte': reporte,
+            'dashboard': dashboard,
+            'chart_data': dashboard['charts'],
+            'fecha_inicio': fecha_inicio,
+            'fecha_fin': fecha_fin,
+        },
+    )
+
+
+@login_required(login_url='login')
+@never_cache
+def finanzas_contabilidad(request):
+    if not _usuario_puede_ver_finanzas(request.user):
+        messages.error(request, 'No tienes permisos para acceder a Contabilidad.')
+        return redirect('home')
+
+    if request.method == 'POST':
+        accion = (request.POST.get('accion') or '').strip()
+
+        if accion == 'crear_cuenta':
+            codigo = (request.POST.get('codigo') or '').strip().upper()
+            nombre = (request.POST.get('nombre') or '').strip()
+            tipo = (request.POST.get('tipo') or '').strip()
+            descripcion = (request.POST.get('descripcion') or '').strip()
+            activa = request.POST.get('activa') == 'on'
+
+            if not codigo or not nombre or not tipo:
+                messages.error(request, 'Código, nombre y tipo de cuenta son obligatorios.')
+                return redirect('finanzas_contabilidad')
+
+            cuenta, created = CuentaContable.objects.get_or_create(
+                codigo=codigo,
+                defaults={
+                    'nombre': nombre,
+                    'tipo': tipo,
+                    'descripcion': descripcion,
+                    'activa': activa,
+                    'creado_por': request.user,
+                    'actualizado_por': request.user,
+                },
+            )
+            if not created:
+                cuenta.nombre = nombre
+                cuenta.tipo = tipo
+                cuenta.descripcion = descripcion
+                cuenta.activa = activa
+                cuenta.actualizado_por = request.user
+                cuenta.save()
+
+            messages.success(request, f'Cuenta contable {cuenta.codigo} guardada correctamente.')
+            return redirect('finanzas_contabilidad')
+
+        if accion == 'crear_poliza':
+            fecha_poliza = _parse_iso_date((request.POST.get('fecha_poliza') or '').strip())
+            tipo = (request.POST.get('tipo_poliza') or '').strip() or PolizaContable.TipoPoliza.DIARIO
+            concepto = (request.POST.get('concepto') or '').strip()
+            referencia = (request.POST.get('referencia') or '').strip()
+            cuentas_ids = request.POST.getlist('cuenta_id[]')
+            descripciones = request.POST.getlist('mov_descripcion[]')
+            debes = request.POST.getlist('debe[]')
+            haberes = request.POST.getlist('haber[]')
+
+            if not fecha_poliza or not concepto:
+                messages.error(request, 'Fecha y concepto de la póliza son obligatorios.')
+                return redirect('finanzas_contabilidad')
+
+            movimientos = []
+            total_debe = Decimal('0')
+            total_haber = Decimal('0')
+            for idx, cuenta_id in enumerate(cuentas_ids):
+                cuenta_id = (cuenta_id or '').strip()
+                debe = _parse_decimal_text(debes[idx] if idx < len(debes) else '0', Decimal('0'))
+                haber = _parse_decimal_text(haberes[idx] if idx < len(haberes) else '0', Decimal('0'))
+                descripcion = (descripciones[idx] if idx < len(descripciones) else '').strip()
+                if not cuenta_id and debe <= 0 and haber <= 0:
+                    continue
+                cuenta = CuentaContable.objects.filter(id=cuenta_id, activa=True).first()
+                if not cuenta:
+                    messages.error(request, f'Línea {idx + 1}: selecciona una cuenta contable válida.')
+                    return redirect('finanzas_contabilidad')
+                if debe <= 0 and haber <= 0:
+                    messages.error(request, f'Línea {idx + 1}: debe capturar debe u haber.')
+                    return redirect('finanzas_contabilidad')
+                movimientos.append({'cuenta': cuenta, 'descripcion': descripcion, 'debe': debe, 'haber': haber})
+                total_debe += debe
+                total_haber += haber
+
+            if not movimientos or total_debe != total_haber:
+                messages.error(request, 'La póliza debe contener movimientos balanceados; el debe debe ser igual al haber.')
+                return redirect('finanzas_contabilidad')
+
+            with transaction.atomic():
+                folio = _next_generic_folio(PolizaContable, 'POL')
+                while PolizaContable.objects.filter(folio=folio).exists():
+                    folio = _next_generic_folio(PolizaContable, 'POL')
+                poliza = PolizaContable.objects.create(
+                    folio=folio,
+                    fecha_poliza=fecha_poliza,
+                    tipo=tipo,
+                    concepto=concepto,
+                    referencia=referencia,
+                    estado=PolizaContable.EstadoPoliza.CONTABILIZADA,
+                    creado_por=request.user,
+                    actualizado_por=request.user,
+                )
+                for movimiento in movimientos:
+                    MovimientoContable.objects.create(poliza=poliza, **movimiento)
+
+            messages.success(request, f'Póliza {poliza.folio} contabilizada correctamente.')
+            return redirect('finanzas_contabilidad')
+
+        if accion == 'generar_estado':
+            tipo_estado = (request.POST.get('tipo_estado') or '').strip() or EstadoFinanciero.TipoEstado.RESULTADOS
+            fecha_inicio, fecha_fin = _finance_date_range(request)
+            estado = generar_estado_financiero(request.user, fecha_inicio, fecha_fin, tipo_estado)
+            messages.success(request, f'Se generó el estado financiero {estado.nombre}.')
+            return redirect('finanzas_contabilidad')
+
+    balances = list(
+        CuentaContable.objects
+        .filter(activa=True)
+        .annotate(total_debe=Sum('movimientos__debe'), total_haber=Sum('movimientos__haber'))
+        .order_by('codigo')
+    )
+    polizas = list(PolizaContable.objects.prefetch_related('movimientos__cuenta').order_by('-fecha_poliza', '-fecha_creacion')[:12])
+    estados = list(EstadoFinanciero.objects.order_by('-fecha_fin', '-fecha_creacion')[:10])
+    return render(request, 'finanzas/contabilidad.html', {
+        'cuentas': CuentaContable.objects.order_by('codigo'),
+        'balances': balances,
+        'polizas': polizas,
+        'estados_financieros': estados,
+        'tipos_cuenta': CuentaContable.TipoCuenta.choices,
+        'tipos_poliza': PolizaContable.TipoPoliza.choices,
+        'tipos_estado': EstadoFinanciero.TipoEstado.choices,
+    })
+
+
+@login_required(login_url='login')
+@never_cache
+def finanzas_presupuestos(request):
+    if not _usuario_puede_ver_finanzas(request.user):
+        messages.error(request, 'No tienes permisos para acceder a Presupuestos.')
+        return redirect('home')
+
+    if request.method == 'POST':
+        accion = (request.POST.get('accion') or '').strip()
+        if accion == 'guardar_presupuesto':
+            nombre = (request.POST.get('nombre') or '').strip()
+            categoria = (request.POST.get('categoria') or '').strip()
+            periodicidad = (request.POST.get('periodicidad') or '').strip() or PresupuestoFinanciero.Periodicidad.MENSUAL
+            fecha_inicio = _parse_iso_date((request.POST.get('fecha_inicio') or '').strip())
+            fecha_fin = _parse_iso_date((request.POST.get('fecha_fin') or '').strip())
+            monto_presupuestado = _parse_decimal_text((request.POST.get('monto_presupuestado') or '').strip(), Decimal('0'))
+            monto_real = _parse_decimal_text((request.POST.get('monto_real') or '').strip(), Decimal('0'))
+            descripcion = (request.POST.get('descripcion') or '').strip()
+            activo = request.POST.get('activo') == 'on'
+
+            if not nombre or not fecha_inicio or not fecha_fin or monto_presupuestado <= 0:
+                messages.error(request, 'Nombre, fechas y monto presupuestado son obligatorios.')
+                return redirect('finanzas_presupuestos')
+
+            PresupuestoFinanciero.objects.create(
+                nombre=nombre,
+                categoria=categoria,
+                periodicidad=periodicidad,
+                fecha_inicio=fecha_inicio,
+                fecha_fin=fecha_fin,
+                monto_presupuestado=monto_presupuestado,
+                monto_real=monto_real,
+                descripcion=descripcion,
+                activo=activo,
+                creado_por=request.user,
+                actualizado_por=request.user,
+            )
+            messages.success(request, 'Presupuesto financiero registrado correctamente.')
+            return redirect('finanzas_presupuestos')
+
+        if accion == 'actualizar_real':
+            presupuesto_id = (request.POST.get('presupuesto_id') or '').strip()
+            monto_real = _parse_decimal_text((request.POST.get('monto_real_actualizado') or '').strip(), Decimal('0'))
+            presupuesto = PresupuestoFinanciero.objects.filter(id=presupuesto_id).first()
+            if not presupuesto:
+                messages.error(request, 'El presupuesto seleccionado no existe.')
+                return redirect('finanzas_presupuestos')
+            presupuesto.monto_real = monto_real
+            presupuesto.actualizado_por = request.user
+            presupuesto.save()
+            messages.success(request, f'Se actualizó el monto real del presupuesto {presupuesto.nombre}.')
+            return redirect('finanzas_presupuestos')
+
+    presupuestos = list(PresupuestoFinanciero.objects.order_by('-fecha_fin', 'nombre'))
+    for presupuesto in presupuestos:
+        presupuesto.desviacion = (presupuesto.monto_real or Decimal('0')) - (presupuesto.monto_presupuestado or Decimal('0'))
+
+    return render(request, 'finanzas/presupuestos.html', {
+        'presupuestos': presupuestos,
+        'categorias': PresupuestoFinanciero.Categoria.choices,
+        'periodicidades': PresupuestoFinanciero.Periodicidad.choices,
+    })
+
+
+@login_required(login_url='login')
+@never_cache
+def finanzas_pagos_cobros(request):
+    if not _usuario_puede_ver_finanzas(request.user):
+        messages.error(request, 'No tienes permisos para acceder a Pagos y Cobros.')
+        return redirect('home')
+
+    if request.method == 'POST':
+        accion = (request.POST.get('accion') or '').strip()
+        if accion == 'guardar_cuenta':
+            tipo = (request.POST.get('tipo') or '').strip()
+            folio = (request.POST.get('folio') or '').strip().upper() or _next_generic_folio(CuentaPorPagarCobrar, 'CXC')
+            tercero_nombre = (request.POST.get('tercero_nombre') or '').strip()
+            cliente_id = (request.POST.get('cliente_compra_id') or '').strip()
+            proveedor_id = (request.POST.get('proveedor_id') or '').strip()
+            orden_compra_id = (request.POST.get('orden_compra_id') or '').strip()
+            monto_total = _parse_decimal_text((request.POST.get('monto_total') or '').strip(), Decimal('0'))
+            fecha_emision = _parse_iso_date((request.POST.get('fecha_emision') or '').strip())
+            fecha_vencimiento = _parse_iso_date((request.POST.get('fecha_vencimiento') or '').strip())
+            observaciones = (request.POST.get('observaciones') or '').strip()
+
+            if not tipo or not tercero_nombre or monto_total <= 0 or not fecha_emision or not fecha_vencimiento:
+                messages.error(request, 'Tipo, tercero, fechas y monto total son obligatorios.')
+                return redirect('finanzas_pagos_cobros')
+
+            CuentaPorPagarCobrar.objects.create(
+                tipo=tipo,
+                folio=folio,
+                tercero_nombre=tercero_nombre,
+                cliente_compra=ClienteCompra.objects.filter(id=cliente_id).first() if cliente_id else None,
+                proveedor=Proveedor.objects.filter(id=proveedor_id).first() if proveedor_id else None,
+                orden_compra=OrdenCompra.objects.filter(id=orden_compra_id).first() if orden_compra_id else None,
+                monto_total=monto_total,
+                fecha_emision=fecha_emision,
+                fecha_vencimiento=fecha_vencimiento,
+                observaciones=observaciones,
+                creado_por=request.user,
+                actualizado_por=request.user,
+            )
+            messages.success(request, f'Cuenta financiera {folio} registrada correctamente.')
+            return redirect('finanzas_pagos_cobros')
+
+        if accion == 'registrar_movimiento':
+            cuenta_id = (request.POST.get('cuenta_id') or '').strip()
+            abono = _parse_decimal_text((request.POST.get('abono') or '').strip(), Decimal('0'))
+            cuenta = CuentaPorPagarCobrar.objects.filter(id=cuenta_id).first()
+            if not cuenta or abono <= 0:
+                messages.error(request, 'Selecciona una cuenta válida y un abono mayor a cero.')
+                return redirect('finanzas_pagos_cobros')
+            cuenta.monto_pagado = min(cuenta.monto_pagado + abono, cuenta.monto_total)
+            if cuenta.monto_pagado >= cuenta.monto_total:
+                cuenta.estado = CuentaPorPagarCobrar.EstadoCuenta.PAGADA
+            elif cuenta.fecha_vencimiento < timezone.localdate():
+                cuenta.estado = CuentaPorPagarCobrar.EstadoCuenta.VENCIDA
+            else:
+                cuenta.estado = CuentaPorPagarCobrar.EstadoCuenta.PARCIAL
+            cuenta.actualizado_por = request.user
+            cuenta.save()
+            messages.success(request, f'Se registró movimiento en la cuenta {cuenta.folio}.')
+            return redirect('finanzas_pagos_cobros')
+
+    cuentas = list(CuentaPorPagarCobrar.objects.select_related('cliente_compra', 'proveedor', 'orden_compra').order_by('fecha_vencimiento', '-fecha_creacion'))
+    return render(request, 'finanzas/pagos_cobros.html', {
+        'cuentas': cuentas,
+        'tipos_cuenta': CuentaPorPagarCobrar.TipoCuenta.choices,
+        'clientes_catalogo': ClienteCompra.objects.filter(activo=True).order_by('nombre'),
+        'proveedores_catalogo': Proveedor.objects.filter(activo=True).order_by('nombre'),
+        'ordenes_compra_catalogo': OrdenCompra.objects.order_by('-fecha_orden')[:30],
+    })
+
+
+@login_required(login_url='login')
+@never_cache
+def finanzas_costeo_produccion(request):
+    if not _usuario_puede_ver_finanzas(request.user):
+        messages.error(request, 'No tienes permisos para acceder a Costeo de Producción.')
+        return redirect('home')
+
+    fecha_inicio, fecha_fin = _finance_date_range(request)
+    if request.method == 'POST' and (request.POST.get('accion') or '').strip() == 'recalcular_costeos':
+        consolidar_costeos_produccion(request.user, fecha_inicio, fecha_fin)
+        messages.success(request, 'Costeo de producción recalculado correctamente.')
+        return redirect(f"{reverse('finanzas_costeo_produccion')}?fecha_inicio={fecha_inicio}&fecha_fin={fecha_fin}")
+
+    costeos = list(
+        CosteoProduccion.objects
+        .select_related('orden_fabricacion', 'orden_fabricacion__bom', 'lote_produccion', 'lote_produccion__bom')
+        .filter(fecha_actualizacion__date__range=(fecha_inicio, fecha_fin))
+        .order_by('-fecha_actualizacion')[:40]
+    )
+    return render(request, 'finanzas/costeo_produccion.html', {
+        'costeos': costeos,
+        'fecha_inicio': fecha_inicio,
+        'fecha_fin': fecha_fin,
+    })
+
+
+@login_required(login_url='login')
+@never_cache
+def finanzas_reportes(request):
+    if not _usuario_puede_ver_finanzas(request.user):
+        messages.error(request, 'No tienes permisos para acceder a Reportes Financieros.')
+        return redirect('home')
+
+    fecha_inicio, fecha_fin = _finance_date_range(request)
+    export = (request.GET.get('export') or '').strip().lower()
+    reporte_id = (request.GET.get('reporte_id') or '').strip()
+
+    reporte = ReporteFinanciero.objects.filter(id=reporte_id).first() if reporte_id else None
+    if request.method == 'POST' and (request.POST.get('accion') or '').strip() == 'generar_reporte':
+        consolidar_costeos_produccion(request.user, fecha_inicio, fecha_fin)
+        reporte = generar_reporte_financiero(request.user, ReporteFinanciero.TipoReporte.KPI, fecha_inicio, fecha_fin)
+        messages.success(request, 'Reporte financiero generado correctamente.')
+        return redirect(f"{reverse('finanzas_reportes')}?reporte_id={reporte.id}")
+
+    if export and reporte:
+        if export == 'excel':
+            payload = exportar_reporte_financiero_excel(reporte)
+            response = HttpResponse(payload, content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+            response['Content-Disposition'] = f'attachment; filename="reporte-financiero-{reporte.id}.xlsx"'
+            return response
+        if export == 'pdf':
+            payload = exportar_reporte_financiero_pdf(reporte)
+            response = HttpResponse(payload, content_type='application/pdf')
+            response['Content-Disposition'] = f'attachment; filename="reporte-financiero-{reporte.id}.pdf"'
+            return response
+
+    reportes = list(ReporteFinanciero.objects.order_by('-fecha_fin', '-fecha_creacion')[:20])
+    dashboard = calcular_dashboard_finanzas(fecha_inicio, fecha_fin)
+    return render(request, 'finanzas/reportes_financieros.html', {
+        'reportes': reportes,
+        'reporte_actual': reporte,
+        'dashboard': dashboard,
+        'fecha_inicio': fecha_inicio,
+        'fecha_fin': fecha_fin,
+    })
+
+
+@login_required(login_url='login')
+@never_cache
+def finanzas_impuestos(request):
+    if not _usuario_puede_ver_finanzas(request.user):
+        messages.error(request, 'No tienes permisos para acceder a Impuestos.')
+        return redirect('home')
+
+    if request.method == 'POST':
+        accion = (request.POST.get('accion') or '').strip()
+        if accion == 'generar_declaracion':
+            folio = (request.POST.get('folio') or '').strip().upper() or _next_generic_folio(DeclaracionImpuesto, 'IMP')
+            tipo_impuesto = (request.POST.get('tipo_impuesto') or '').strip()
+            periodo_inicio = _parse_iso_date((request.POST.get('periodo_inicio') or '').strip())
+            periodo_fin = _parse_iso_date((request.POST.get('periodo_fin') or '').strip())
+            base_gravable = _parse_decimal_text((request.POST.get('base_gravable') or '').strip(), Decimal('0'))
+            tasa = _parse_decimal_text((request.POST.get('tasa') or '').strip(), Decimal('0'))
+            impuesto_calculado = (base_gravable * tasa / Decimal('100')).quantize(Decimal('0.01'))
+
+            if not tipo_impuesto or not periodo_inicio or not periodo_fin:
+                messages.error(request, 'Tipo de impuesto y periodo son obligatorios.')
+                return redirect('finanzas_impuestos')
+
+            DeclaracionImpuesto.objects.create(
+                folio=folio,
+                tipo_impuesto=tipo_impuesto,
+                periodo_inicio=periodo_inicio,
+                periodo_fin=periodo_fin,
+                base_gravable=base_gravable,
+                tasa=tasa,
+                impuesto_calculado=impuesto_calculado,
+                estado=DeclaracionImpuesto.EstadoDeclaracion.CALCULADA,
+                detalle={'origen': 'manual'},
+                creado_por=request.user,
+                actualizado_por=request.user,
+            )
+            messages.success(request, f'Declaración {folio} calculada correctamente.')
+            return redirect('finanzas_impuestos')
+
+        if accion == 'presentar':
+            declaracion_id = (request.POST.get('declaracion_id') or '').strip()
+            acuse = (request.POST.get('acuse') or '').strip()
+            declaracion = DeclaracionImpuesto.objects.filter(id=declaracion_id).first()
+            if not declaracion:
+                messages.error(request, 'La declaración seleccionada no existe.')
+                return redirect('finanzas_impuestos')
+            declaracion.estado = DeclaracionImpuesto.EstadoDeclaracion.PRESENTADA
+            declaracion.acuse = acuse
+            declaracion.actualizado_por = request.user
+            declaracion.save()
+            messages.success(request, f'Declaración {declaracion.folio} marcada como presentada.')
+            return redirect('finanzas_impuestos')
+
+    declaraciones = list(DeclaracionImpuesto.objects.order_by('-periodo_fin', '-fecha_creacion')[:20])
+    return render(request, 'finanzas/impuestos.html', {
+        'declaraciones': declaraciones,
+        'tipos_impuesto': DeclaracionImpuesto.TipoImpuesto.choices,
+    })
+
+
+@login_required(login_url='login')
+@never_cache
+def finanzas_ordenes_compra(request):
+    if not _usuario_puede_ver_finanzas(request.user):
+        messages.error(request, 'No tienes permisos para acceder a Órdenes de Compra de Finanzas.')
+        return redirect('home')
+
+    requerimientos_pendientes_qs = (
+        RequerimientoMaterialProduccion.objects
+        .filter(estado=RequerimientoMaterialProduccion.EstadoRequerimiento.ENVIADO_FINANZAS)
+        .exclude(ordenes_compra_generadas__creada_desde_mfg=True)
+        .select_related('bom', 'creado_por')
+        .prefetch_related('detalles__material')
+        .order_by('-fecha_envio_finanzas', '-fecha_creacion')
+        .distinct()
+    )
+
+    if request.method == 'POST' and (request.POST.get('accion_estado') or '').strip():
+        orden_id = (request.POST.get('orden_id') or '').strip()
+        accion_estado = (request.POST.get('accion_estado') or '').strip().upper()
+        orden = OrdenCompra.objects.filter(id=orden_id).first()
+        if not orden:
+            messages.error(request, 'La orden seleccionada no existe.')
+            return redirect('finanzas_ordenes_compra')
+        transiciones = _ordenes_transiciones_permitidas(orden.estado)
+        if accion_estado not in transiciones:
+            messages.error(request, f'No es posible cambiar la orden a {accion_estado}.')
+            return redirect('finanzas_ordenes_compra')
+        orden.estado = accion_estado
+        orden.save(update_fields=['estado'])
+        messages.success(request, f'La orden {orden.folio} cambió a {orden.get_estado_display()}.')
+        return redirect('finanzas_ordenes_compra')
+
+    if request.method == 'POST':
+        accion = (request.POST.get('accion') or '').strip()
+        if accion == 'crear_oc_desde_mfg':
+            requerimiento_id = (request.POST.get('requerimiento_id') or '').strip()
+            proveedor_id = (request.POST.get('proveedor_id') or '').strip()
+            fecha_orden = _parse_iso_date((request.POST.get('fecha_orden') or '').strip())
+            fecha_prometida = _parse_iso_date((request.POST.get('fecha_prometida') or '').strip())
+            tiempo_entrega = int((request.POST.get('tiempo_entrega_estimado_dias') or '0').strip() or '0')
+            condiciones_pago = (request.POST.get('condiciones_pago') or '').strip()
+            observaciones = (request.POST.get('observaciones') or '').strip()
+            requerimiento = (
+                requerimientos_pendientes_qs
+                .filter(id=requerimiento_id)
+                .first()
+                if requerimiento_id else None
+            )
+            proveedor = Proveedor.objects.filter(id=proveedor_id, activo=True).prefetch_related('materiales').first() if proveedor_id else None
+
+            if not requerimiento or not proveedor or not fecha_orden:
+                messages.error(request, 'Selecciona requerimiento, proveedor y fecha de orden válidos.')
+                return redirect('finanzas_ordenes_compra')
+
+            if requerimiento.ordenes_compra_generadas.filter(creada_desde_mfg=True).exists():
+                messages.error(request, f'El requerimiento {requerimiento.folio} ya tiene una orden de compra generada.')
+                return redirect('finanzas_ordenes_compra')
+
+            materiales_permitidos = {material.id: material for material in proveedor.materiales.filter(activo=True)}
+            price_map = {
+                precio.material_id: precio.precio_unitario
+                for precio in ProveedorMaterialPrecio.objects.filter(proveedor=proveedor)
+            }
+            lineas = []
+            for detalle in requerimiento.detalles.all():
+                if detalle.material_id not in materiales_permitidos:
+                    messages.error(request, f'El proveedor {proveedor.nombre} no tiene asignado el material {detalle.material.sku}.')
+                    return redirect('finanzas_ordenes_compra')
+                cantidad_pedida = detalle.cantidad_solicitada or detalle.cantidad_sugerida_compra or detalle.cantidad_faltante
+                precio_unitario = _parse_decimal_text(price_map.get(detalle.material_id, '0'), Decimal('0'))
+                subtotal = (cantidad_pedida * precio_unitario).quantize(Decimal('0.01'))
+                lineas.append({
+                    'material': detalle.material,
+                    'sku': detalle.material.sku,
+                    'descripcion': detalle.material.nombre,
+                    'um': detalle.material.um,
+                    'cantidad_pedida': cantidad_pedida,
+                    'precio_unitario': precio_unitario,
+                    'subtotal': subtotal,
+                })
+
+            total_estimado = sum((linea['subtotal'] for linea in lineas), Decimal('0'))
+            with transaction.atomic():
+                folio = _next_orden_compra_folio()
+                while OrdenCompra.objects.filter(folio=folio).exists():
+                    folio = _next_orden_compra_folio()
+                orden = OrdenCompra.objects.create(
+                    folio=folio,
+                    proveedor=proveedor,
+                    requerimiento_origen=requerimiento,
+                    fecha_orden=fecha_orden,
+                    fecha_prometida=fecha_prometida,
+                    tiempo_entrega_estimado_dias=tiempo_entrega,
+                    condiciones_pago=condiciones_pago,
+                    observaciones=f'Requerimiento origen: {requerimiento.folio}\n{observaciones}'.strip(),
+                    estado=OrdenCompra.EstadoOrden.APROBADA,
+                    creada_desde_mfg=True,
+                    total_estimado=total_estimado,
+                    creado_por=request.user,
+                )
+                for linea in lineas:
+                    OrdenCompraDetalle.objects.create(orden=orden, **linea)
+
+            messages.success(request, f'Orden de compra {orden.folio} generada desde {requerimiento.folio}.')
+            return redirect('finanzas_ordenes_compra')
+
+    requerimientos_pendientes = list(requerimientos_pendientes_qs[:20])
+    ordenes = list(
+        OrdenCompra.objects
+        .filter(creada_desde_mfg=True)
+        .select_related('proveedor', 'requerimiento_origen', 'requerimiento_origen__bom', 'creado_por')
+        .prefetch_related('detalles')
+        .order_by('-fecha_creacion')[:20]
+    )
+    return render(request, 'finanzas/ordenes_compra.html', {
+        'requerimientos_pendientes': requerimientos_pendientes,
+        'ordenes': ordenes,
+        'proveedores_catalogo': Proveedor.objects.filter(activo=True).order_by('nombre'),
+        'opciones_condiciones_pago': ORDEN_CONDICIONES_PAGO,
+        'estado_enviada': OrdenCompra.EstadoOrden.ENVIADA,
+        'estado_parcial': OrdenCompra.EstadoOrden.PARCIAL,
+        'estado_borrador': OrdenCompra.EstadoOrden.BORRADOR,
+        'estado_aprobada': OrdenCompra.EstadoOrden.APROBADA,
+    })
+
+
+@login_required(login_url='login')
+@never_cache
+def control_recursos_mfg(request):
+    if not _usuario_puede_control_recursos_mfg(request.user):
+        messages.error(request, 'No tienes permisos para administrar el control de recursos MFG.')
+        return redirect('home')
+
+    ordenes_catalogo = list(
+        OrdenFabricacion.objects
+        .select_related('bom')
+        .order_by('-fecha_actualizacion')[:30]
+    )
+    operadores_catalogo = list(
+        UsuarioERP.objects
+        .filter(activo=True)
+        .select_related('departamento')
+        .order_by('first_name', 'last_name', 'username')
+    )
+
+    if request.method == 'POST':
+        accion = (request.POST.get('resource_action') or '').strip()
+
+        if accion == 'registrar_maquina':
+            linea = (request.POST.get('linea_produccion') or '').strip()
+            maquina = (request.POST.get('maquina_nombre') or '').strip()
+            costo_hora = _parse_decimal_text((request.POST.get('costo_hora') or '').strip(), Decimal('0'))
+            notas = (request.POST.get('notas_maquina') or '').strip()
+            activo = request.POST.get('activo_maquina') == 'on'
+
+            if not linea or not maquina or costo_hora <= 0:
+                messages.error(request, 'Línea, máquina y costo hora válido son obligatorios.')
+                return redirect('control_recursos_mfg')
+
+            costo_obj, created = CostoHoraMaquina.objects.get_or_create(
+                linea_produccion=linea,
+                maquina_nombre=maquina,
+                defaults={
+                    'costo_hora': costo_hora,
+                    'activo': activo,
+                    'notas': notas,
+                    'registrado_por': request.user,
+                    'actualizado_por': request.user,
+                },
+            )
+            if not created:
+                costo_obj.costo_hora = costo_hora
+                costo_obj.activo = activo
+                costo_obj.notas = notas
+                costo_obj.actualizado_por = request.user
+                costo_obj.save(update_fields=['costo_hora', 'activo', 'notas', 'actualizado_por', 'fecha_actualizacion'])
+
+            _mark_dashboard_sync(request, scope='produccion')
+            messages.success(request, f'Costo hora de máquina {maquina} registrado correctamente.')
+            return redirect('control_recursos_mfg')
+
+        if accion == 'registrar_operador':
+            operador_id = (request.POST.get('operador_id') or '').strip()
+            nomina_hora = _parse_decimal_text((request.POST.get('nomina_hora') or '').strip(), Decimal('0'))
+            asistencia = _parse_decimal_text((request.POST.get('porcentaje_asistencia') or '').strip(), Decimal('100'))
+            desempeno = _parse_decimal_text((request.POST.get('factor_desempeno') or '').strip(), Decimal('100'))
+            notas = (request.POST.get('notas_operador') or '').strip()
+            activo = request.POST.get('activo_operador') == 'on'
+            operador = UsuarioERP.objects.filter(id=operador_id, activo=True).first() if operador_id else None
+
+            if not operador or nomina_hora <= 0:
+                messages.error(request, 'Selecciona un operador válido y captura una nómina por hora mayor a cero.')
+                return redirect('control_recursos_mfg')
+
+            costo_operador, created = CostoHoraOperador.objects.get_or_create(
+                operador=operador,
+                defaults={
+                    'nomina_hora': nomina_hora,
+                    'porcentaje_asistencia': asistencia,
+                    'factor_desempeno': desempeno,
+                    'activo': activo,
+                    'notas': notas,
+                    'registrado_por': request.user,
+                    'actualizado_por': request.user,
+                },
+            )
+            if not created:
+                costo_operador.nomina_hora = nomina_hora
+                costo_operador.porcentaje_asistencia = asistencia
+                costo_operador.factor_desempeno = desempeno
+                costo_operador.activo = activo
+                costo_operador.notas = notas
+                costo_operador.actualizado_por = request.user
+                costo_operador.save()
+
+            _mark_dashboard_sync(request, scope='produccion')
+            messages.success(request, f'Costo hora del operador {operador.get_full_name() or operador.username} registrado correctamente.')
+            return redirect('control_recursos_mfg')
+
+        if accion == 'registrar_uso':
+            orden_id = (request.POST.get('orden_id') or '').strip()
+            tipo_recurso = (request.POST.get('tipo_recurso') or '').strip()
+            maquina_id = (request.POST.get('costo_maquina_id') or '').strip()
+            operador_cost_id = (request.POST.get('costo_operador_id') or '').strip()
+            horas_reales = _parse_decimal_text((request.POST.get('horas_reales') or '').strip(), Decimal('0'))
+            notas = (request.POST.get('notas_uso') or '').strip()
+
+            orden = OrdenFabricacion.objects.filter(id=orden_id).first() if orden_id else None
+            costo_maquina = CostoHoraMaquina.objects.filter(id=maquina_id, activo=True).first() if maquina_id else None
+            costo_operador = CostoHoraOperador.objects.filter(id=operador_cost_id, activo=True).first() if operador_cost_id else None
+
+            if not orden or horas_reales <= 0:
+                messages.error(request, 'Selecciona una orden válida y captura horas reales mayores a cero.')
+                return redirect('control_recursos_mfg')
+
+            if tipo_recurso == RegistroUsoRecursoProduccion.TipoRecurso.MAQUINA and not costo_maquina:
+                messages.error(request, 'Selecciona la máquina válida para registrar el uso.')
+                return redirect('control_recursos_mfg')
+
+            if tipo_recurso == RegistroUsoRecursoProduccion.TipoRecurso.OPERADOR and not costo_operador:
+                messages.error(request, 'Selecciona el operador válido para registrar el uso.')
+                return redirect('control_recursos_mfg')
+
+            RegistroUsoRecursoProduccion.objects.create(
+                orden=orden,
+                tipo_recurso=tipo_recurso,
+                costo_maquina=costo_maquina,
+                costo_operador=costo_operador,
+                horas_reales=horas_reales,
+                notas=notas,
+                registrado_por=request.user,
+                actualizado_por=request.user,
+            )
+
+            _mark_dashboard_sync(request, scope='produccion')
+            messages.success(request, f'Uso de recurso registrado para la orden {orden.folio}.')
+            return redirect('control_recursos_mfg')
+
+    costos_maquina = list(
+        CostoHoraMaquina.objects
+        .select_related('registrado_por', 'actualizado_por')
+        .order_by('linea_produccion', 'maquina_nombre')
+    )
+    costos_operador = list(
+        CostoHoraOperador.objects
+        .select_related('operador', 'registrado_por', 'actualizado_por')
+        .order_by('operador__username')
+    )
+    usos_recursos = list(
+        RegistroUsoRecursoProduccion.objects
+        .select_related('orden', 'costo_maquina', 'costo_operador', 'registrado_por')
+        .order_by('-fecha_creacion')[:20]
+    )
+
+    return render(
+        request,
+        'produccion/control_recursos_mfg.html',
+        {
+            'lineas_produccion': ['Línea SMT-01', 'Línea SMT-02', 'Línea SMT-03'],
+            'ordenes_catalogo': ordenes_catalogo,
+            'operadores_catalogo': operadores_catalogo,
+            'costos_maquina': costos_maquina,
+            'costos_operador': costos_operador,
+            'usos_recursos': usos_recursos,
+            'tipo_recurso_maquina': RegistroUsoRecursoProduccion.TipoRecurso.MAQUINA,
+            'tipo_recurso_operador': RegistroUsoRecursoProduccion.TipoRecurso.OPERADOR,
+        },
+    )
 
 
 def logout_usuario(request):
@@ -718,6 +1818,7 @@ def entrada_material_planta(request):
         if accion == 'borrador':
             messages.success(request, f'Borrador guardado con folio {recepcion.id}.')
         else:
+            _mark_dashboard_sync(request, scope='inventario')
             messages.success(request, f'Recepción guardada con folio {recepcion.id}.')
 
         return redirect('entrada_planta')
@@ -969,6 +2070,7 @@ def entrada_material_linea(request):
                 },
             )
 
+        _mark_dashboard_sync(request, scope='inventario')
         messages.success(request, f'Salida a linea registrada con folio {salida.id}.')
         return redirect('entrada_linea')
 
@@ -1243,6 +2345,7 @@ def transferencia_almacenes(request):
                 },
             )
 
+        _mark_dashboard_sync(request, scope='inventario')
         messages.success(request, f'Transferencia registrada con folio {transferencia.referencia}.')
         return redirect('transferencias_almacenes')
 
@@ -1513,7 +2616,7 @@ def ordenes_compra(request):
 def bom_lista_materiales(request):
     material_sku = (request.GET.get('material_sku') or '').strip().upper()
     material_consultado = None
-    materiales_catalogo = list(Material.objects.filter(activo=True).order_by('sku'))
+    materiales_catalogo = list(Material.objects.filter(activo=True).order_by('nombre', 'sku'))
     boms_registrados = (
         BOM.objects
         .filter(tipo=BOM.TipoBOM.MATERIALES)
@@ -2282,56 +3385,300 @@ def historial_almacen(request):
 @login_required(login_url='login')
 @never_cache
 def qa_sqa(request):
+    recepciones_pendientes = list(
+        RecepcionMaterial.objects
+        .filter(estado=RecepcionMaterial.EstadoRecepcion.ENVIADA)
+        .select_related('creado_por', 'proveedor_registrado')
+        .prefetch_related('detalles__material')
+        .order_by('-fecha_recepcion', '-id')[:20]
+    )
+    recepciones_revisadas = list(
+        RecepcionMaterial.objects
+        .filter(chk_calidad=True)
+        .select_related('creado_por', 'proveedor_registrado')
+        .prefetch_related('detalles__material')
+        .order_by('-fecha_recepcion', '-id')[:10]
+    )
+
     if request.method == 'POST':
         accion = (request.POST.get('accion') or '').strip()
-        lote = (request.POST.get('lote') or '').strip()
+        recepcion_id = (request.POST.get('recepcion_id') or '').strip()
+        resultado = (request.POST.get('resultado') or '').strip()
+        observaciones = (request.POST.get('observaciones') or '').strip()
 
-        if accion == 'liberar':
-            messages.success(request, f'Lote {lote or "seleccionado"} aprobado por SQA y liberado para producción (demo).')
-        elif accion == 'rechazar':
-            messages.error(request, f'Lote {lote or "seleccionado"} rechazado por SQA y enviado a cuarentena (demo).')
+        recepcion = (
+            RecepcionMaterial.objects
+            .filter(id=recepcion_id, estado=RecepcionMaterial.EstadoRecepcion.ENVIADA)
+            .prefetch_related('detalles')
+            .first()
+            if recepcion_id else None
+        )
+
+        if not recepcion:
+            messages.error(request, 'Selecciona una recepción pendiente válida para inspeccionar.')
+            return redirect('qa_sqa')
+
+        accion_recomendada = RecepcionMaterial.AccionRecomendada.ACEPTAR_PARCIAL
+        detalle_mensaje = f'Recepción {recepcion.id}'
+
+        if accion == 'liberar' or resultado == 'aprobado':
+            accion_recomendada = RecepcionMaterial.AccionRecomendada.ACEPTAR_TODO
+            detalle_mensaje = f'Recepción {recepcion.id} aprobada por SQA y liberada para producción.'
+        elif accion == 'rechazar' or resultado == 'rechazado':
+            accion_recomendada = RecepcionMaterial.AccionRecomendada.CUARENTENA
+            detalle_mensaje = f'Recepción {recepcion.id} rechazada por SQA y enviada a cuarentena.'
+        elif resultado == 'aprobado_condicional':
+            accion_recomendada = RecepcionMaterial.AccionRecomendada.ACEPTAR_PARCIAL
+            detalle_mensaje = f'Recepción {recepcion.id} aprobada condicionalmente por SQA.'
         else:
-            messages.success(request, 'Inspección SQA guardada (demo).')
+            detalle_mensaje = f'Inspección SQA guardada para la recepción {recepcion.id}.'
 
-        return redirect('qa_sqa')
+        recepcion.chk_calidad = True
+        recepcion.accion_recomendada = accion_recomendada
+        if observaciones:
+            recepcion.observaciones = (
+                f"{recepcion.observaciones}\n\nSQA: {observaciones}".strip()
+                if recepcion.observaciones else f'SQA: {observaciones}'
+            )
+        recepcion.save(update_fields=['chk_calidad', 'accion_recomendada', 'observaciones'])
+        _mark_dashboard_sync(request, scope='qa')
 
-    return render(request, 'qa/sqa.html')
+        if accion_recomendada == RecepcionMaterial.AccionRecomendada.CUARENTENA:
+            messages.error(request, detalle_mensaje)
+        else:
+            messages.success(request, detalle_mensaje)
+
+        return redirect(f"{reverse('qa_sqa')}?dashboard_sync=1")
+
+    return render(
+        request,
+        'qa/sqa.html',
+        {
+            'recepciones_pendientes': recepciones_pendientes,
+            'recepciones_revisadas': recepciones_revisadas,
+        },
+    )
+
+
+@login_required(login_url='login')
+@never_cache
+def it_clientes_compra(request):
+    if not _usuario_puede_administrar_clientes(request.user):
+        messages.error(request, 'No tienes permisos para administrar el catalogo de clientes de compra.')
+        return redirect('home')
+
+    clientes = ClienteCompra.objects.order_by('nombre')
+
+    if request.method == 'POST':
+        codigo = (request.POST.get('codigo') or '').strip().upper()
+        nombre = (request.POST.get('nombre') or '').strip()
+        contacto = (request.POST.get('contacto') or '').strip()
+        email = (request.POST.get('email') or '').strip()
+        telefono = (request.POST.get('telefono') or '').strip()
+        activo = request.POST.get('activo') == 'on'
+
+        if not codigo or not nombre:
+            messages.error(request, 'Codigo y nombre del cliente son obligatorios.')
+            return render(
+                request,
+                'it/clientes_compra.html',
+                {
+                    'clientes': clientes,
+                    'form_data': {
+                        'codigo': codigo,
+                        'nombre': nombre,
+                        'contacto': contacto,
+                        'email': email,
+                        'telefono': telefono,
+                        'activo': activo,
+                    },
+                },
+            )
+
+        cliente, created = ClienteCompra.objects.update_or_create(
+            codigo=codigo,
+            defaults={
+                'nombre': nombre,
+                'contacto': contacto,
+                'email': email,
+                'telefono': telefono,
+                'activo': activo,
+            },
+        )
+
+        _mark_dashboard_sync(request, scope='qa')
+
+        if created:
+            messages.success(request, f'Cliente {cliente.nombre} registrado correctamente.')
+        else:
+            messages.success(request, f'Cliente {cliente.nombre} actualizado correctamente.')
+
+        return redirect('it_clientes_compra')
+
+    return render(
+        request,
+        'it/clientes_compra.html',
+        {
+            'clientes': clientes,
+        },
+    )
 
 
 @login_required(login_url='login')
 @never_cache
 def qa_oqa(request):
+    clientes_compra = list(ClienteCompra.objects.filter(activo=True).order_by('nombre'))
+    lotes_pendientes = list(
+        LoteProduccion.objects
+        .filter(estado=LoteProduccion.EstadoLote.CAPTURADO)
+        .select_related('bom', 'orden_fabricacion', 'creado_por', 'cliente_destino')
+        .order_by('-fecha_captura', '-hora_captura', '-id')[:20]
+    )
+    lotes_revisados = list(
+        LoteProduccion.objects
+        .filter(estado__in=[
+            LoteProduccion.EstadoLote.VALIDADO,
+            LoteProduccion.EstadoLote.RECHAZADO,
+        ])
+        .select_related('bom', 'orden_fabricacion', 'creado_por', 'cliente_destino')
+        .order_by('-fecha_actualizacion', '-id')[:12]
+    )
+
     if request.method == 'POST':
-        lote = (request.POST.get('lote_producto') or '').strip()
+        lote_id = (request.POST.get('lote_id') or '').strip()
+        cliente_destino_id = (request.POST.get('cliente_destino') or '').strip()
         decision = (request.POST.get('decision_final') or '').strip()
+        observaciones = (request.POST.get('observaciones_oqa') or '').strip()
+
+        lote = (
+            LoteProduccion.objects.filter(id=lote_id).select_related('bom', 'orden_fabricacion').first()
+            if lote_id else None
+        )
+
+        if not lote:
+            messages.error(request, 'Selecciona un lote válido para evaluación OQA.')
+            return redirect('qa_oqa')
+
+        cliente_destino = ClienteCompra.objects.filter(id=cliente_destino_id, activo=True).first() if cliente_destino_id else None
+        if not cliente_destino:
+            messages.error(request, 'Selecciona un cliente destino válido del catalogo.')
+            return render(
+                request,
+                'qa/oqa.html',
+                {
+                    'lotes_pendientes': lotes_pendientes,
+                    'lotes_revisados': lotes_revisados,
+                    'clientes_compra': clientes_compra,
+                },
+            )
 
         if decision == 'liberado':
-            messages.success(request, f'Lote terminado {lote or "seleccionado"} liberado por OQA para embarque (demo).')
-        elif decision == 'retenido':
-            messages.error(request, f'Lote terminado {lote or "seleccionado"} retenido por OQA para retrabajo (demo).')
+            lote.estado = LoteProduccion.EstadoLote.VALIDADO
+            mensaje = f'Lote terminado {lote.folio} liberado por OQA para embarque.'
+        elif decision in ['retenido', 'bloqueado']:
+            lote.estado = LoteProduccion.EstadoLote.RECHAZADO
+            mensaje = f'Lote terminado {lote.folio} retenido por OQA para retrabajo.'
         else:
-            messages.success(request, 'Evaluación OQA guardada (demo).')
+            mensaje = f'Evaluación OQA guardada para el lote {lote.folio}.'
 
-        return redirect('qa_oqa')
+        if observaciones:
+            lote.observaciones = (
+                f"{lote.observaciones}\n\nOQA: {observaciones}".strip()
+                if lote.observaciones else f'OQA: {observaciones}'
+            )
+        lote.cliente_destino = cliente_destino
+        lote.save(update_fields=['estado', 'cliente_destino', 'observaciones', 'fecha_actualizacion'])
+        _mark_dashboard_sync(request, scope='qa')
 
-    return render(request, 'qa/oqa.html')
+        if lote.estado == LoteProduccion.EstadoLote.RECHAZADO:
+            messages.error(request, mensaje)
+        else:
+            messages.success(request, mensaje)
+
+        return redirect(f"{reverse('qa_oqa')}?dashboard_sync=1")
+
+    return render(
+        request,
+        'qa/oqa.html',
+        {
+            'clientes_compra': clientes_compra,
+            'lotes_pendientes': lotes_pendientes,
+            'lotes_revisados': lotes_revisados,
+        },
+    )
 
 
 @login_required(login_url='login')
 @never_cache
 def qa_customer_service(request):
+    clientes_compra = list(ClienteCompra.objects.filter(activo=True).order_by('nombre'))
+    reclamos_abiertos = list(
+        ReclamoCliente.objects
+        .exclude(estado_reclamo=ReclamoCliente.EstadoReclamo.CERRADO)
+        .select_related('creado_por', 'cliente_compra')
+        .order_by('-fecha_actualizacion', '-id')[:15]
+    )
+    reclamos_recientes = list(
+        ReclamoCliente.objects
+        .select_related('creado_por', 'cliente_compra')
+        .order_by('-fecha_actualizacion', '-id')[:20]
+    )
+
     if request.method == 'POST':
         folio = (request.POST.get('folio_reclamo') or '').strip()
         estado = (request.POST.get('estado_reclamo') or '').strip()
+        cliente_id = (request.POST.get('cliente') or '').strip()
+        producto_lote = (request.POST.get('producto_lote') or '').strip()
+        tipo_reclamo = (request.POST.get('tipo_reclamo') or '').strip()
+        descripcion = (request.POST.get('descripcion') or '').strip()
+        prioridad = (request.POST.get('prioridad') or '').strip() or ReclamoCliente.PrioridadReclamo.MEDIA
+        cliente_obj = ClienteCompra.objects.filter(id=cliente_id, activo=True).first() if cliente_id else None
 
-        if estado == 'cerrado':
-            messages.success(request, f'Reclamo {folio or "seleccionado"} cerrado y comunicado al cliente (demo).')
+        if not folio or not cliente_obj or not tipo_reclamo:
+            messages.error(request, 'Folio, cliente y tipo de reclamo son obligatorios y deben seleccionarse del catalogo.')
+            return render(
+                request,
+                'qa/customer_service.html',
+                {
+                    'clientes_compra': clientes_compra,
+                    'reclamos_abiertos': reclamos_abiertos,
+                    'reclamos_recientes': reclamos_recientes,
+                },
+            )
+
+        reclamo, created = ReclamoCliente.objects.update_or_create(
+            folio=folio,
+            defaults={
+                'cliente': cliente_obj.nombre,
+                'cliente_compra': cliente_obj,
+                'producto_lote': producto_lote,
+                'tipo_reclamo': tipo_reclamo,
+                'estado_reclamo': estado or ReclamoCliente.EstadoReclamo.ABIERTO,
+                'prioridad': prioridad,
+                'descripcion': descripcion,
+                'creado_por': request.user,
+            },
+        )
+
+        if reclamo.estado_reclamo == ReclamoCliente.EstadoReclamo.CERRADO:
+            messages.success(request, f'Reclamo {reclamo.folio} cerrado y comunicado al cliente.')
+        elif created:
+            messages.success(request, f'Reclamo {reclamo.folio} registrado en Customer Service.')
         else:
-            messages.success(request, f'Reclamo {folio or "seleccionado"} actualizado en Customer Service (demo).')
+            messages.success(request, f'Reclamo {reclamo.folio} actualizado en Customer Service.')
 
-        return redirect('qa_customer_service')
+        _mark_dashboard_sync(request, scope='qa')
+        return redirect(f"{reverse('qa_customer_service')}?dashboard_sync=1")
 
-    return render(request, 'qa/customer_service.html')
+    return render(
+        request,
+        'qa/customer_service.html',
+        {
+            'clientes_compra': clientes_compra,
+            'reclamos_abiertos': reclamos_abiertos,
+            'reclamos_recientes': reclamos_recientes,
+        },
+    )
 
 
 @login_required(login_url='login')
@@ -3105,6 +4452,10 @@ def plan_produccion_diario(request):
         
         # Sumar cantidades de lotes
         cantidad_en_lotes = sum(lote.cantidad_producida for lote in lotes_of)
+
+        ultima_fecha_produccion = None
+        if lotes_of:
+            ultima_fecha_produccion = max(lote.fecha_captura for lote in lotes_of if lote.fecha_captura)
         
         # Resto a producir
         cantidad_pendiente = max(of.cantidad_planificada - cantidad_en_lotes, Decimal('0'))
@@ -3131,6 +4482,7 @@ def plan_produccion_diario(request):
             'cantidad_producida': float(of.cantidad_producida or 0),
             'cantidad_pendiente': float(cantidad_pendiente),
             'avance_pct': avance,
+            'fecha_produccion': ultima_fecha_produccion,
             'estado': of.estado,
             'estado_label': of.get_estado_display(),
             'fecha_inicio_programada': of.fecha_inicio_programada,
@@ -3216,12 +4568,13 @@ def ordenes_fabricacion(request):
         ofs = (
             OrdenFabricacion.objects
             .select_related('bom', 'plan', 'creado_por')
-            .prefetch_related('detalles__material')
+            .prefetch_related('detalles__material', 'lotes_produccion', 'scraps_defectos__informe_qa')
             .order_by('-fecha_creacion')[:15]
         )
         data = []
         for of in ofs:
             detalles = list(of.detalles.all())
+            scraps = list(of.scraps_defectos.all())
             avance = 0
             if of.cantidad_planificada > 0:
                 avance = min(int(round(float(of.cantidad_producida / of.cantidad_planificada) * 100)), 100)
@@ -3253,8 +4606,54 @@ def ordenes_fabricacion(request):
                     }
                     for d in detalles
                 ],
+                'scraps': [
+                    {
+                        'cantidad_defectos': scrap.cantidad_defectos,
+                        'tipo_defecto': scrap.get_tipo_defecto_display(),
+                        'causa': scrap.causa,
+                        'qa_validado': hasattr(scrap, 'informe_qa'),
+                    }
+                    for scrap in scraps[:6]
+                ],
             })
         return data
+
+    if request.method == 'POST' and (request.POST.get('scrap_action') or '').strip() == 'registrar_scrap':
+        orden_id = (request.POST.get('scrap_orden_id') or '').strip()
+        lote_id = (request.POST.get('scrap_lote_id') or '').strip()
+        cantidad_defectos = _parse_decimal_text((request.POST.get('scrap_cantidad') or '').strip(), Decimal('0'))
+        tipo_defecto = (request.POST.get('scrap_tipo_defecto') or '').strip()
+        causa = (request.POST.get('scrap_causa') or '').strip()
+        descripcion = (request.POST.get('scrap_descripcion') or '').strip()
+
+        orden = OrdenFabricacion.objects.filter(id=orden_id).first() if orden_id else None
+        lote = LoteProduccion.objects.filter(id=lote_id).select_related('orden_fabricacion').first() if lote_id else None
+
+        if not orden and lote and lote.orden_fabricacion_id:
+            orden = lote.orden_fabricacion
+
+        if not orden and not lote:
+            messages.error(request, 'Debes seleccionar una orden o un lote para registrar el scrap/defecto.')
+            return redirect('ordenes_fabricacion')
+
+        if cantidad_defectos <= 0 or not tipo_defecto or not causa:
+            messages.error(request, 'Cantidad, tipo de defecto y causa son obligatorios para registrar scrap.')
+            return redirect('ordenes_fabricacion')
+
+        RegistroScrapDefecto.objects.create(
+            orden=orden,
+            lote=lote,
+            cantidad_defectos=cantidad_defectos,
+            tipo_defecto=tipo_defecto,
+            causa=causa,
+            descripcion=descripcion,
+            registrado_por=request.user,
+            actualizado_por=request.user,
+        )
+
+        _mark_dashboard_sync(request, scope='produccion')
+        messages.success(request, 'Registro de scrap/defecto guardado y enviado a QA para validación.')
+        return redirect('ordenes_fabricacion')
 
     # ── POST: cambio de estado ─────────────────────────────────────────────────
     if request.method == 'POST' and (request.POST.get('accion_estado') or '').strip():
@@ -3310,6 +4709,10 @@ def ordenes_fabricacion(request):
         of_obj.estado = accion_estado
         of_obj.save(update_fields=update_fields)
 
+        lote_generado = None
+        if accion_estado == OrdenFabricacion.EstadoOF.COMPLETADA:
+            lote_generado = _ensure_auto_lote_for_of(of_obj, request.user)
+
         # Si se completó la OF, actualizar plan a COMPLETADO si todas sus OFs están completadas
         if accion_estado == OrdenFabricacion.EstadoOF.COMPLETADA and of_obj.plan:
             plan = of_obj.plan
@@ -3324,10 +4727,11 @@ def ordenes_fabricacion(request):
                     estado=PlanProduccion.EstadoPlan.COMPLETADO
                 )
 
-        messages.success(
-            request,
-            f'Orden {of_obj.folio} actualizada a estado {of_obj.get_estado_display()}.',
-        )
+        mensaje = f'Orden {of_obj.folio} actualizada a estado {of_obj.get_estado_display()}.'
+        if lote_generado:
+            mensaje += f' Se generó automáticamente el lote {lote_generado.folio}.'
+        _mark_dashboard_sync(request, scope='produccion')
+        messages.success(request, mensaje)
         return redirect('ordenes_fabricacion')
 
     # ── POST: crear nueva OF ───────────────────────────────────────────────────
@@ -3428,14 +4832,80 @@ def ordenes_fabricacion(request):
         'boms_activos': boms_activos,
         'planes_aprobados': planes_aprobados,
         'ofs_recientes': _build_ofs_recientes(),
+        'scraps_recientes': RegistroScrapDefecto.objects.select_related('orden', 'lote').order_by('-fecha_creacion')[:12],
+        'lotes_catalogo': LoteProduccion.objects.select_related('orden_fabricacion').order_by('-fecha_actualizacion')[:20],
         'lineas_produccion': LINEAS_PRODUCCION,
         'turnos': TURNOS,
+        'tipos_defecto': RegistroScrapDefecto.TipoDefecto.choices,
         'estado_en_proceso': OrdenFabricacion.EstadoOF.EN_PROCESO,
         'estado_pausada': OrdenFabricacion.EstadoOF.PAUSADA,
         'estado_completada': OrdenFabricacion.EstadoOF.COMPLETADA,
         'estado_cancelada': OrdenFabricacion.EstadoOF.CANCELADA,
         'estado_borrador': OrdenFabricacion.EstadoOF.BORRADOR,
     })
+
+
+@login_required(login_url='login')
+@never_cache
+def qa_qqa_defectos(request):
+    if not _usuario_puede_validar_defectos(request.user):
+        messages.error(request, 'No tienes permisos para validar defectos en QA.')
+        return redirect('home')
+
+    if request.method == 'POST':
+        defecto_id = (request.POST.get('defecto_id') or '').strip()
+        resultado = (request.POST.get('resultado_validacion') or '').strip() or InformeValidacionDefectoQA.ResultadoValidacion.EN_ANALISIS
+        falla_maquina = request.POST.get('falla_maquina') == 'on'
+        informe = (request.POST.get('informe_qa') or '').strip()
+        acciones = (request.POST.get('acciones_contencion') or '').strip()
+        defecto = (
+            RegistroScrapDefecto.objects
+            .select_related('orden', 'lote')
+            .filter(id=defecto_id)
+            .first()
+            if defecto_id else None
+        )
+
+        if not defecto or not informe:
+            messages.error(request, 'Selecciona un defecto válido y captura el informe QA.')
+            return redirect('qa_qqa_defectos')
+
+        informe_obj, created = InformeValidacionDefectoQA.objects.update_or_create(
+            defecto=defecto,
+            defaults={
+                'resultado_validacion': resultado,
+                'falla_maquina': falla_maquina,
+                'informe': informe,
+                'acciones_contencion': acciones,
+                'validado_por': request.user,
+            },
+        )
+
+        _mark_dashboard_sync(request, scope='qa')
+        messages.success(request, f'Informe QA {"creado" if created else "actualizado"} para el defecto {defecto.id}.')
+        return redirect('qa_qqa_defectos')
+
+    defectos_pendientes = list(
+        RegistroScrapDefecto.objects
+        .filter(informe_qa__isnull=True)
+        .select_related('orden', 'lote', 'registrado_por')
+        .order_by('-fecha_creacion')[:20]
+    )
+    informes_recientes = list(
+        InformeValidacionDefectoQA.objects
+        .select_related('defecto__orden', 'defecto__lote', 'validado_por')
+        .order_by('-fecha_actualizacion')[:20]
+    )
+
+    return render(
+        request,
+        'qa/qqa_defectos.html',
+        {
+            'defectos_pendientes': defectos_pendientes,
+            'informes_recientes': informes_recientes,
+            'resultado_choices': InformeValidacionDefectoQA.ResultadoValidacion.choices,
+        },
+    )
 
 
 # ─────────────────────────────────────────────────────────────
@@ -3465,6 +4935,36 @@ def _next_lote_folio():
         if m:
             seq = int(m.group(1)) + 1
     return f"{prefix}{seq:04d}"
+
+
+def _ensure_auto_lote_for_of(of_obj, user):
+    if not of_obj or (of_obj.cantidad_producida or Decimal('0')) <= 0:
+        return None
+
+    cantidad_lote_existente = (
+        of_obj.lotes_produccion.aggregate(total=Sum('cantidad_producida')).get('total')
+        or Decimal('0')
+    )
+    cantidad_faltante_lote = ((of_obj.cantidad_producida or Decimal('0')) - cantidad_lote_existente).quantize(Decimal('0.01'))
+
+    if cantidad_faltante_lote <= 0:
+        return None
+
+    marca_tiempo = of_obj.fecha_fin_real or timezone.now()
+    return LoteProduccion.objects.create(
+        folio=_next_lote_folio(),
+        bom=of_obj.bom,
+        orden_fabricacion=of_obj,
+        fecha_captura=marca_tiempo.date(),
+        hora_captura=marca_tiempo.time().replace(microsecond=0),
+        linea_produccion=of_obj.linea_produccion or '',
+        turno=of_obj.turno or '',
+        cantidad_producida=cantidad_faltante_lote,
+        operador=(user.get_full_name() or user.username or '').strip(),
+        estado=LoteProduccion.EstadoLote.CAPTURADO,
+        observaciones=f'Lote autogenerado al completar la OF {of_obj.folio}.',
+        creado_por=user,
+    )
 
 
 @login_required

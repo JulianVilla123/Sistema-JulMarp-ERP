@@ -58,6 +58,24 @@ class UsuarioERP(AbstractUser):
         verbose_name_plural = 'Usuarios ERP'
 
 
+class RegistroAuditable(models.Model):
+    creado_por = models.ForeignKey(
+        'UsuarioERP',
+        on_delete=models.PROTECT,
+        related_name='%(class)s_creados',
+    )
+    actualizado_por = models.ForeignKey(
+        'UsuarioERP',
+        on_delete=models.PROTECT,
+        related_name='%(class)s_actualizados',
+    )
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        abstract = True
+
+
 class Material(models.Model):
     sku = models.CharField('SKU', max_length=50, unique=True)
     nombre = models.CharField('Nombre', max_length=255)
@@ -238,6 +256,25 @@ class ProveedorMaterialPrecio(models.Model):
                 name='unique_proveedor_material_precio',
             )
         ]
+
+
+class ClienteCompra(models.Model):
+    codigo = models.CharField('Código', max_length=20, unique=True)
+    nombre = models.CharField('Nombre', max_length=200, unique=True)
+    contacto = models.CharField('Contacto principal', max_length=150, blank=True)
+    email = models.EmailField('Correo electrónico', blank=True)
+    telefono = models.CharField('Teléfono', max_length=30, blank=True)
+    activo = models.BooleanField('Activo', default=True)
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.nombre
+
+    class Meta:
+        verbose_name = 'Cliente de compra'
+        verbose_name_plural = 'Clientes de compra'
+        ordering = ['nombre']
 
 
 class Almacen(models.Model):
@@ -516,8 +553,16 @@ class OrdenCompra(models.Model):
         on_delete=models.PROTECT,
         related_name='ordenes_compra',
     )
+    requerimiento_origen = models.ForeignKey(
+        'RequerimientoMaterialProduccion',
+        on_delete=models.SET_NULL,
+        related_name='ordenes_compra_generadas',
+        null=True,
+        blank=True,
+    )
     fecha_orden = models.DateField('Fecha de orden')
     fecha_prometida = models.DateField('Fecha prometida', null=True, blank=True)
+    tiempo_entrega_estimado_dias = models.PositiveIntegerField('Tiempo estimado entrega (días)', default=0)
     condiciones_pago = models.CharField('Condiciones de pago', max_length=120, blank=True)
     observaciones = models.TextField('Observaciones', blank=True)
     estado = models.CharField(
@@ -526,6 +571,7 @@ class OrdenCompra(models.Model):
         choices=EstadoOrden.choices,
         default=EstadoOrden.BORRADOR,
     )
+    creada_desde_mfg = models.BooleanField('Creada desde requerimiento MFG', default=False)
     total_estimado = models.DecimalField('Total estimado', max_digits=14, decimal_places=2, default=0)
     creado_por = models.ForeignKey(
         UsuarioERP,
@@ -838,6 +884,14 @@ class LoteProduccion(models.Model):
         blank=True,
         verbose_name='Orden de fabricación',
     )
+    cliente_destino = models.ForeignKey(
+        ClienteCompra,
+        on_delete=models.PROTECT,
+        related_name='lotes_produccion',
+        null=True,
+        blank=True,
+        verbose_name='Cliente destino',
+    )
     fecha_captura = models.DateField('Fecha de captura')
     hora_captura = models.TimeField('Hora de captura')
     linea_produccion = models.CharField('Línea de producción', max_length=120, blank=True)
@@ -866,3 +920,598 @@ class LoteProduccion(models.Model):
         verbose_name = 'Lote de producción'
         verbose_name_plural = 'Lotes de producción'
         ordering = ['-fecha_creacion']
+
+
+class ReclamoCliente(models.Model):
+    class TipoReclamo(models.TextChoices):
+        DEFECTO_VISUAL = 'defecto_visual', 'Defecto visual'
+        FUNCIONAL = 'funcional', 'Falla funcional'
+        DOCUMENTAL = 'documental', 'Error documental'
+        LOGISTICO = 'logistico', 'Incidencia logística'
+
+    class EstadoReclamo(models.TextChoices):
+        ABIERTO = 'abierto', 'Abierto'
+        EN_ANALISIS = 'en_analisis', 'En análisis'
+        EN_CONTENCION = 'en_contencion', 'En contención'
+        CERRADO = 'cerrado', 'Cerrado'
+
+    class PrioridadReclamo(models.TextChoices):
+        ALTA = 'alta', 'Alta'
+        MEDIA = 'media', 'Media'
+        BAJA = 'baja', 'Baja'
+
+    folio = models.CharField('Folio de reclamo', max_length=40, unique=True)
+    cliente = models.CharField('Cliente', max_length=200)
+    cliente_compra = models.ForeignKey(
+        ClienteCompra,
+        on_delete=models.PROTECT,
+        related_name='reclamos_cliente',
+        null=True,
+        blank=True,
+        verbose_name='Cliente catálogo',
+    )
+    producto_lote = models.CharField('Producto / lote', max_length=200, blank=True)
+    tipo_reclamo = models.CharField('Tipo de reclamo', max_length=30, choices=TipoReclamo.choices)
+    estado_reclamo = models.CharField(
+        'Estado del reclamo',
+        max_length=20,
+        choices=EstadoReclamo.choices,
+        default=EstadoReclamo.ABIERTO,
+    )
+    prioridad = models.CharField(
+        'Prioridad',
+        max_length=10,
+        choices=PrioridadReclamo.choices,
+        default=PrioridadReclamo.MEDIA,
+    )
+    descripcion = models.TextField('Descripción', blank=True)
+    creado_por = models.ForeignKey(
+        UsuarioERP,
+        on_delete=models.PROTECT,
+        related_name='reclamos_cliente',
+    )
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.folio} - {self.cliente}"
+
+    class Meta:
+        verbose_name = 'Reclamo de cliente'
+        verbose_name_plural = 'Reclamos de cliente'
+        ordering = ['-fecha_actualizacion', '-fecha_creacion']
+
+
+class ReporteKPIProduccion(models.Model):
+    fecha_inicio = models.DateField('Fecha inicio reporte')
+    fecha_fin = models.DateField('Fecha fin reporte')
+    disponibilidad = models.DecimalField('Disponibilidad', max_digits=7, decimal_places=2, default=0)
+    rendimiento = models.DecimalField('Rendimiento', max_digits=7, decimal_places=2, default=0)
+    calidad = models.DecimalField('Calidad', max_digits=7, decimal_places=2, default=0)
+    oee = models.DecimalField('OEE', max_digits=7, decimal_places=2, default=0)
+    tiempo_ciclo_promedio = models.DecimalField('Tiempo de ciclo promedio', max_digits=10, decimal_places=2, default=0)
+    tasa_rechazo = models.DecimalField('Tasa de rechazo', max_digits=7, decimal_places=2, default=0)
+    cumplimiento_ordenes = models.DecimalField('Cumplimiento de órdenes', max_digits=7, decimal_places=2, default=0)
+    costo_planificado = models.DecimalField('Costo planificado', max_digits=14, decimal_places=2, default=0)
+    costo_real = models.DecimalField('Costo real', max_digits=14, decimal_places=2, default=0)
+    variacion_costos = models.DecimalField('Variación de costos', max_digits=14, decimal_places=2, default=0)
+    utilizacion_maquinas = models.DecimalField('Utilización de máquinas', max_digits=7, decimal_places=2, default=0)
+    utilizacion_personal = models.DecimalField('Utilización de personal', max_digits=7, decimal_places=2, default=0)
+    utilizacion_recursos = models.DecimalField('Utilización de recursos', max_digits=7, decimal_places=2, default=0)
+    alertas = models.JSONField('Alertas', default=list, blank=True)
+    detalle = models.JSONField('Detalle', default=dict, blank=True)
+    generado_por = models.ForeignKey(
+        UsuarioERP,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='reportes_kpi_produccion',
+    )
+    fecha_generacion = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"KPIs Producción {self.fecha_inicio} - {self.fecha_fin}"
+
+    class Meta:
+        verbose_name = 'Reporte KPI de producción'
+        verbose_name_plural = 'Reportes KPI de producción'
+        ordering = ['-fecha_generacion']
+
+
+class CostoHoraMaquina(models.Model):
+    linea_produccion = models.CharField('Línea de producción', max_length=120)
+    maquina_nombre = models.CharField('Máquina / Equipo', max_length=150)
+    costo_hora = models.DecimalField('Costo hora real', max_digits=12, decimal_places=2)
+    activo = models.BooleanField('Activo', default=True)
+    notas = models.CharField('Notas', max_length=255, blank=True)
+    registrado_por = models.ForeignKey(
+        UsuarioERP,
+        on_delete=models.PROTECT,
+        related_name='costos_maquina_registrados',
+    )
+    actualizado_por = models.ForeignKey(
+        UsuarioERP,
+        on_delete=models.PROTECT,
+        related_name='costos_maquina_actualizados',
+    )
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.linea_produccion} - {self.maquina_nombre}"
+
+    class Meta:
+        verbose_name = 'Costo hora máquina'
+        verbose_name_plural = 'Costos hora de máquina'
+        ordering = ['linea_produccion', 'maquina_nombre']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['linea_produccion', 'maquina_nombre'],
+                name='unique_linea_maquina_costo',
+            )
+        ]
+
+
+class CostoHoraOperador(models.Model):
+    operador = models.ForeignKey(
+        UsuarioERP,
+        on_delete=models.PROTECT,
+        related_name='costos_hora_operador',
+    )
+    nomina_hora = models.DecimalField('Nómina por hora', max_digits=12, decimal_places=2)
+    porcentaje_asistencia = models.DecimalField('Asistencia %', max_digits=5, decimal_places=2, default=100)
+    factor_desempeno = models.DecimalField('Desempeño %', max_digits=5, decimal_places=2, default=100)
+    costo_hora_real = models.DecimalField('Costo hora real', max_digits=12, decimal_places=2, default=0)
+    activo = models.BooleanField('Activo', default=True)
+    notas = models.CharField('Notas', max_length=255, blank=True)
+    registrado_por = models.ForeignKey(
+        UsuarioERP,
+        on_delete=models.PROTECT,
+        related_name='costos_operador_registrados',
+    )
+    actualizado_por = models.ForeignKey(
+        UsuarioERP,
+        on_delete=models.PROTECT,
+        related_name='costos_operador_actualizados',
+    )
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        asistencia = self.porcentaje_asistencia or 0
+        desempeno = self.factor_desempeno or 0
+        self.costo_hora_real = (self.nomina_hora or 0) * (asistencia / 100) * (desempeno / 100)
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.operador}"
+
+    class Meta:
+        verbose_name = 'Costo hora operador'
+        verbose_name_plural = 'Costos hora de operador'
+        ordering = ['operador__username']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['operador'],
+                name='unique_operador_costo_hora',
+            )
+        ]
+
+
+class RegistroUsoRecursoProduccion(models.Model):
+    class TipoRecurso(models.TextChoices):
+        MAQUINA = 'MAQUINA', 'Máquina'
+        OPERADOR = 'OPERADOR', 'Operador'
+
+    orden = models.ForeignKey(
+        OrdenFabricacion,
+        on_delete=models.CASCADE,
+        related_name='usos_recursos',
+    )
+    tipo_recurso = models.CharField('Tipo recurso', max_length=12, choices=TipoRecurso.choices)
+    costo_maquina = models.ForeignKey(
+        CostoHoraMaquina,
+        on_delete=models.PROTECT,
+        related_name='usos_orden',
+        null=True,
+        blank=True,
+    )
+    costo_operador = models.ForeignKey(
+        CostoHoraOperador,
+        on_delete=models.PROTECT,
+        related_name='usos_orden',
+        null=True,
+        blank=True,
+    )
+    horas_reales = models.DecimalField('Horas reales', max_digits=10, decimal_places=2)
+    costo_total = models.DecimalField('Costo total', max_digits=14, decimal_places=2, default=0)
+    notas = models.CharField('Notas', max_length=255, blank=True)
+    registrado_por = models.ForeignKey(
+        UsuarioERP,
+        on_delete=models.PROTECT,
+        related_name='usos_recurso_registrados',
+    )
+    actualizado_por = models.ForeignKey(
+        UsuarioERP,
+        on_delete=models.PROTECT,
+        related_name='usos_recurso_actualizados',
+    )
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        tarifa = 0
+        if self.tipo_recurso == self.TipoRecurso.MAQUINA and self.costo_maquina_id:
+            tarifa = self.costo_maquina.costo_hora
+        elif self.tipo_recurso == self.TipoRecurso.OPERADOR and self.costo_operador_id:
+            tarifa = self.costo_operador.costo_hora_real
+        self.costo_total = (self.horas_reales or 0) * tarifa
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.orden.folio} - {self.get_tipo_recurso_display()}"
+
+    class Meta:
+        verbose_name = 'Uso de recurso de producción'
+        verbose_name_plural = 'Usos de recursos de producción'
+        ordering = ['-fecha_creacion']
+
+
+class RegistroScrapDefecto(models.Model):
+    class TipoDefecto(models.TextChoices):
+        SCRAP = 'SCRAP', 'Scrap'
+        VISUAL = 'VISUAL', 'Defecto visual'
+        FUNCIONAL = 'FUNCIONAL', 'Defecto funcional'
+        DIMENSIONAL = 'DIMENSIONAL', 'Defecto dimensional'
+        PROCESO = 'PROCESO', 'Defecto de proceso'
+
+    orden = models.ForeignKey(
+        OrdenFabricacion,
+        on_delete=models.CASCADE,
+        related_name='scraps_defectos',
+        null=True,
+        blank=True,
+    )
+    lote = models.ForeignKey(
+        LoteProduccion,
+        on_delete=models.CASCADE,
+        related_name='scraps_defectos',
+        null=True,
+        blank=True,
+    )
+    cantidad_defectos = models.DecimalField('Cantidad defectos', max_digits=12, decimal_places=2)
+    tipo_defecto = models.CharField('Tipo de defecto', max_length=20, choices=TipoDefecto.choices)
+    causa = models.CharField('Causa', max_length=150)
+    descripcion = models.TextField('Descripción', blank=True)
+    registrado_por = models.ForeignKey(
+        UsuarioERP,
+        on_delete=models.PROTECT,
+        related_name='scraps_registrados',
+    )
+    actualizado_por = models.ForeignKey(
+        UsuarioERP,
+        on_delete=models.PROTECT,
+        related_name='scraps_actualizados',
+    )
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        referencia = self.orden.folio if self.orden_id else (self.lote.folio if self.lote_id else 'Sin referencia')
+        return f"{referencia} - {self.tipo_defecto}"
+
+    class Meta:
+        verbose_name = 'Registro scrap / defecto'
+        verbose_name_plural = 'Registros scrap / defectos'
+        ordering = ['-fecha_creacion']
+
+
+class InformeValidacionDefectoQA(models.Model):
+    class ResultadoValidacion(models.TextChoices):
+        EN_ANALISIS = 'EN_ANALISIS', 'En análisis'
+        VALIDADO = 'VALIDADO', 'Validado'
+        RECHAZADO = 'RECHAZADO', 'Rechazado'
+
+    defecto = models.OneToOneField(
+        RegistroScrapDefecto,
+        on_delete=models.CASCADE,
+        related_name='informe_qa',
+    )
+    resultado_validacion = models.CharField(
+        'Resultado validación',
+        max_length=15,
+        choices=ResultadoValidacion.choices,
+        default=ResultadoValidacion.EN_ANALISIS,
+    )
+    falla_maquina = models.BooleanField('Falla de máquina', default=False)
+    informe = models.TextField('Informe QA')
+    acciones_contencion = models.TextField('Acciones de contención', blank=True)
+    validado_por = models.ForeignKey(
+        UsuarioERP,
+        on_delete=models.PROTECT,
+        related_name='informes_defectos_qa',
+    )
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"QA {self.defecto_id} - {self.get_resultado_validacion_display()}"
+
+    class Meta:
+        verbose_name = 'Informe validación defecto QA'
+        verbose_name_plural = 'Informes de validación de defectos QA'
+        ordering = ['-fecha_actualizacion']
+
+
+class CuentaContable(RegistroAuditable):
+    class TipoCuenta(models.TextChoices):
+        ACTIVO = 'ACTIVO', 'Activo'
+        PASIVO = 'PASIVO', 'Pasivo'
+        CAPITAL = 'CAPITAL', 'Capital'
+        INGRESO = 'INGRESO', 'Ingreso'
+        GASTO = 'GASTO', 'Gasto'
+
+    codigo = models.CharField('Código', max_length=20, unique=True)
+    nombre = models.CharField('Nombre', max_length=150)
+    tipo = models.CharField('Tipo', max_length=10, choices=TipoCuenta.choices)
+    descripcion = models.TextField('Descripción', blank=True)
+    activa = models.BooleanField('Activa', default=True)
+
+    def __str__(self):
+        return f"{self.codigo} - {self.nombre}"
+
+    class Meta:
+        verbose_name = 'Cuenta contable'
+        verbose_name_plural = 'Cuentas contables'
+        ordering = ['codigo']
+
+
+class PolizaContable(RegistroAuditable):
+    class TipoPoliza(models.TextChoices):
+        DIARIO = 'DIARIO', 'Diario'
+        INGRESO = 'INGRESO', 'Ingreso'
+        EGRESO = 'EGRESO', 'Egreso'
+        AJUSTE = 'AJUSTE', 'Ajuste'
+
+    class EstadoPoliza(models.TextChoices):
+        BORRADOR = 'BORRADOR', 'Borrador'
+        CONTABILIZADA = 'CONTABILIZADA', 'Contabilizada'
+        CANCELADA = 'CANCELADA', 'Cancelada'
+
+    folio = models.CharField('Folio', max_length=30, unique=True)
+    fecha_poliza = models.DateField('Fecha póliza')
+    tipo = models.CharField('Tipo', max_length=10, choices=TipoPoliza.choices, default=TipoPoliza.DIARIO)
+    concepto = models.CharField('Concepto', max_length=255)
+    referencia = models.CharField('Referencia', max_length=120, blank=True)
+    estado = models.CharField('Estado', max_length=15, choices=EstadoPoliza.choices, default=EstadoPoliza.BORRADOR)
+
+    def __str__(self):
+        return self.folio
+
+    class Meta:
+        verbose_name = 'Póliza contable'
+        verbose_name_plural = 'Pólizas contables'
+        ordering = ['-fecha_poliza', '-fecha_creacion']
+
+
+class MovimientoContable(models.Model):
+    poliza = models.ForeignKey(
+        PolizaContable,
+        on_delete=models.CASCADE,
+        related_name='movimientos',
+    )
+    cuenta = models.ForeignKey(
+        CuentaContable,
+        on_delete=models.PROTECT,
+        related_name='movimientos',
+    )
+    descripcion = models.CharField('Descripción', max_length=255, blank=True)
+    debe = models.DecimalField('Debe', max_digits=14, decimal_places=2, default=0)
+    haber = models.DecimalField('Haber', max_digits=14, decimal_places=2, default=0)
+
+    def __str__(self):
+        return f"{self.poliza.folio} - {self.cuenta.codigo}"
+
+    class Meta:
+        verbose_name = 'Movimiento contable'
+        verbose_name_plural = 'Movimientos contables'
+
+
+class EstadoFinanciero(RegistroAuditable):
+    class TipoEstado(models.TextChoices):
+        RESULTADOS = 'RESULTADOS', 'Estado de resultados'
+        BALANCE = 'BALANCE', 'Balance general'
+        FLUJO_CAJA = 'FLUJO_CAJA', 'Flujo de caja'
+
+    nombre = models.CharField('Nombre', max_length=150)
+    tipo = models.CharField('Tipo', max_length=15, choices=TipoEstado.choices)
+    fecha_inicio = models.DateField('Fecha inicio')
+    fecha_fin = models.DateField('Fecha fin')
+    datos = models.JSONField('Datos', default=dict, blank=True)
+    notas = models.TextField('Notas', blank=True)
+
+    def __str__(self):
+        return f"{self.nombre} ({self.fecha_inicio} - {self.fecha_fin})"
+
+    class Meta:
+        verbose_name = 'Estado financiero'
+        verbose_name_plural = 'Estados financieros'
+        ordering = ['-fecha_fin', '-fecha_creacion']
+
+
+class PresupuestoFinanciero(RegistroAuditable):
+    class Categoria(models.TextChoices):
+        INGRESO = 'INGRESO', 'Ingreso'
+        GASTO = 'GASTO', 'Gasto'
+        CAPEX = 'CAPEX', 'CAPEX'
+        OPEX = 'OPEX', 'OPEX'
+
+    class Periodicidad(models.TextChoices):
+        MENSUAL = 'MENSUAL', 'Mensual'
+        TRIMESTRAL = 'TRIMESTRAL', 'Trimestral'
+        ANUAL = 'ANUAL', 'Anual'
+
+    nombre = models.CharField('Nombre', max_length=150)
+    categoria = models.CharField('Categoría', max_length=12, choices=Categoria.choices)
+    periodicidad = models.CharField('Periodicidad', max_length=12, choices=Periodicidad.choices, default=Periodicidad.MENSUAL)
+    fecha_inicio = models.DateField('Fecha inicio')
+    fecha_fin = models.DateField('Fecha fin')
+    monto_presupuestado = models.DecimalField('Monto presupuestado', max_digits=14, decimal_places=2)
+    monto_real = models.DecimalField('Monto real', max_digits=14, decimal_places=2, default=0)
+    descripcion = models.TextField('Descripción', blank=True)
+    activo = models.BooleanField('Activo', default=True)
+
+    def __str__(self):
+        return self.nombre
+
+    class Meta:
+        verbose_name = 'Presupuesto financiero'
+        verbose_name_plural = 'Presupuestos financieros'
+        ordering = ['-fecha_fin', 'nombre']
+
+
+class CuentaPorPagarCobrar(RegistroAuditable):
+    class TipoCuenta(models.TextChoices):
+        POR_PAGAR = 'POR_PAGAR', 'Cuenta por pagar'
+        POR_COBRAR = 'POR_COBRAR', 'Cuenta por cobrar'
+
+    class EstadoCuenta(models.TextChoices):
+        PENDIENTE = 'PENDIENTE', 'Pendiente'
+        PARCIAL = 'PARCIAL', 'Parcial'
+        PAGADA = 'PAGADA', 'Pagada / Cobrada'
+        VENCIDA = 'VENCIDA', 'Vencida'
+
+    tipo = models.CharField('Tipo', max_length=12, choices=TipoCuenta.choices)
+    folio = models.CharField('Folio', max_length=30, unique=True)
+    tercero_nombre = models.CharField('Proveedor / Cliente', max_length=200)
+    cliente_compra = models.ForeignKey(
+        ClienteCompra,
+        on_delete=models.PROTECT,
+        related_name='cuentas_financieras',
+        null=True,
+        blank=True,
+    )
+    proveedor = models.ForeignKey(
+        Proveedor,
+        on_delete=models.PROTECT,
+        related_name='cuentas_financieras',
+        null=True,
+        blank=True,
+    )
+    orden_compra = models.ForeignKey(
+        OrdenCompra,
+        on_delete=models.SET_NULL,
+        related_name='cuentas_financieras',
+        null=True,
+        blank=True,
+    )
+    monto_total = models.DecimalField('Monto total', max_digits=14, decimal_places=2)
+    monto_pagado = models.DecimalField('Monto pagado / cobrado', max_digits=14, decimal_places=2, default=0)
+    fecha_emision = models.DateField('Fecha emisión')
+    fecha_vencimiento = models.DateField('Fecha vencimiento')
+    estado = models.CharField('Estado', max_length=12, choices=EstadoCuenta.choices, default=EstadoCuenta.PENDIENTE)
+    observaciones = models.TextField('Observaciones', blank=True)
+
+    def __str__(self):
+        return f"{self.folio} - {self.tercero_nombre}"
+
+    class Meta:
+        verbose_name = 'Cuenta por pagar / cobrar'
+        verbose_name_plural = 'Cuentas por pagar / cobrar'
+        ordering = ['fecha_vencimiento', '-fecha_creacion']
+
+
+class CosteoProduccion(RegistroAuditable):
+    class EstadoCosteo(models.TextChoices):
+        BORRADOR = 'BORRADOR', 'Borrador'
+        CERRADO = 'CERRADO', 'Cerrado'
+
+    orden_fabricacion = models.ForeignKey(
+        OrdenFabricacion,
+        on_delete=models.CASCADE,
+        related_name='costeos_financieros',
+        null=True,
+        blank=True,
+    )
+    lote_produccion = models.ForeignKey(
+        LoteProduccion,
+        on_delete=models.CASCADE,
+        related_name='costeos_financieros',
+        null=True,
+        blank=True,
+    )
+    costo_material_plan = models.DecimalField('Costo material plan', max_digits=14, decimal_places=2, default=0)
+    costo_material_real = models.DecimalField('Costo material real', max_digits=14, decimal_places=2, default=0)
+    costo_maquina_real = models.DecimalField('Costo máquina real', max_digits=14, decimal_places=2, default=0)
+    costo_operador_real = models.DecimalField('Costo operador real', max_digits=14, decimal_places=2, default=0)
+    costo_total_plan = models.DecimalField('Costo total plan', max_digits=14, decimal_places=2, default=0)
+    costo_total_real = models.DecimalField('Costo total real', max_digits=14, decimal_places=2, default=0)
+    ingreso_estimado = models.DecimalField('Ingreso estimado', max_digits=14, decimal_places=2, default=0)
+    rentabilidad = models.DecimalField('Rentabilidad', max_digits=14, decimal_places=2, default=0)
+    margen_pct = models.DecimalField('Margen %', max_digits=7, decimal_places=2, default=0)
+    estado = models.CharField('Estado', max_length=10, choices=EstadoCosteo.choices, default=EstadoCosteo.BORRADOR)
+    detalle = models.JSONField('Detalle', default=dict, blank=True)
+
+    def __str__(self):
+        referencia = self.orden_fabricacion.folio if self.orden_fabricacion_id else (self.lote_produccion.folio if self.lote_produccion_id else 'Sin referencia')
+        return f"Costeo {referencia}"
+
+    class Meta:
+        verbose_name = 'Costeo de producción'
+        verbose_name_plural = 'Costeos de producción'
+        ordering = ['-fecha_actualizacion']
+
+
+class ReporteFinanciero(RegistroAuditable):
+    class TipoReporte(models.TextChoices):
+        KPI = 'KPI', 'KPIs financieros'
+        RESULTADOS = 'RESULTADOS', 'Resultados'
+        FLUJO_CAJA = 'FLUJO_CAJA', 'Flujo de caja'
+        COSTEO = 'COSTEO', 'Costeo de producción'
+
+    nombre = models.CharField('Nombre', max_length=150)
+    tipo = models.CharField('Tipo', max_length=15, choices=TipoReporte.choices)
+    fecha_inicio = models.DateField('Fecha inicio')
+    fecha_fin = models.DateField('Fecha fin')
+    indicadores = models.JSONField('Indicadores', default=dict, blank=True)
+    alertas = models.JSONField('Alertas', default=list, blank=True)
+
+    def __str__(self):
+        return self.nombre
+
+    class Meta:
+        verbose_name = 'Reporte financiero'
+        verbose_name_plural = 'Reportes financieros'
+        ordering = ['-fecha_fin', '-fecha_creacion']
+
+
+class DeclaracionImpuesto(RegistroAuditable):
+    class TipoImpuesto(models.TextChoices):
+        IVA = 'IVA', 'IVA'
+        ISR = 'ISR', 'ISR'
+        IEPS = 'IEPS', 'IEPS'
+        LOCAL = 'LOCAL', 'Impuesto local'
+
+    class EstadoDeclaracion(models.TextChoices):
+        BORRADOR = 'BORRADOR', 'Borrador'
+        CALCULADA = 'CALCULADA', 'Calculada'
+        PRESENTADA = 'PRESENTADA', 'Presentada'
+
+    folio = models.CharField('Folio', max_length=30, unique=True)
+    tipo_impuesto = models.CharField('Tipo impuesto', max_length=10, choices=TipoImpuesto.choices)
+    periodo_inicio = models.DateField('Periodo inicio')
+    periodo_fin = models.DateField('Periodo fin')
+    base_gravable = models.DecimalField('Base gravable', max_digits=14, decimal_places=2, default=0)
+    tasa = models.DecimalField('Tasa %', max_digits=7, decimal_places=2, default=0)
+    impuesto_calculado = models.DecimalField('Impuesto calculado', max_digits=14, decimal_places=2, default=0)
+    estado = models.CharField('Estado', max_length=12, choices=EstadoDeclaracion.choices, default=EstadoDeclaracion.BORRADOR)
+    acuse = models.CharField('Acuse / referencia', max_length=120, blank=True)
+    detalle = models.JSONField('Detalle', default=dict, blank=True)
+
+    def __str__(self):
+        return self.folio
+
+    class Meta:
+        verbose_name = 'Declaración de impuesto'
+        verbose_name_plural = 'Declaraciones de impuestos'
+        ordering = ['-periodo_fin', '-fecha_creacion']

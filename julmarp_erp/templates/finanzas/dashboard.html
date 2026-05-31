@@ -1,0 +1,167 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Finanzas - Dashboard{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/pages/home.css' %}">
+<style>
+    .fin-page { max-width: 1280px; margin: 0 auto; padding: 32px 20px 48px; }
+    .fin-filter { background:#fff; border:1px solid #dde7f2; border-radius:16px; padding:18px; margin-bottom:18px; }
+    .fin-filter form { display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:12px; align-items:end; }
+    .fin-filter label { display:flex; flex-direction:column; gap:6px; font-weight:700; color:#49607d; font-size:.85rem; }
+    .fin-filter input { border:1px solid #d1dceb; border-radius:9px; padding:10px 12px; background:#f8fbff; }
+    .fin-hero { display:flex; justify-content:space-between; gap:18px; background:linear-gradient(135deg, #113254 0%, #1e537f 55%, #77b9d8 100%); color:#fff; border-radius:18px; padding:28px 30px; margin-bottom:20px; }
+    .fin-hero h1 { margin:0 0 8px; }
+    .fin-alert { background:#fff4f4; border:1px solid #f0c5c5; color:#8a1c1c; border-radius:12px; padding:12px 14px; font-weight:700; margin-bottom:10px; }
+    .fin-kpi-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap:14px; margin-bottom:18px; }
+    .fin-kpi-card {
+        text-align:center;
+        min-width:0;
+        display:flex;
+        flex-direction:column;
+        justify-content:center;
+        min-height:112px;
+    }
+    .fin-kpi-value {
+        margin:0;
+        font-size:clamp(1.4rem, 1.3rem + 1vw, 2rem);
+        line-height:1.05;
+        font-weight:800;
+        letter-spacing:-0.03em;
+        overflow-wrap:anywhere;
+        word-break:break-word;
+    }
+    .fin-kpi-label {
+        margin:8px 0 0;
+        font-size:.78rem;
+        text-transform:uppercase;
+        letter-spacing:.05em;
+        color:#7a90ad;
+    }
+    .fin-shortcuts {
+        display:flex;
+        gap:10px;
+        flex-wrap:wrap;
+        margin-top:16px;
+    }
+    @media (max-width: 900px) {
+        .fin-hero { flex-direction:column; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="fin-page">
+    <section class="fin-hero">
+        <div>
+            <h1>Dashboard Financiero</h1>
+            <p>Consolida flujo de caja, presupuesto vs real, rentabilidad de producción, OC de MFG y trazabilidad financiera con exportación ejecutiva.</p>
+        </div>
+        <div>
+            <div style="font-size:.8rem; text-transform:uppercase; letter-spacing:.06em; opacity:.85;">Último reporte</div>
+            <div style="font-size:1.1rem; font-weight:800;">{{ reporte.fecha_creacion|date:'d/m/Y H:i' }}</div>
+            <div style="margin-top:6px; font-size:.88rem; opacity:.88;">{{ fecha_inicio|date:'d/m/Y' }} al {{ fecha_fin|date:'d/m/Y' }}</div>
+        </div>
+    </section>
+
+    <section class="fin-filter">
+        <form method="get">
+            <label>Fecha inicio<input type="date" name="fecha_inicio" value="{{ fecha_inicio|date:'Y-m-d' }}"></label>
+            <label>Fecha fin<input type="date" name="fecha_fin" value="{{ fecha_fin|date:'Y-m-d' }}"></label>
+            <button type="submit" name="recalcular" value="1" class="btn btn-warning">Recalcular</button>
+            <a href="{% url 'finanzas_dashboard' %}?fecha_inicio={{ fecha_inicio|date:'Y-m-d' }}&fecha_fin={{ fecha_fin|date:'Y-m-d' }}&export=excel" class="btn btn-primary">Exportar Excel</a>
+            <a href="{% url 'finanzas_dashboard' %}?fecha_inicio={{ fecha_inicio|date:'Y-m-d' }}&fecha_fin={{ fecha_fin|date:'Y-m-d' }}&export=pdf" class="btn btn-danger">Exportar PDF</a>
+        </form>
+        <div class="fin-shortcuts">
+            <a href="{% url 'home' %}" class="btn btn-secondary">Volver a Inicio</a>
+            <a href="{% url 'finanzas_contabilidad' %}" class="btn btn-outline-primary">Contabilidad</a>
+            <a href="{% url 'finanzas_reportes' %}" class="btn btn-outline-danger">Reportes</a>
+        </div>
+    </section>
+
+    {% for alerta in dashboard.alertas %}
+    <div class="fin-alert">{{ alerta }}</div>
+    {% endfor %}
+
+    <section class="fin-kpi-grid">
+        <article class="dashboard-card fin-kpi-card"><p class="fin-kpi-value" style="color:{% if dashboard.kpis.flujo_caja >= 0 %}#0a7c42{% else %}#9b2121{% endif %};">${{ dashboard.kpis.flujo_caja|floatformat:2 }}</p><p class="fin-kpi-label">Flujo de caja</p></article>
+        <article class="dashboard-card fin-kpi-card"><p class="fin-kpi-value" style="color:#1255a7;">${{ dashboard.kpis.rentabilidad|floatformat:2 }}</p><p class="fin-kpi-label">Rentabilidad</p></article>
+        <article class="dashboard-card fin-kpi-card"><p class="fin-kpi-value" style="color:#1f3e67;">{{ dashboard.kpis.rentabilidad_pct|floatformat:2 }}%</p><p class="fin-kpi-label">Margen</p></article>
+        <article class="dashboard-card fin-kpi-card"><p class="fin-kpi-value" style="color:{% if dashboard.kpis.gasto_real <= dashboard.kpis.presupuesto_total %}#0a7c42{% else %}#9b2121{% endif %};">${{ dashboard.kpis.gasto_real|floatformat:2 }}</p><p class="fin-kpi-label">Gasto real</p></article>
+        <article class="dashboard-card fin-kpi-card"><p class="fin-kpi-value" style="color:#d28a0f;">{{ dashboard.kpis.oc_pendientes }}</p><p class="fin-kpi-label">OC pendientes</p></article>
+        <article class="dashboard-card fin-kpi-card"><p class="fin-kpi-value" style="color:#159947;">{{ dashboard.kpis.oc_completadas }}</p><p class="fin-kpi-label">OC completadas</p></article>
+        <article class="dashboard-card fin-kpi-card"><p class="fin-kpi-value" style="color:{% if dashboard.kpis.impuestos_pendientes > 0 %}#9b2121{% else %}#159947{% endif %};">{{ dashboard.kpis.impuestos_pendientes }}</p><p class="fin-kpi-label">Impuestos pendientes</p></article>
+    </section>
+
+    <section class="dashboard-grid chart-grid">
+        <article class="dashboard-card chart-card"><h3>Presupuesto vs gasto</h3><div class="chart-stage"><canvas id="fin-budget-chart"></canvas></div></article>
+        <article class="dashboard-card chart-card"><h3>Costos y rentabilidad</h3><div class="chart-stage"><canvas id="fin-cost-chart"></canvas></div></article>
+        <article class="dashboard-card chart-card"><h3>Órdenes de compra</h3><div class="chart-stage"><canvas id="fin-oc-chart"></canvas></div></article>
+    </section>
+
+    <section class="dashboard-grid" style="margin-top:16px;">
+        <article class="dashboard-card">
+            <h3>Producción y costo</h3>
+            <ul class="recent-activity-list">
+                <li><div><p>Costo planificado</p><small>Producción consolidada</small></div><strong>${{ dashboard.produccion.costo_planificado|floatformat:2 }}</strong></li>
+                <li><div><p>Costo real</p><small>Máquina + operador + materiales</small></div><strong>${{ dashboard.produccion.costo_real|floatformat:2 }}</strong></li>
+                <li><div><p>Variación</p><small>Desviación financiera</small></div><strong>${{ dashboard.produccion.variacion_costos|floatformat:2 }}</strong></li>
+                <li><div><p>OEE</p><small>Operación</small></div><strong>{{ dashboard.produccion.oee|floatformat:2 }}%</strong></li>
+                <li><div><p>Tasa rechazo</p><small>Impacto de calidad</small></div><strong>{{ dashboard.produccion.tasa_rechazo|floatformat:2 }}%</strong></li>
+            </ul>
+        </article>
+        <article class="dashboard-card">
+            <h3>Costeos recientes</h3>
+            <ul class="recent-activity-list">
+                {% for costeo in dashboard.costeos_recientes %}
+                <li>
+                    <div><p>{% if costeo.orden_fabricacion %}{{ costeo.orden_fabricacion.folio }}{% else %}{{ costeo.lote_produccion.folio }}{% endif %}</p><small>Real ${{ costeo.costo_total_real|floatformat:2 }}</small></div>
+                    <strong>{{ costeo.margen_pct|floatformat:2 }}%</strong>
+                </li>
+                {% empty %}
+                <li><div><p>Sin costeos generados</p><small>Usa recalcular para consolidar</small></div><strong>-</strong></li>
+                {% endfor %}
+            </ul>
+        </article>
+    </section>
+</div>
+
+{{ chart_data|json_script:"fin-dashboard-data" }}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    Chart.defaults.font.family = "Manrope, Segoe UI, sans-serif";
+    const node = document.getElementById('fin-dashboard-data');
+    if (!node || typeof Chart === 'undefined') return;
+    const data = JSON.parse(node.textContent || '{}');
+
+    const budgetCtx = document.getElementById('fin-budget-chart');
+    if (budgetCtx) {
+        new Chart(budgetCtx, {
+            type: 'bar',
+            data: { labels: data.presupuesto_labels || [], datasets: [{ data: data.presupuesto_values || [], backgroundColor: ['#1f5d8d', '#c53030', '#159947'], borderRadius: 10 }] },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } },
+        });
+    }
+
+    const costCtx = document.getElementById('fin-cost-chart');
+    if (costCtx) {
+        new Chart(costCtx, {
+            type: 'line',
+            data: { labels: data.costos_labels || [], datasets: [{ data: data.costos_values || [], borderColor: '#163a66', backgroundColor: 'rgba(22,58,102,.12)', fill: true, tension: .3 }] },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } },
+        });
+    }
+
+    const ocCtx = document.getElementById('fin-oc-chart');
+    if (ocCtx) {
+        new Chart(ocCtx, {
+            type: 'doughnut',
+            data: { labels: data.oc_labels || [], datasets: [{ data: data.oc_values || [], backgroundColor: ['#d28a0f', '#159947'], borderWidth: 0 }] },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } },
+        });
+    }
+});
+</script>
+{% endblock %}

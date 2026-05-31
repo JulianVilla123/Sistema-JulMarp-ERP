@@ -44,12 +44,12 @@
                 <li class="nav-item">
                     <a href="{% url 'planificacion_produccion' %}" class="nav-link">Planificación Producción</a>
                 </li>
-                <li class="nav-item">
-                    <a href="{% url 'captura_lotes' %}" class="nav-link">Captura de Lotes</a>
-                </li>
-                <li class="nav-item">
-                    <a href="{% url 'escaneo_produccion' %}" class="nav-link">Escaneo Producción</a>
-                </li>
+                    <li class="nav-item">
+                        <a href="{% url 'control_recursos_mfg' %}" class="nav-link">Control Recursos</a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{% url 'indicadores_kpis_mfg' %}" class="nav-link">Indicadores MFG</a>
+                    </li>
                     <li class="nav-item">
                         <a href="{% url 'ordenes_fabricacion' %}" class="nav-link">Órdenes de Fabricación</a>
                     </li>
@@ -59,14 +59,32 @@
                     {% endif %}
 
                 {% if departamento == 'Finanzas' or departamento == 'Admin' %}
-                <li class="nav-item dropdown">
-                    <a href="#" class="nav-link dropdown-toggle">Finanzas <span class="arrow">&#9660;</span></a>
-                    <ul class="dropdown-menu">
-                        <li><a href="{% url 'ordenes_compra' %}">Órdenes de Compra</a></li>
-                        <li><a href="#">Análisis de Costos</a></li>
-                        <li><a href="#">Reportes de Ventas</a></li>
-                        <li><a href="#">Gráficas Financieras</a></li>
-                    </ul>
+                    <li class="nav-item">
+                        <a href="{% url 'finanzas_dashboard' %}" class="nav-link">Dashboard Finanzas</a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{% url 'finanzas_contabilidad' %}" class="nav-link">Contabilidad</a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{% url 'finanzas_presupuestos' %}" class="nav-link">Presupuestos</a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{% url 'finanzas_pagos_cobros' %}" class="nav-link">Pagos y Cobros</a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{% url 'finanzas_costeo_produccion' %}" class="nav-link">Costeo Producción</a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{% url 'finanzas_reportes' %}" class="nav-link">Reportes Financieros</a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{% url 'finanzas_impuestos' %}" class="nav-link">Impuestos</a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{% url 'finanzas_ordenes_compra' %}" class="nav-link">Órdenes Compra MFG</a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{% url 'indicadores_kpis_mfg' %}" class="nav-link">KPIs Producción</a>
                 </li>
                 {% endif %}
 
@@ -80,14 +98,24 @@
                 </li>
                 {% endif %}
 
+                {% if departamento == 'IT' or departamento == 'Admin' %}
+                <li class="nav-item">
+                    <a href="{% url 'it_clientes_compra' %}" class="nav-link">Clientes PT</a>
+                </li>
+                {% endif %}
+
                 {% if departamento == 'QA' or departamento == 'Calidad' or departamento == 'Admin' %}
-                <li class="nav-item dropdown">
-                    <a href="#" class="nav-link dropdown-toggle">QA <span class="arrow">&#9660;</span></a>
-                    <ul class="dropdown-menu">
-                        <li><a href="{% url 'qa_sqa' %}">SQA - Supplier Quality Assurance</a></li>
-                        <li><a href="{% url 'qa_oqa' %}">OQA - Producto Terminado</a></li>
-                        <li><a href="{% url 'qa_customer_service' %}">Customer Service - Reclamos</a></li>
-                    </ul>
+                <li class="nav-item">
+                    <a href="{% url 'qa_sqa' %}" class="nav-link">SQA</a>
+                </li>
+                <li class="nav-item">
+                    <a href="{% url 'qa_oqa' %}" class="nav-link">OQA</a>
+                </li>
+                <li class="nav-item">
+                    <a href="{% url 'qa_qqa_defectos' %}" class="nav-link">Defectos y Scrap</a>
+                </li>
+                <li class="nav-item">
+                    <a href="{% url 'qa_customer_service' %}" class="nav-link">Customer Service</a>
                 </li>
                 {% endif %}
             {% endwith %}

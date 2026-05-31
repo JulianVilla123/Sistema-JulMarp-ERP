@@ -4,13 +4,29 @@ from .models import (
     Almacen,
     BOM,
     BOMDetalle,
+    ClienteCompra,
+    CuentaContable,
+    CuentaPorPagarCobrar,
+    CostoHoraMaquina,
+    CostoHoraOperador,
+    CosteoProduccion,
+    DeclaracionImpuesto,
     Departamento,
+    EstadoFinanciero,
+    InformeValidacionDefectoQA,
     InventarioAlmacen,
     Material,
+    MovimientoContable,
     OrdenCompra,
     OrdenCompraDetalle,
+    PolizaContable,
+    PresupuestoFinanciero,
     Proveedor,
     ProveedorMaterialPrecio,
+    ReporteKPIProduccion,
+    ReporteFinanciero,
+    RegistroScrapDefecto,
+    RegistroUsoRecursoProduccion,
     SalidaLinea,
     SalidaLineaDetalle,
     TransferenciaAlmacen,
@@ -94,6 +110,118 @@ class ProveedorMaterialPrecioAdmin(admin.ModelAdmin):
     list_display = ('proveedor', 'material', 'precio_unitario', 'fecha_actualizacion')
     search_fields = ('proveedor__nombre', 'material__sku', 'material__nombre')
     list_filter = ('proveedor',)
+
+
+@admin.register(ClienteCompra)
+class ClienteCompraAdmin(admin.ModelAdmin):
+    list_display = ('codigo', 'nombre', 'contacto', 'email', 'telefono', 'activo')
+    search_fields = ('codigo', 'nombre', 'contacto', 'email', 'telefono')
+    list_filter = ('activo',)
+
+
+@admin.register(ReporteKPIProduccion)
+class ReporteKPIProduccionAdmin(admin.ModelAdmin):
+    list_display = ('fecha_inicio', 'fecha_fin', 'oee', 'cumplimiento_ordenes', 'tasa_rechazo', 'fecha_generacion')
+    search_fields = ('fecha_inicio', 'fecha_fin', 'generado_por__username')
+    list_filter = ('fecha_inicio', 'fecha_fin', 'fecha_generacion')
+
+
+@admin.register(CostoHoraMaquina)
+class CostoHoraMaquinaAdmin(admin.ModelAdmin):
+    list_display = ('linea_produccion', 'maquina_nombre', 'costo_hora', 'activo', 'actualizado_por', 'fecha_actualizacion')
+    search_fields = ('linea_produccion', 'maquina_nombre', 'notas')
+    list_filter = ('linea_produccion', 'activo')
+
+
+@admin.register(CostoHoraOperador)
+class CostoHoraOperadorAdmin(admin.ModelAdmin):
+    list_display = ('operador', 'nomina_hora', 'costo_hora_real', 'activo', 'actualizado_por', 'fecha_actualizacion')
+    search_fields = ('operador__username', 'operador__first_name', 'operador__last_name', 'notas')
+    list_filter = ('activo', 'operador__departamento')
+
+
+@admin.register(RegistroUsoRecursoProduccion)
+class RegistroUsoRecursoProduccionAdmin(admin.ModelAdmin):
+    list_display = ('orden', 'tipo_recurso', 'horas_reales', 'costo_total', 'registrado_por', 'fecha_creacion')
+    search_fields = ('orden__folio', 'notas', 'costo_maquina__maquina_nombre', 'costo_operador__operador__username')
+    list_filter = ('tipo_recurso', 'fecha_creacion')
+
+
+@admin.register(RegistroScrapDefecto)
+class RegistroScrapDefectoAdmin(admin.ModelAdmin):
+    list_display = ('orden', 'lote', 'tipo_defecto', 'cantidad_defectos', 'causa', 'registrado_por', 'fecha_creacion')
+    search_fields = ('orden__folio', 'lote__folio', 'causa', 'descripcion')
+    list_filter = ('tipo_defecto', 'fecha_creacion')
+
+
+@admin.register(InformeValidacionDefectoQA)
+class InformeValidacionDefectoQAAdmin(admin.ModelAdmin):
+    list_display = ('defecto', 'resultado_validacion', 'falla_maquina', 'validado_por', 'fecha_actualizacion')
+    search_fields = ('defecto__orden__folio', 'defecto__lote__folio', 'informe', 'acciones_contencion')
+    list_filter = ('resultado_validacion', 'falla_maquina', 'fecha_actualizacion')
+
+
+@admin.register(CuentaContable)
+class CuentaContableAdmin(admin.ModelAdmin):
+    list_display = ('codigo', 'nombre', 'tipo', 'activa', 'actualizado_por', 'fecha_actualizacion')
+    search_fields = ('codigo', 'nombre', 'descripcion')
+    list_filter = ('tipo', 'activa')
+
+
+@admin.register(PolizaContable)
+class PolizaContableAdmin(admin.ModelAdmin):
+    list_display = ('folio', 'fecha_poliza', 'tipo', 'concepto', 'estado', 'actualizado_por')
+    search_fields = ('folio', 'concepto', 'referencia')
+    list_filter = ('tipo', 'estado', 'fecha_poliza')
+
+
+@admin.register(MovimientoContable)
+class MovimientoContableAdmin(admin.ModelAdmin):
+    list_display = ('poliza', 'cuenta', 'debe', 'haber')
+    search_fields = ('poliza__folio', 'cuenta__codigo', 'cuenta__nombre', 'descripcion')
+    list_filter = ('cuenta__tipo',)
+
+
+@admin.register(EstadoFinanciero)
+class EstadoFinancieroAdmin(admin.ModelAdmin):
+    list_display = ('nombre', 'tipo', 'fecha_inicio', 'fecha_fin', 'actualizado_por')
+    search_fields = ('nombre', 'notas')
+    list_filter = ('tipo', 'fecha_inicio', 'fecha_fin')
+
+
+@admin.register(PresupuestoFinanciero)
+class PresupuestoFinancieroAdmin(admin.ModelAdmin):
+    list_display = ('nombre', 'categoria', 'periodicidad', 'monto_presupuestado', 'monto_real', 'activo')
+    search_fields = ('nombre', 'descripcion')
+    list_filter = ('categoria', 'periodicidad', 'activo')
+
+
+@admin.register(CuentaPorPagarCobrar)
+class CuentaPorPagarCobrarAdmin(admin.ModelAdmin):
+    list_display = ('folio', 'tipo', 'tercero_nombre', 'monto_total', 'monto_pagado', 'fecha_vencimiento', 'estado')
+    search_fields = ('folio', 'tercero_nombre', 'observaciones')
+    list_filter = ('tipo', 'estado', 'fecha_vencimiento')
+
+
+@admin.register(CosteoProduccion)
+class CosteoProduccionAdmin(admin.ModelAdmin):
+    list_display = ('orden_fabricacion', 'lote_produccion', 'costo_total_plan', 'costo_total_real', 'rentabilidad', 'margen_pct', 'estado')
+    search_fields = ('orden_fabricacion__folio', 'lote_produccion__folio')
+    list_filter = ('estado', 'fecha_actualizacion')
+
+
+@admin.register(ReporteFinanciero)
+class ReporteFinancieroAdmin(admin.ModelAdmin):
+    list_display = ('nombre', 'tipo', 'fecha_inicio', 'fecha_fin', 'actualizado_por')
+    search_fields = ('nombre',)
+    list_filter = ('tipo', 'fecha_inicio', 'fecha_fin')
+
+
+@admin.register(DeclaracionImpuesto)
+class DeclaracionImpuestoAdmin(admin.ModelAdmin):
+    list_display = ('folio', 'tipo_impuesto', 'periodo_inicio', 'periodo_fin', 'impuesto_calculado', 'estado')
+    search_fields = ('folio', 'acuse')
+    list_filter = ('tipo_impuesto', 'estado', 'periodo_inicio', 'periodo_fin')
 
 
 @admin.register(Almacen)

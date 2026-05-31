@@ -1,0 +1,553 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Indicadores y Reportes MFG{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/pages/home.css' %}">
+<style>
+    .kpi-page {
+        max-width: 1280px;
+        margin: 0 auto;
+        padding: 36px 20px 48px;
+    }
+    .kpi-hero {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 18px;
+        background: linear-gradient(135deg, #163a66 0%, #1f5d8d 45%, #71a7c8 100%);
+        color: #fff;
+        border-radius: 18px;
+        padding: 28px 30px;
+        margin-bottom: 22px;
+        box-shadow: 0 18px 34px rgba(16, 40, 73, 0.22);
+    }
+    .kpi-hero h1 { margin: 0 0 8px; font-size: 2rem; }
+    .kpi-hero p { margin: 0; max-width: 720px; color: rgba(255,255,255,.88); }
+    .kpi-filter-card {
+        background: #fff;
+        border: 1px solid #dde7f2;
+        border-radius: 16px;
+        padding: 18px 20px;
+        margin-bottom: 18px;
+        box-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
+    }
+    .kpi-filter-form {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 12px;
+        align-items: end;
+    }
+    .kpi-filter-form label {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        font-size: 0.85rem;
+        color: #49607d;
+        font-weight: 700;
+    }
+    .kpi-filter-form input {
+        border: 1px solid #d1dceb;
+        border-radius: 9px;
+        padding: 10px 12px;
+        background: #f8fbff;
+    }
+    .kpi-filter-actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+    .kpi-filter-actions .btn { min-width: 150px; }
+    .metric-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+        gap: 14px;
+        margin-bottom: 18px;
+    }
+    .metric-card {
+        border-radius: 16px;
+        padding: 18px;
+        background: #fff;
+        border: 1px solid #e2e8f0;
+        box-shadow: 0 10px 22px rgba(15, 23, 42, 0.06);
+        position: relative;
+        overflow: hidden;
+    }
+    .metric-card::before {
+        content: '';
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: 6px;
+        background: #9ca3af;
+    }
+    .metric-card.verde::before { background: #159947; }
+    .metric-card.amarillo::before { background: #d28a0f; }
+    .metric-card.rojo::before { background: #c53030; }
+    .metric-label { font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; color: #74839a; margin-bottom: 8px; }
+    .metric-value { font-size: 2rem; font-weight: 800; color: #163a66; line-height: 1; }
+    .metric-help { margin-top: 8px; font-size: .84rem; color: #52657e; min-height: 36px; }
+    .metric-traffic {
+        margin-top: 12px;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-size: .78rem;
+        font-weight: 800;
+        text-transform: uppercase;
+    }
+    .metric-dot { width: 10px; height: 10px; border-radius: 999px; display: inline-block; }
+    .metric-card.verde .metric-dot { background: #159947; }
+    .metric-card.amarillo .metric-dot { background: #d28a0f; }
+    .metric-card.rojo .metric-dot { background: #c53030; }
+    .alert-strip {
+        display: grid;
+        gap: 10px;
+        margin-bottom: 18px;
+    }
+    .alert-item {
+        background: #fff4f4;
+        border: 1px solid #f0c5c5;
+        color: #8a1c1c;
+        border-radius: 12px;
+        padding: 12px 14px;
+        font-weight: 700;
+    }
+    .status-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 10px;
+        border-radius: 999px;
+        font-size: .75rem;
+        font-weight: 800;
+        text-transform: uppercase;
+    }
+    .status-chip.verde { background: #e7f8ee; color: #187d43; }
+    .status-chip.amarillo { background: #fff7e5; color: #996300; }
+    .status-chip.rojo { background: #fdeaea; color: #a52b2b; }
+    .summary-grid {
+        display: grid;
+        grid-template-columns: 1.2fr .8fr;
+        gap: 16px;
+        margin-top: 18px;
+    }
+    .summary-card {
+        background: #fff;
+        border: 1px solid #e2e8f0;
+        border-radius: 16px;
+        padding: 20px;
+        box-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
+    }
+    .summary-card h3 { margin: 0 0 14px; color: #163a66; }
+    .summary-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+    .summary-list li {
+        border: 1px solid #edf1f6;
+        border-radius: 12px;
+        padding: 12px 14px;
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 12px;
+        align-items: center;
+        background: #f9fbff;
+    }
+    .summary-list p, .summary-list small { margin: 0; }
+    .summary-list p { color: #25364f; font-weight: 700; }
+    .summary-list small { color: #65768d; }
+    .chart-card canvas { width: 100% !important; height: 280px !important; }
+    .table-card { margin-top: 16px; }
+    .table-card .tabla-wrap { overflow-x: auto; }
+    @media (max-width: 960px) {
+        .summary-grid { grid-template-columns: 1fr; }
+        .kpi-hero { flex-direction: column; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="kpi-page">
+    <section class="kpi-hero">
+        <div>
+            <h1>Indicadores y Reportes MFG</h1>
+            <p>Dashboard ejecutivo para producción con OEE, ciclo, rechazo, cumplimiento, costos y utilización de recursos. Los indicadores se calculan desde órdenes, operaciones BOM, lotes y consumos reales.</p>
+        </div>
+        <div>
+            <div style="font-size:.78rem; text-transform:uppercase; letter-spacing:.08em; opacity:.82;">Último cálculo</div>
+            <div style="font-size:1.1rem; font-weight:800;">{{ reporte.fecha_generacion|date:'d/m/Y H:i' }}</div>
+            <div style="margin-top:6px; font-size:.88rem; opacity:.88;">Periodo {{ fecha_inicio|date:'d/m/Y' }} al {{ fecha_fin|date:'d/m/Y' }}</div>
+        </div>
+    </section>
+
+    <section class="kpi-filter-card">
+        <form method="get" class="kpi-filter-form">
+            <label>
+                Fecha inicio
+                <input type="date" name="fecha_inicio" value="{{ fecha_inicio|date:'Y-m-d' }}">
+            </label>
+            <label>
+                Fecha fin
+                <input type="date" name="fecha_fin" value="{{ fecha_fin|date:'Y-m-d' }}">
+            </label>
+            <div class="kpi-filter-actions">
+                <button type="submit" name="recalcular" value="1" class="btn btn-success">Recalcular KPIs</button>
+                <button type="submit" name="export" value="excel" class="btn btn-primary">Exportar Excel</button>
+                <button type="submit" name="export" value="pdf" class="btn btn-danger">Exportar PDF</button>
+            </div>
+        </form>
+    </section>
+
+    {% if alertas %}
+    <section class="alert-strip">
+        {% for alerta in alertas %}
+        <div class="alert-item">{{ alerta }}</div>
+        {% endfor %}
+    </section>
+    {% endif %}
+
+    <section class="metric-grid">
+        {% for metric in metric_cards %}
+        <article class="metric-card {{ metric.status }}">
+            <div class="metric-label">{{ metric.label }}</div>
+            <div class="metric-value">{{ metric.value }}<span style="font-size:.82rem; font-weight:700; margin-left:4px;">{{ metric.unit }}</span></div>
+            <div class="metric-help">{{ metric.help_text }}</div>
+            <div class="metric-traffic"><span class="metric-dot"></span>{{ metric.status }}</div>
+        </article>
+        {% endfor %}
+    </section>
+
+    <section class="dashboard-grid chart-grid">
+        <article class="dashboard-card chart-card">
+            <h3>Semáforo de KPIs</h3>
+            <p class="chart-subtitle">Comparativo visual de métricas clave de manufactura.</p>
+            <div class="chart-stage">
+                <canvas id="chart-kpis-mfg"></canvas>
+            </div>
+        </article>
+        <article class="dashboard-card chart-card">
+            <h3>Utilización de recursos</h3>
+            <p class="chart-subtitle">Uso relativo de máquinas y personal contra capacidad programada.</p>
+            <div class="chart-stage">
+                <canvas id="chart-recursos-mfg"></canvas>
+            </div>
+        </article>
+    </section>
+
+    <section class="summary-grid">
+        <article class="summary-card">
+            <h3>Resumen operativo</h3>
+            <ul class="summary-list">
+                <li>
+                    <div>
+                        <p>Disponibilidad</p>
+                        <small>Horas reales {{ detalle.horas_reales|default:0 }} / programadas {{ detalle.horas_programadas|default:0 }}</small>
+                    </div>
+                    <span class="status-chip {% if reporte.disponibilidad >= 85 %}verde{% elif reporte.disponibilidad >= 70 %}amarillo{% else %}rojo{% endif %}">{{ reporte.disponibilidad }}%</span>
+                </li>
+                <li>
+                    <div>
+                        <p>Calidad</p>
+                        <small>Unidades buenas {{ detalle.unidades_buenas|default:0 }} de {{ detalle.unidades_totales|default:0 }}</small>
+                    </div>
+                    <span class="status-chip {% if reporte.calidad >= 95 %}verde{% elif reporte.calidad >= 90 %}amarillo{% else %}rojo{% endif %}">{{ reporte.calidad }}%</span>
+                </li>
+                <li>
+                    <div>
+                        <p>Costos plan vs real</p>
+                        <small>Plan ${{ reporte.costo_planificado }} | Real ${{ reporte.costo_real }}</small>
+                    </div>
+                    <span class="status-chip {% if detalle.costo_variacion_pct|default:0 <= 5 and detalle.costo_variacion_pct|default:0 >= -5 %}verde{% elif detalle.costo_variacion_pct|default:0 <= 10 and detalle.costo_variacion_pct|default:0 >= -10 %}amarillo{% else %}rojo{% endif %}">{{ detalle.costo_variacion_pct|default:0|floatformat:2 }}%</span>
+                </li>
+            </ul>
+        </article>
+
+        <article class="summary-card">
+            <h3>Costos y capacidad</h3>
+            <ul class="summary-list">
+                <li>
+                    <div>
+                        <p>Utilización máquinas</p>
+                        <small>Capacidad relativa de línea y equipo vs horas programadas</small>
+                    </div>
+                    <strong>{{ reporte.utilizacion_maquinas }}%</strong>
+                </li>
+                <li>
+                    <div>
+                        <p>Utilización personal</p>
+                        <small>Uso real de operador cuando existe captura, con respaldo BOM en faltantes</small>
+                    </div>
+                    <strong>{{ reporte.utilizacion_personal }}%</strong>
+                </li>
+                <li>
+                    <div>
+                        <p>Órdenes dentro del plan</p>
+                        <small>{{ detalle.ordenes_a_tiempo|default:0 }} de {{ detalle.ordenes_completadas|default:0 }} OFs completadas</small>
+                    </div>
+                    <strong>{{ reporte.cumplimiento_ordenes }}%</strong>
+                </li>
+            </ul>
+        </article>
+    </section>
+
+    <section class="summary-grid" style="margin-top:16px;">
+        <article class="summary-card">
+            <h3>Scrap y validación QA</h3>
+            <ul class="summary-list">
+                <li>
+                    <div>
+                        <p>Defectos registrados</p>
+                        <small>Capturados desde Producción por orden o lote</small>
+                    </div>
+                    <strong>{{ detalle.defectos_registrados|default:0|floatformat:2 }}</strong>
+                </li>
+                <li>
+                    <div>
+                        <p>Defectos pendientes QA</p>
+                        <small>Registros aún sin informe QQA</small>
+                    </div>
+                    <strong>{{ detalle.defectos_pendientes_qa|default:0 }}</strong>
+                </li>
+                <li>
+                    <div>
+                        <p>Falla de máquina validada</p>
+                        <small>Piezas con causa confirmada por QA</small>
+                    </div>
+                    <strong>{{ detalle.defectos_falla_maquina|default:0|floatformat:2 }}</strong>
+                </li>
+            </ul>
+        </article>
+
+        <article class="summary-card">
+            <h3>Desglose de costos</h3>
+            <ul class="summary-list">
+                <li>
+                    <div>
+                        <p>Materiales</p>
+                        <small>Plan ${{ detalle.costo_planificado_materiales|default:0|floatformat:2 }} | Real ${{ detalle.costo_real_materiales|default:0|floatformat:2 }}</small>
+                    </div>
+                    <strong>${{ detalle.costo_real_materiales|default:0|floatformat:2 }}</strong>
+                </li>
+                <li>
+                    <div>
+                        <p>Recursos</p>
+                        <small>Plan ${{ detalle.costo_planificado_recursos|default:0|floatformat:2 }} | Real ${{ detalle.costo_real_recursos|default:0|floatformat:2 }}</small>
+                    </div>
+                    <strong>${{ detalle.costo_real_recursos|default:0|floatformat:2 }}</strong>
+                </li>
+                <li>
+                    <div>
+                        <p>Defectos validados QA</p>
+                        <small>Eventos confirmados en el período</small>
+                    </div>
+                    <strong>{{ detalle.defectos_validados_qa|default:0 }}</strong>
+                </li>
+            </ul>
+        </article>
+    </section>
+
+    <section class="dashboard-grid chart-grid" style="margin-top:16px;">
+        <article class="dashboard-card chart-card">
+            <h3>Costos planificados vs reales</h3>
+            <p class="chart-subtitle">Estimación material + máquina + mano de obra contra consumo real.</p>
+            <div class="chart-stage">
+                <canvas id="chart-costos-mfg"></canvas>
+            </div>
+        </article>
+        <article class="dashboard-card table-card">
+            <h3>Órdenes incluidas en el cálculo</h3>
+            <div class="tabla-wrap">
+                <table class="tabla-material">
+                    <thead>
+                        <tr>
+                            <th>OF</th>
+                            <th>Producto</th>
+                            <th>Estado</th>
+                            <th>Plan</th>
+                            <th>Real</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for orden in ordenes_recientes %}
+                        <tr>
+                            <td>{{ orden.folio }}</td>
+                            <td>{{ orden.producto }}</td>
+                            <td>{{ orden.estado }}</td>
+                            <td>{{ orden.cantidad_planificada|floatformat:0 }}</td>
+                            <td>{{ orden.cantidad_producida|floatformat:0 }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5">No hay órdenes dentro del período seleccionado.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </article>
+    </section>
+
+    <section class="dashboard-grid chart-grid" style="margin-top:16px;">
+        <article class="dashboard-card table-card" style="grid-column: 1 / -1;">
+            <h3>Scrap y defectos incluidos en KPIs</h3>
+            <div class="tabla-wrap">
+                <table class="tabla-material">
+                    <thead>
+                        <tr>
+                            <th>Referencia</th>
+                            <th>Tipo</th>
+                            <th>Cantidad</th>
+                            <th>Causa</th>
+                            <th>QA</th>
+                            <th>Falla máquina</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for scrap in detalle.scrap_reciente %}
+                        <tr>
+                            <td>{{ scrap.referencia }}</td>
+                            <td>{{ scrap.tipo_defecto }}</td>
+                            <td>{{ scrap.cantidad|floatformat:2 }}</td>
+                            <td>{{ scrap.causa }}</td>
+                            <td>{{ scrap.qa }}</td>
+                            <td>{% if scrap.falla_maquina %}Sí{% else %}No{% endif %}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="6">No hay scrap o defectos registrados en el período seleccionado.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </article>
+    </section>
+</div>
+
+{{ chart_data|json_script:"mfg-kpi-chart-data" }}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    Chart.defaults.font.family = "Manrope, Segoe UI, sans-serif";
+    Chart.defaults.color = '#5b6475';
+
+    const dataNode = document.getElementById('mfg-kpi-chart-data');
+    if (!dataNode || typeof Chart === 'undefined') {
+        return;
+    }
+
+    const data = JSON.parse(dataNode.textContent || '{}');
+    const statusColors = {
+        verde: '#159947',
+        amarillo: '#d28a0f',
+        rojo: '#c53030',
+    };
+
+    const metricCtx = document.getElementById('chart-kpis-mfg');
+    if (metricCtx) {
+        new Chart(metricCtx, {
+            type: 'bar',
+            data: {
+                labels: data.metric_labels || [],
+                datasets: [{
+                    label: 'Valor KPI',
+                    data: data.metric_values || [],
+                    backgroundColor: (data.metric_status || []).map(function (status) {
+                        return statusColors[status] || '#5b6475';
+                    }),
+                    borderRadius: 10,
+                    borderSkipped: false,
+                    maxBarThickness: 48,
+                }],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: { color: '#e9edf3', drawBorder: false },
+                        border: { display: false },
+                    },
+                    x: {
+                        grid: { display: false },
+                        border: { display: false },
+                    },
+                },
+            },
+        });
+    }
+
+    const resourceCtx = document.getElementById('chart-recursos-mfg');
+    if (resourceCtx) {
+        new Chart(resourceCtx, {
+            type: 'doughnut',
+            data: {
+                labels: data.resource_labels || [],
+                datasets: [{
+                    data: data.resource_values || [],
+                    backgroundColor: ['#1255a7', '#16a34a'],
+                    borderColor: '#ffffff',
+                    borderWidth: 3,
+                    hoverOffset: 8,
+                }],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '62%',
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            boxWidth: 10,
+                            usePointStyle: true,
+                            pointStyle: 'circle',
+                            padding: 14,
+                            font: { weight: 700 },
+                        },
+                    },
+                },
+            },
+        });
+    }
+
+    const costCtx = document.getElementById('chart-costos-mfg');
+    if (costCtx) {
+        new Chart(costCtx, {
+            type: 'bar',
+            data: {
+                labels: data.cost_labels || [],
+                datasets: [{
+                    label: 'MXN',
+                    data: data.cost_values || [],
+                    backgroundColor: ['#1f5d8d', '#b45309', '#6d33c8'],
+                    borderRadius: 10,
+                    borderSkipped: false,
+                    maxBarThickness: 52,
+                }],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: { color: '#e9edf3', drawBorder: false },
+                        border: { display: false },
+                    },
+                    x: {
+                        grid: { display: false },
+                        border: { display: false },
+                    },
+                },
+            },
+        });
+    }
+});
+</script>
+{% endblock %}

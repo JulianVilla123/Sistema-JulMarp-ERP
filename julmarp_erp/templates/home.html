@@ -122,14 +122,14 @@
                     <a href="{% url 'planificacion_produccion' %}" class="btn btn-success">Abrir módulo</a>
                 </div>
                 <div class="module-card">
-                    <h4>Captura de Lotes</h4>
-                    <p>Registra lotes terminados con folio propio, producto, turno, operador y cantidad producida.</p>
-                    <a href="{% url 'captura_lotes' %}" class="btn btn-success">Abrir módulo</a>
+                    <h4>Control de Recursos</h4>
+                    <p>Registra costo hora real de máquinas y operadores, y captura su uso por orden.</p>
+                    <a href="{% url 'control_recursos_mfg' %}" class="btn btn-success">Abrir módulo</a>
                 </div>
                 <div class="module-card">
-                    <h4>Escaneo de Producción</h4>
-                    <p>Busca una OF por folio y registra paquetes de producción para actualizar su avance en tiempo real.</p>
-                    <a href="{% url 'escaneo_produccion' %}" class="btn btn-success">Abrir módulo</a>
+                    <h4>Indicadores y Reportes MFG</h4>
+                    <p>Consulta OEE, ciclo, rechazo, costos y utilización de recursos con exportación a Excel y PDF.</p>
+                    <a href="{% url 'indicadores_kpis_mfg' %}" class="btn btn-success">Abrir módulo</a>
                 </div>
             </div>
         </section>
@@ -239,31 +239,137 @@
         </section>
 
     {% elif departamento == 'Finanzas' %}
-        <div class="modules-section">
-            <h2>Módulos disponibles</h2>
+        <section class="modules-section premium-actions">
+            <h2>Accesos rápidos de Finanzas</h2>
             <div class="modules-grid">
                 <div class="module-card">
-                    <h4>Análisis de Costos</h4>
-                    <p>Visualiza costos de fabricación</p>
-                    <a href="#" class="btn btn-warning">Acceder</a>
+                    <h4>Dashboard Financiero</h4>
+                    <p>Flujo de caja, rentabilidad, presupuesto vs real y semáforos ejecutivos.</p>
+                    <a href="{% url 'finanzas_dashboard' %}" class="btn btn-warning">Abrir módulo</a>
                 </div>
                 <div class="module-card">
-                    <h4>Órdenes de Compra</h4>
-                    <p>Genera órdenes por proveedor y da seguimiento a pedido vs recibido.</p>
-                    <a href="{% url 'ordenes_compra' %}" class="btn btn-warning">Acceder</a>
+                    <h4>Contabilidad</h4>
+                    <p>Registra cuentas, pólizas, asientos balanceados y genera estados financieros.</p>
+                    <a href="{% url 'finanzas_contabilidad' %}" class="btn btn-warning">Abrir módulo</a>
                 </div>
                 <div class="module-card">
-                    <h4>Reportes de Ventas</h4>
-                    <p>Reportes y gráficas de ventas</p>
-                    <a href="#" class="btn btn-warning">Acceder</a>
+                    <h4>Presupuestos</h4>
+                    <p>Planea ingresos y gastos futuros y compara presupuesto contra gasto real.</p>
+                    <a href="{% url 'finanzas_presupuestos' %}" class="btn btn-warning">Abrir módulo</a>
                 </div>
                 <div class="module-card">
-                    <h4>Gráficas Financieras</h4>
-                    <p>Análisis gráfico financiero</p>
-                    <a href="#" class="btn btn-warning">Acceder</a>
+                    <h4>Órdenes Compra MFG</h4>
+                    <p>Recibe folios desde Producción y genera compras con proveedor, lead time y costo estimado.</p>
+                    <a href="{% url 'finanzas_ordenes_compra' %}" class="btn btn-warning">Abrir módulo</a>
                 </div>
             </div>
-        </div>
+        </section>
+
+        {% if fin_alertas %}
+        <section class="alert-strip" style="margin-bottom:16px; display:grid; gap:10px;">
+            {% for alerta in fin_alertas %}
+            <div class="alert-item">{{ alerta }}</div>
+            {% endfor %}
+        </section>
+        {% endif %}
+
+        <section class="dashboard-grid" style="grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap:14px; margin-bottom: 16px;">
+            <article class="dashboard-card" style="text-align:center; padding:18px 12px;">
+                <p style="font-size:2rem; font-weight:800; color:{% if fin_kpis.flujo_caja >= 0 %}#0a7c42{% else %}#9b2121{% endif %}; margin:0; line-height:1.1;">${{ fin_kpis.flujo_caja|floatformat:2 }}</p>
+                <p style="font-size:0.72rem; text-transform:uppercase; letter-spacing:.05em; color:#7a90ad; margin:4px 0 0;">Flujo de caja</p>
+            </article>
+            <article class="dashboard-card" style="text-align:center; padding:18px 12px;">
+                <p style="font-size:2rem; font-weight:800; color:{% if fin_kpis.rentabilidad >= 0 %}#1255a7{% else %}#9b2121{% endif %}; margin:0; line-height:1.1;">${{ fin_kpis.rentabilidad|floatformat:2 }}</p>
+                <p style="font-size:0.72rem; text-transform:uppercase; letter-spacing:.05em; color:#7a90ad; margin:4px 0 0;">Rentabilidad</p>
+            </article>
+            <article class="dashboard-card" style="text-align:center; padding:18px 12px;">
+                <p style="font-size:2rem; font-weight:800; color:{% if fin_kpis.gasto_real <= fin_kpis.presupuesto_total %}#0a7c42{% else %}#9b2121{% endif %}; margin:0; line-height:1.1;">${{ fin_kpis.gasto_real|floatformat:2 }}</p>
+                <p style="font-size:0.72rem; text-transform:uppercase; letter-spacing:.05em; color:#7a90ad; margin:4px 0 0;">Gasto real</p>
+            </article>
+            <article class="dashboard-card" style="text-align:center; padding:18px 12px;">
+                <p style="font-size:2rem; font-weight:800; color:#1f3e67; margin:0; line-height:1.1;">{{ fin_kpis.oc_pendientes }}</p>
+                <p style="font-size:0.72rem; text-transform:uppercase; letter-spacing:.05em; color:#7a90ad; margin:4px 0 0;">OC pendientes</p>
+            </article>
+            <article class="dashboard-card" style="text-align:center; padding:18px 12px;">
+                <p style="font-size:2rem; font-weight:800; color:#0a7c42; margin:0; line-height:1.1;">{{ fin_kpis.oc_completadas }}</p>
+                <p style="font-size:0.72rem; text-transform:uppercase; letter-spacing:.05em; color:#7a90ad; margin:4px 0 0;">OC completadas</p>
+            </article>
+            <article class="dashboard-card" style="text-align:center; padding:18px 12px;">
+                <p style="font-size:2rem; font-weight:800; color:{% if fin_kpis.impuestos_pendientes > 0 %}#9b2121{% else %}#0a7c42{% endif %}; margin:0; line-height:1.1;">{{ fin_kpis.impuestos_pendientes }}</p>
+                <p style="font-size:0.72rem; text-transform:uppercase; letter-spacing:.05em; color:#7a90ad; margin:4px 0 0;">Impuestos pendientes</p>
+            </article>
+        </section>
+
+        <section class="dashboard-grid chart-grid">
+            <article class="dashboard-card chart-card">
+                <h3>Presupuesto vs gasto real</h3>
+                <p class="chart-subtitle">Comparativo financiero base para ingresos y egresos.</p>
+                <div class="chart-stage"><canvas id="chart-fin-presupuesto" height="140"></canvas></div>
+            </article>
+            <article class="dashboard-card chart-card">
+                <h3>Costos de producción y rentabilidad</h3>
+                <p class="chart-subtitle">Cruce entre Finanzas y Producción.</p>
+                <div class="chart-stage"><canvas id="chart-fin-costos" height="140"></canvas></div>
+            </article>
+        </section>
+
+        <section class="dashboard-grid chart-grid" style="margin-top:16px;">
+            <article class="dashboard-card chart-card">
+                <h3>Estado órdenes de compra</h3>
+                <p class="chart-subtitle">Pendientes vs completadas.</p>
+                <div class="chart-stage"><canvas id="chart-fin-oc" height="140"></canvas></div>
+            </article>
+            <article class="dashboard-card">
+                <h3>Indicadores cruzados de producción</h3>
+                <ul class="recent-activity-list">
+                    <li><div><p>Costo planificado</p><small>Producción consolidada</small></div><strong>${{ fin_produccion.costo_planificado|floatformat:2 }}</strong></li>
+                    <li><div><p>Costo real</p><small>Máquina + operador + materiales</small></div><strong>${{ fin_produccion.costo_real|floatformat:2 }}</strong></li>
+                    <li><div><p>Variación costos</p><small>Desviación financiera de MFG</small></div><strong>${{ fin_produccion.variacion_costos|floatformat:2 }}</strong></li>
+                    <li><div><p>OEE</p><small>Desempeño operativo</small></div><strong>{{ fin_produccion.oee|floatformat:2 }}%</strong></li>
+                    <li><div><p>Tasa rechazo</p><small>Impacto directo al costo</small></div><strong>{{ fin_produccion.tasa_rechazo|floatformat:2 }}%</strong></li>
+                </ul>
+                <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top: 16px;">
+                    <a href="{% url 'finanzas_dashboard' %}" class="btn btn-warning">Ver dashboard completo</a>
+                    <a href="{% url 'finanzas_dashboard' %}?export=excel" class="btn btn-primary">Exportar Excel</a>
+                    <a href="{% url 'finanzas_dashboard' %}?export=pdf" class="btn btn-danger">Exportar PDF</a>
+                </div>
+            </article>
+        </section>
+
+        <section class="dashboard-grid" style="margin-top:16px;">
+            <article class="dashboard-card">
+                <h3>Órdenes de compra recientes</h3>
+                <ul class="recent-activity-list">
+                    {% for orden in fin_ordenes_compra_recientes %}
+                    <li>
+                        <div>
+                            <p>{{ orden.folio }} — {{ orden.proveedor.nombre }}</p>
+                            <small>{{ orden.fecha_orden|date:'d/m/Y' }}{% if orden.requerimiento_origen %} | {{ orden.requerimiento_origen.folio }}{% endif %}</small>
+                        </div>
+                        <span class="activity-tag {% if orden.estado == 'RECIBIDA' %}transferencia{% elif orden.estado == 'CANCELADA' %}salida_linea{% else %}entrada{% endif %}">{{ orden.get_estado_display }}</span>
+                    </li>
+                    {% empty %}
+                    <li><div><p>Sin órdenes de compra</p><small>Las OC de Finanzas aparecerán aquí</small></div><span class="activity-tag">N/A</span></li>
+                    {% endfor %}
+                </ul>
+            </article>
+            <article class="dashboard-card">
+                <h3>Costeos recientes</h3>
+                <ul class="recent-activity-list">
+                    {% for costeo in fin_costeos_recientes %}
+                    <li>
+                        <div>
+                            <p>{% if costeo.orden_fabricacion %}{{ costeo.orden_fabricacion.folio }}{% else %}{{ costeo.lote_produccion.folio }}{% endif %}</p>
+                            <small>Real ${{ costeo.costo_total_real|floatformat:2 }} | Margen {{ costeo.margen_pct|floatformat:2 }}%</small>
+                        </div>
+                        <span class="activity-tag {% if costeo.rentabilidad >= 0 %}transferencia{% else %}salida_linea{% endif %}">{% if costeo.rentabilidad >= 0 %}Rentable{% else %}Negativo{% endif %}</span>
+                    </li>
+                    {% empty %}
+                    <li><div><p>Sin costeos consolidados</p><small>Recalcula desde el módulo de costeo</small></div><span class="activity-tag">N/A</span></li>
+                    {% endfor %}
+                </ul>
+            </article>
+        </section>
 
     {% elif departamento == 'RRHH' %}
         <div class="modules-section">
@@ -282,9 +388,56 @@
             </div>
         </div>
 
+    {% elif departamento == 'IT' %}
+        <section class="modules-section premium-actions">
+            <h2>Acciones rápidas de IT</h2>
+            <div class="modules-grid">
+                <div class="module-card">
+                    <h4>Clientes de Compra PT</h4>
+                    <p>Administra el catalogo oficial de clientes destino para producto terminado y reclamos.</p>
+                    <a href="{% url 'it_clientes_compra' %}" class="btn btn-dark">Abrir módulo</a>
+                </div>
+            </div>
+        </section>
+
+        <section class="dashboard-grid" style="grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap:14px;">
+            <article class="dashboard-card" style="text-align:center; padding:18px 12px;">
+                <p style="font-size:2rem; font-weight:800; color:#1255a7; margin:0; line-height:1.1;">{{ it_clientes_activos }}</p>
+                <p style="font-size:0.72rem; text-transform:uppercase; letter-spacing:.05em; color:#7a90ad; margin:4px 0 0;">Clientes activos</p>
+            </article>
+            <article class="dashboard-card" style="text-align:center; padding:18px 12px;">
+                <p style="font-size:2rem; font-weight:800; color:#9b2121; margin:0; line-height:1.1;">{{ it_clientes_inactivos }}</p>
+                <p style="font-size:0.72rem; text-transform:uppercase; letter-spacing:.05em; color:#7a90ad; margin:4px 0 0;">Clientes inactivos</p>
+            </article>
+        </section>
+
+        <section class="dashboard-grid" style="margin-top:16px;">
+            <article class="dashboard-card">
+                <h3>Clientes recientes</h3>
+                <ul class="recent-activity-list">
+                    {% for cliente in it_clientes_recientes %}
+                    <li>
+                        <div>
+                            <p>{{ cliente.codigo }} — {{ cliente.nombre }}</p>
+                            <small>{{ cliente.contacto|default:'Sin contacto' }}{% if cliente.email %} | {{ cliente.email }}{% endif %}</small>
+                        </div>
+                        <span class="activity-tag {% if cliente.activo %}entrada{% else %}salida_linea{% endif %}">
+                            {% if cliente.activo %}Activo{% else %}Inactivo{% endif %}
+                        </span>
+                    </li>
+                    {% empty %}
+                    <li>
+                        <div><p>Sin clientes cargados</p><small>Registra clientes desde el modulo de IT</small></div>
+                        <span class="activity-tag">N/A</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </article>
+        </section>
+
     {% elif departamento == 'QA' or departamento == 'Calidad' %}
-        <div class="modules-section">
-            <h2>Módulos disponibles</h2>
+        <section class="modules-section premium-actions">
+            <h2>Accesos rápidos de Calidad</h2>
             <div class="modules-grid">
                 <div class="module-card">
                     <h4>SQA - Supplier Quality Assurance</h4>
@@ -297,12 +450,131 @@
                     <a href="{% url 'qa_oqa' %}" class="btn btn-success">Acceder</a>
                 </div>
                 <div class="module-card">
+                    <h4>QQA - Validación de Defectos</h4>
+                    <p>Analiza scrap y defectos capturados por Producción, valida causa máquina y genera informe QA.</p>
+                    <a href="{% url 'qa_qqa_defectos' %}" class="btn btn-success">Acceder</a>
+                </div>
+                <div class="module-card">
                     <h4>Customer Service</h4>
                     <p>Gestión y seguimiento de reclamos de cliente</p>
                     <a href="{% url 'qa_customer_service' %}" class="btn btn-success">Acceder</a>
                 </div>
             </div>
-        </div>
+        </section>
+
+        <section class="dashboard-grid" style="grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap:14px; margin-bottom: 16px;">
+            <article class="dashboard-card" style="text-align:center; padding:18px 12px;">
+                <p style="font-size:2rem; font-weight:800; color:#9b2121; margin:0; line-height:1.1;">{{ qa_sqa_pendientes }}</p>
+                <p style="font-size:0.72rem; text-transform:uppercase; letter-spacing:.05em; color:#7a90ad; margin:4px 0 0;">Recepciones SQA pendientes</p>
+            </article>
+            <article class="dashboard-card" style="text-align:center; padding:18px 12px;">
+                <p style="font-size:2rem; font-weight:800; color:#1255a7; margin:0; line-height:1.1;">{{ qa_sqa_revisadas_semana }}</p>
+                <p style="font-size:0.72rem; text-transform:uppercase; letter-spacing:.05em; color:#7a90ad; margin:4px 0 0;">SQA revisadas 7 días</p>
+            </article>
+            <article class="dashboard-card" style="text-align:center; padding:18px 12px;">
+                <p style="font-size:2rem; font-weight:800; color:#b45309; margin:0; line-height:1.1;">{{ qa_oqa_pendientes }}</p>
+                <p style="font-size:0.72rem; text-transform:uppercase; letter-spacing:.05em; color:#7a90ad; margin:4px 0 0;">Lotes OQA pendientes</p>
+            </article>
+            <article class="dashboard-card" style="text-align:center; padding:18px 12px;">
+                <p style="font-size:2rem; font-weight:800; color:#0a7c42; margin:0; line-height:1.1;">{{ qa_oqa_liberados_semana }}</p>
+                <p style="font-size:0.72rem; text-transform:uppercase; letter-spacing:.05em; color:#7a90ad; margin:4px 0 0;">OQA liberados 7 días</p>
+            </article>
+            <article class="dashboard-card" style="text-align:center; padding:18px 12px;">
+                <p style="font-size:2rem; font-weight:800; color:#1f3e67; margin:0; line-height:1.1;">{{ qa_reclamos_abiertos }}</p>
+                <p style="font-size:0.72rem; text-transform:uppercase; letter-spacing:.05em; color:#7a90ad; margin:4px 0 0;">Reclamos abiertos</p>
+            </article>
+            <article class="dashboard-card" style="text-align:center; padding:18px 12px;">
+                <p style="font-size:2rem; font-weight:800; color:{% if qa_reclamos_criticos > 0 %}#9b2121{% else %}#0a7c42{% endif %}; margin:0; line-height:1.1;">{{ qa_reclamos_criticos }}</p>
+                <p style="font-size:0.72rem; text-transform:uppercase; letter-spacing:.05em; color:#7a90ad; margin:4px 0 0;">Reclamos críticos</p>
+            </article>
+        </section>
+
+        <section class="dashboard-grid chart-grid">
+            <article class="dashboard-card chart-card">
+                <h3>Pipeline operativo QA</h3>
+                <p class="chart-subtitle">Vista ejecutiva tipo Power BI de la carga actual por módulo.</p>
+                <div class="chart-stage">
+                    <canvas id="chart-qa-pipeline" height="140"></canvas>
+                </div>
+            </article>
+            <article class="dashboard-card chart-card">
+                <h3>Resoluciones y contención</h3>
+                <p class="chart-subtitle">Distribución reciente de liberaciones, cuarentenas y cierres.</p>
+                <div class="chart-stage">
+                    <canvas id="chart-qa-status" height="140"></canvas>
+                </div>
+            </article>
+        </section>
+
+        <section class="dashboard-grid">
+            <article class="dashboard-card">
+                <h3>Actividad reciente SQA</h3>
+                <ul class="recent-activity-list">
+                    {% for recepcion in qa_sqa_recientes %}
+                    <li>
+                        <div>
+                            <p>REC-{{ recepcion.id }} — {{ recepcion.proveedor }}</p>
+                            <small>{{ recepcion.fecha_recepcion|date:'d/m/Y' }} | {{ recepcion.get_accion_recomendada_display|default:'Sin acción' }}</small>
+                        </div>
+                        <span class="activity-tag {% if recepcion.accion_recomendada == 'CUARENTENA' %}salida_linea{% else %}entrada{% endif %}">
+                            {{ recepcion.get_accion_recomendada_display|default:'Revisada' }}
+                        </span>
+                    </li>
+                    {% empty %}
+                    <li>
+                        <div><p>Sin revisiones SQA</p><small>Las recepciones inspeccionadas aparecerán aquí</small></div>
+                        <span class="activity-tag">N/A</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </article>
+
+            <article class="dashboard-card">
+                <h3>Actividad reciente OQA</h3>
+                <ul class="recent-activity-list">
+                    {% for lote in qa_oqa_recientes %}
+                    <li>
+                        <div>
+                            <p>{{ lote.folio }} — {{ lote.bom.producto }}</p>
+                            <small>{{ lote.fecha_captura|date:'d/m/Y' }}{% if lote.orden_fabricacion %} | {{ lote.orden_fabricacion.folio }}{% endif %}</small>
+                        </div>
+                        <span class="activity-tag {% if lote.estado == 'VALIDADO' %}transferencia{% else %}salida_linea{% endif %}">
+                            {{ lote.get_estado_display }}
+                        </span>
+                    </li>
+                    {% empty %}
+                    <li>
+                        <div><p>Sin evaluaciones OQA</p><small>Los lotes revisados se mostrarán aquí</small></div>
+                        <span class="activity-tag">N/A</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </article>
+        </section>
+
+        <section class="dashboard-grid" style="margin-top: 16px;">
+            <article class="dashboard-card">
+                <h3>Customer Service reciente</h3>
+                <ul class="recent-activity-list">
+                    {% for reclamo in qa_reclamos_recientes %}
+                    <li>
+                        <div>
+                            <p>{{ reclamo.folio }} — {{ reclamo.cliente }}</p>
+                            <small>{{ reclamo.get_tipo_reclamo_display }} | {{ reclamo.producto_lote|default:'Sin lote' }}</small>
+                        </div>
+                        <span class="activity-tag {% if reclamo.estado_reclamo == 'cerrado' %}transferencia{% elif reclamo.prioridad == 'alta' %}salida_linea{% else %}entrada{% endif %}">
+                            {{ reclamo.get_estado_reclamo_display }}
+                        </span>
+                    </li>
+                    {% empty %}
+                    <li>
+                        <div><p>Sin reclamos registrados</p><small>Customer Service mostrará los casos recientes aquí</small></div>
+                        <span class="activity-tag">N/A</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </article>
+        </section>
 
     {% elif departamento == 'Admin' %}
         <div class="modules-section">
@@ -322,6 +594,11 @@
                     <h4>Configuración del Sistema</h4>
                     <p>Configuración general del ERP</p>
                     <a href="#" class="btn btn-danger">Acceder</a>
+                </div>
+                <div class="module-card">
+                    <h4>Clientes de Compra PT</h4>
+                    <p>Administra el catalogo oficial de clientes para embarque y reclamos.</p>
+                    <a href="{% url 'it_clientes_compra' %}" class="btn btn-danger">Acceder</a>
                 </div>
             </div>
         </div>
@@ -525,6 +802,72 @@ document.addEventListener('DOMContentLoaded', function () {
 </script>
 {% endif %}
 
+{% if departamento == 'Finanzas' and fin_chart_data %}
+{{ fin_chart_data|json_script:"fin-chart-data" }}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    Chart.defaults.font.family = "Manrope, Segoe UI, sans-serif";
+    Chart.defaults.color = '#5b6475';
+    const dataNode = document.getElementById('fin-chart-data');
+    if (!dataNode || typeof Chart === 'undefined') {
+        return;
+    }
+
+    const chartData = JSON.parse(dataNode.textContent || '{}');
+    const budgetCtx = document.getElementById('chart-fin-presupuesto');
+    if (budgetCtx) {
+        new Chart(budgetCtx, {
+            type: 'bar',
+            data: {
+                labels: chartData.presupuesto_labels || [],
+                datasets: [{
+                    data: chartData.presupuesto_values || [],
+                    backgroundColor: ['#1f5d8d', '#c53030', '#159947'],
+                    borderRadius: 10,
+                }],
+            },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } },
+        });
+    }
+
+    const costCtx = document.getElementById('chart-fin-costos');
+    if (costCtx) {
+        new Chart(costCtx, {
+            type: 'line',
+            data: {
+                labels: chartData.costos_labels || [],
+                datasets: [{
+                    data: chartData.costos_values || [],
+                    borderColor: '#1f3e67',
+                    backgroundColor: 'rgba(31, 62, 103, .12)',
+                    fill: true,
+                    tension: 0.3,
+                }],
+            },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } },
+        });
+    }
+
+    const ocCtx = document.getElementById('chart-fin-oc');
+    if (ocCtx) {
+        new Chart(ocCtx, {
+            type: 'doughnut',
+            data: {
+                labels: chartData.oc_labels || [],
+                datasets: [{
+                    data: chartData.oc_values || [],
+                    backgroundColor: ['#d28a0f', '#159947'],
+                    borderWidth: 0,
+                }],
+            },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } },
+        });
+    }
+});
+</script>
+{% endif %}
+
 {% if departamento == 'Producción' and prod_chart_data %}
 {{ prod_chart_data|json_script:"prod-chart-data" }}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -631,6 +974,118 @@ document.addEventListener('DOMContentLoaded', function () {
                         ticks: { color: '#4b5563', font: { weight: 700 } },
                         grid: { display: false },
                         border: { display: false },
+                    },
+                },
+            },
+        });
+    }
+});
+</script>
+{% endif %}
+
+{% if departamento == 'QA' or departamento == 'Calidad' %}
+{{ qa_chart_data|json_script:"qa-chart-data" }}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    Chart.defaults.font.family = "Manrope, Segoe UI, sans-serif";
+    Chart.defaults.color = '#5b6475';
+
+    const dataNode = document.getElementById('qa-chart-data');
+    if (!dataNode || typeof Chart === 'undefined') return;
+    const chartData = JSON.parse(dataNode.textContent || '{}');
+
+    const ctxPipeline = document.getElementById('chart-qa-pipeline');
+    if (ctxPipeline) {
+        const grad = ctxPipeline.getContext('2d').createLinearGradient(0, 0, 0, 220);
+        grad.addColorStop(0, '#b71f17');
+        grad.addColorStop(1, '#ef8c57');
+
+        new Chart(ctxPipeline, {
+            type: 'bar',
+            data: {
+                labels: chartData.pipeline_labels || [],
+                datasets: [{
+                    label: 'Casos activos',
+                    data: chartData.pipeline_values || [],
+                    backgroundColor: grad,
+                    borderRadius: 10,
+                    borderSkipped: false,
+                    maxBarThickness: 54,
+                }],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: '#111827',
+                        titleColor: '#f9fafb',
+                        bodyColor: '#f9fafb',
+                        padding: 10,
+                    },
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: { color: '#6b7280' },
+                        grid: { color: '#e9edf3', drawBorder: false },
+                        border: { display: false },
+                    },
+                    x: {
+                        ticks: { color: '#4b5563', font: { weight: 700 } },
+                        grid: { display: false },
+                        border: { display: false },
+                    },
+                },
+            },
+        });
+    }
+
+    const ctxStatus = document.getElementById('chart-qa-status');
+    if (ctxStatus) {
+        new Chart(ctxStatus, {
+            type: 'doughnut',
+            data: {
+                labels: chartData.status_labels || [],
+                datasets: [{
+                    data: chartData.status_values || [],
+                    backgroundColor: ['#0a7c42', '#9b2121', '#1255a7', '#f59e0b', '#6d33c8'],
+                    borderColor: '#ffffff',
+                    borderWidth: 3,
+                    hoverOffset: 7,
+                }],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '62%',
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            color: '#374151',
+                            boxWidth: 10,
+                            usePointStyle: true,
+                            pointStyle: 'circle',
+                            padding: 14,
+                            font: { weight: 700 },
+                        },
+                    },
+                    tooltip: {
+                        backgroundColor: '#111827',
+                        titleColor: '#f9fafb',
+                        bodyColor: '#f9fafb',
+                        padding: 10,
+                        callbacks: {
+                            label(context) {
+                                const values = chartData.status_values || [];
+                                const total = values.reduce((acc, value) => acc + Number(value || 0), 0);
+                                const pct = total > 0 ? (Number(context.raw || 0) / total * 100).toFixed(1) : '0.0';
+                                return `${context.label}: ${context.raw} (${pct}%)`;
+                            },
+                        },
                     },
                 },
             },

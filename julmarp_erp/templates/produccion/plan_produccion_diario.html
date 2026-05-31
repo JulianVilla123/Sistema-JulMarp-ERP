@@ -88,12 +88,6 @@
     margin-bottom: 1.5rem;
   }
 
-  .btn-group-custom {
-    display: flex;
-    gap: 0.5rem;
-    margin-top: 1rem;
-  }
-
   .lote-card {
     transition: all 0.3s ease;
     border: 1px solid #dee2e6;
@@ -244,13 +238,12 @@
             <tr>
               <th class="text-center" style="width: 8%">Orden</th>
               <th style="width: 12%">Folio</th>
-              <th style="width: 18%">Producto</th>
-              <th class="text-center" style="width: 8%">Línea</th>
+              <th style="width: 20%">Producto</th>
+              <th class="text-center" style="width: 14%">Día producido</th>
+              <th class="text-center" style="width: 12%">Línea</th>
               <th class="text-end" style="width: 10%">Planificado</th>
               <th class="text-end" style="width: 10%">Producido</th>
-              <th class="text-end" style="width: 10%">Pendiente</th>
-              <th style="width: 14%">Avance</th>
-              <th class="text-center" style="width: 10%">Estado</th>
+              <th class="text-center" style="width: 14%">Estado</th>
             </tr>
           </thead>
           <tbody>
@@ -265,25 +258,17 @@
                 <div class="text-muted small">{{ plan.codigo_bom }}</div>
               </td>
               <td class="text-center">
+                {% if plan.fecha_produccion %}
+                  <small class="text-muted">{{ plan.fecha_produccion|date:"d/m/Y" }}</small>
+                {% else %}
+                  <small class="text-muted">-</small>
+                {% endif %}
+              </td>
+              <td class="text-center">
                 <small class="text-muted">{{ plan.linea }}</small>
               </td>
               <td class="text-end fw-600">{{ plan.cantidad_planificada|floatformat:0 }}</td>
               <td class="text-end fw-600 text-success">{{ plan.cantidad_producida|floatformat:0 }}</td>
-              <td class="text-end fw-600 text-warning">{{ plan.cantidad_pendiente|floatformat:0 }}</td>
-              <td>
-                <div class="progress">
-                  <div
-                    class="progress-bar {% if plan.avance_pct >= 75 %}bg-success{% elif plan.avance_pct >= 50 %}bg-info{% elif plan.avance_pct > 0 %}bg-warning{% else %}bg-secondary{% endif %}"
-                    role="progressbar"
-                    style="width: {{ plan.avance_pct }}%"
-                    aria-valuenow="{{ plan.avance_pct }}"
-                    aria-valuemin="0"
-                    aria-valuemax="100"
-                  >
-                    {{ plan.avance_pct }}%
-                  </div>
-                </div>
-              </td>
               <td class="text-center">
                 {% if plan.estado == 'EN_PROCESO' %}
                   <span class="badge bg-success">
@@ -310,7 +295,7 @@
             </tr>
             {% if plan.lotes %}
             <tr class="table-light">
-              <td colspan="9">
+              <td colspan="7">
                 <div class="ps-4 py-3">
                   <h6 class="mb-3 text-muted fw-600">
                     <i class="bi bi-boxes"></i> Lotes Capturados ({{ plan.num_lotes }})
@@ -421,23 +406,6 @@
     </div>
   </div>
   {% endif %}
-
-  <!-- Action Buttons -->
-  <div class="row mt-4 mb-4">
-    <div class="col-12">
-      <div class="btn-group-custom">
-        <a href="{% url 'captura_lotes' %}" class="btn btn-success fw-600">
-          <i class="bi bi-plus-circle"></i> Capturar Nuevo Lote
-        </a>
-        <a href="{% url 'ordenes_fabricacion' %}" class="btn btn-outline-secondary fw-600">
-          <i class="bi bi-list"></i> Ver Órdenes Fabricación
-        </a>
-        <a href="{% url 'planificacion_produccion' %}" class="btn btn-outline-secondary fw-600">
-          <i class="bi bi-calendar3"></i> Ver Planes Producción
-        </a>
-      </div>
-    </div>
-  </div>
 
 </div>
 {% endblock %}

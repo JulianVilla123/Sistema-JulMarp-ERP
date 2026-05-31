@@ -1,0 +1,265 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Producción - Control de Recursos{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/pages/inventario.css' %}">
+<style>
+    .resource-page { display:grid; gap:20px; }
+    .resource-grid { display:grid; grid-template-columns: 1fr 1fr; gap:20px; }
+    .resource-card {
+        background:#fff;
+        border:1px solid #dce7f5;
+        border-radius:14px;
+        padding:22px 24px;
+    }
+    .resource-card h3 { margin:0 0 16px; color:#1f3e67; }
+    .resource-form-grid {
+        display:grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap:12px;
+    }
+    .resource-form-grid label { display:flex; flex-direction:column; gap:5px; font-size:.85rem; color:#4b5e78; font-weight:600; }
+    .resource-form-grid input,
+    .resource-form-grid select,
+    .resource-form-grid textarea {
+        padding:8px 10px;
+        border:1px solid #c8d9ef;
+        border-radius:8px;
+        background:#f8fbff;
+        font-size:.88rem;
+        color:#25364f;
+    }
+    .resource-form-grid textarea { min-height: 80px; resize: vertical; }
+    .resource-form-grid label.full { grid-column: 1 / -1; }
+    .resource-actions { margin-top:14px; display:flex; gap:10px; flex-wrap:wrap; }
+    .resource-kpis { display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:14px; }
+    .resource-kpi {
+        background:#f8fbff;
+        border:1px solid #dce7f5;
+        border-radius:12px;
+        padding:16px;
+        text-align:center;
+    }
+    .resource-kpi strong { display:block; font-size:1.7rem; color:#1f3e67; }
+    .resource-kpi span { font-size:.76rem; text-transform:uppercase; letter-spacing:.05em; color:#7a90ad; }
+    @media (max-width: 960px) { .resource-grid { grid-template-columns: 1fr; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="entrada-container">
+    <div class="entrada-header">
+        <h1>Control de Recursos MFG</h1>
+        <p>Captura costo hora real de máquinas y operadores, y registra su uso real por orden de fabricación para alimentar KPIs y comparación financiera.</p>
+    </div>
+
+    {% if messages %}
+    <ul class="messages" style="margin-bottom: 20px;">
+        {% for message in messages %}
+        <li class="{{ message.tags }}">{{ message }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    <div class="resource-page">
+        <section class="resource-kpis">
+            <article class="resource-kpi"><strong>{{ costos_maquina|length }}</strong><span>Máquinas con costo</span></article>
+            <article class="resource-kpi"><strong>{{ costos_operador|length }}</strong><span>Operadores con costo</span></article>
+            <article class="resource-kpi"><strong>{{ usos_recursos|length }}</strong><span>Usos registrados</span></article>
+        </section>
+
+        <section class="resource-grid">
+            <article class="resource-card">
+                <h3>Costo hora de línea / máquina</h3>
+                <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="resource_action" value="registrar_maquina">
+                    <div class="resource-form-grid">
+                        <label>
+                            Línea de producción
+                            <select name="linea_produccion" required>
+                                <option value="">Selecciona línea</option>
+                                {% for linea in lineas_produccion %}
+                                <option value="{{ linea }}">{{ linea }}</option>
+                                {% endfor %}
+                            </select>
+                        </label>
+                        <label>
+                            Máquina / Equipo
+                            <input type="text" name="maquina_nombre" placeholder="Ej. SMT Fuji NXT-01" required>
+                        </label>
+                        <label>
+                            Costo hora real
+                            <input type="number" name="costo_hora" step="0.01" min="0.01" required>
+                        </label>
+                        <label class="full">
+                            Notas
+                            <textarea name="notas_maquina" placeholder="Referencia de mantenimiento, energía o criterio financiero."></textarea>
+                        </label>
+                        <label><input type="checkbox" name="activo_maquina" checked> Recurso activo</label>
+                    </div>
+                    <div class="resource-actions"><button type="submit" class="btn btn-primary">Guardar costo máquina</button></div>
+                </form>
+            </article>
+
+            <article class="resource-card">
+                <h3>Costo hora de operador</h3>
+                <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="resource_action" value="registrar_operador">
+                    <div class="resource-form-grid">
+                        <label>
+                            Operador
+                            <select name="operador_id" required>
+                                <option value="">Selecciona operador</option>
+                                {% for operador in operadores_catalogo %}
+                                <option value="{{ operador.id }}">{{ operador.get_full_name|default:operador.username }}{% if operador.departamento %} | {{ operador.departamento.nombre }}{% endif %}</option>
+                                {% endfor %}
+                            </select>
+                        </label>
+                        <label>
+                            Nómina por hora
+                            <input type="number" name="nomina_hora" step="0.01" min="0.01" required>
+                        </label>
+                        <label>
+                            Asistencia %
+                            <input type="number" name="porcentaje_asistencia" step="0.01" min="0" max="100" value="100" required>
+                        </label>
+                        <label>
+                            Desempeño %
+                            <input type="number" name="factor_desempeno" step="0.01" min="0" max="100" value="100" required>
+                        </label>
+                        <label class="full">
+                            Notas
+                            <textarea name="notas_operador" placeholder="Criterio RRHH: nómina, asistencia, desempeño o bonos."></textarea>
+                        </label>
+                        <label><input type="checkbox" name="activo_operador" checked> Operador activo</label>
+                    </div>
+                    <div class="resource-actions"><button type="submit" class="btn btn-primary">Guardar costo operador</button></div>
+                </form>
+            </article>
+        </section>
+
+        <section class="resource-card">
+            <h3>Uso real por orden de fabricación</h3>
+            <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="resource_action" value="registrar_uso">
+                <div class="resource-form-grid">
+                    <label>
+                        Orden de fabricación
+                        <select name="orden_id" required>
+                            <option value="">Selecciona orden</option>
+                            {% for orden in ordenes_catalogo %}
+                            <option value="{{ orden.id }}">{{ orden.folio }} — {{ orden.bom.producto }}</option>
+                            {% endfor %}
+                        </select>
+                    </label>
+                    <label>
+                        Tipo de recurso
+                        <select name="tipo_recurso" required>
+                            <option value="{{ tipo_recurso_maquina }}">Máquina</option>
+                            <option value="{{ tipo_recurso_operador }}">Operador</option>
+                        </select>
+                    </label>
+                    <label>
+                        Máquina
+                        <select name="costo_maquina_id">
+                            <option value="">Selecciona máquina</option>
+                            {% for maquina in costos_maquina %}
+                            <option value="{{ maquina.id }}">{{ maquina.linea_produccion }} | {{ maquina.maquina_nombre }} | ${{ maquina.costo_hora }}/h</option>
+                            {% endfor %}
+                        </select>
+                    </label>
+                    <label>
+                        Operador
+                        <select name="costo_operador_id">
+                            <option value="">Selecciona operador</option>
+                            {% for operador in costos_operador %}
+                            <option value="{{ operador.id }}">{{ operador.operador.get_full_name|default:operador.operador.username }} | ${{ operador.costo_hora_real }}/h</option>
+                            {% endfor %}
+                        </select>
+                    </label>
+                    <label>
+                        Horas reales
+                        <input type="number" name="horas_reales" step="0.01" min="0.01" required>
+                    </label>
+                    <label class="full">
+                        Notas
+                        <textarea name="notas_uso" placeholder="Ej. Setup, cambio de programa, retrabajo o soporte técnico."></textarea>
+                    </label>
+                </div>
+                <div class="resource-actions"><button type="submit" class="btn btn-success">Registrar uso del recurso</button></div>
+            </form>
+        </section>
+
+        <section class="resource-grid">
+            <article class="resource-card">
+                <h3>Catálogo costo máquina</h3>
+                <div class="tabla-wrap">
+                    <table class="tabla-material">
+                        <thead><tr><th>Línea</th><th>Máquina</th><th>Costo/h</th><th>Estatus</th></tr></thead>
+                        <tbody>
+                            {% for maquina in costos_maquina %}
+                            <tr>
+                                <td>{{ maquina.linea_produccion }}</td>
+                                <td>{{ maquina.maquina_nombre }}</td>
+                                <td>${{ maquina.costo_hora }}</td>
+                                <td>{% if maquina.activo %}<span class="badge ok">Activo</span>{% else %}<span class="badge warn">Inactivo</span>{% endif %}</td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="4">Sin costos de máquina registrados.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </article>
+            <article class="resource-card">
+                <h3>Catálogo costo operador</h3>
+                <div class="tabla-wrap">
+                    <table class="tabla-material">
+                        <thead><tr><th>Operador</th><th>Nómina/h</th><th>Costo real/h</th><th>Estatus</th></tr></thead>
+                        <tbody>
+                            {% for operador in costos_operador %}
+                            <tr>
+                                <td>{{ operador.operador.get_full_name|default:operador.operador.username }}</td>
+                                <td>${{ operador.nomina_hora }}</td>
+                                <td>${{ operador.costo_hora_real }}</td>
+                                <td>{% if operador.activo %}<span class="badge ok">Activo</span>{% else %}<span class="badge warn">Inactivo</span>{% endif %}</td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="4">Sin costos de operador registrados.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </article>
+        </section>
+
+        <section class="resource-card">
+            <h3>Uso reciente de recursos por orden</h3>
+            <div class="tabla-wrap">
+                <table class="tabla-material">
+                    <thead><tr><th>Fecha</th><th>OF</th><th>Tipo</th><th>Recurso</th><th>Horas</th><th>Costo total</th></tr></thead>
+                    <tbody>
+                        {% for uso in usos_recursos %}
+                        <tr>
+                            <td>{{ uso.fecha_creacion|date:'d/m/Y H:i' }}</td>
+                            <td>{{ uso.orden.folio }}</td>
+                            <td>{{ uso.get_tipo_recurso_display }}</td>
+                            <td>{% if uso.tipo_recurso == 'MAQUINA' %}{{ uso.costo_maquina.maquina_nombre }}{% else %}{{ uso.costo_operador.operador.get_full_name|default:uso.costo_operador.operador.username }}{% endif %}</td>
+                            <td>{{ uso.horas_reales }}</td>
+                            <td>${{ uso.costo_total }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="6">Sin usos de recursos registrados.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+</div>
+{% endblock %}

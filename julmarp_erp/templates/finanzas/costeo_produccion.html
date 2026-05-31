@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Finanzas - Costeo de Producción{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/pages/inventario.css' %}">{% endblock %}
+{% block content %}
+<div class="entrada-container">
+    <div class="entrada-header"><h1>Costeo de Producción</h1><p>Consolida costos reales vs planificados y calcula rentabilidad por orden o lote.</p></div>
+    {% if messages %}<ul class="messages" style="margin-bottom:20px;">{% for message in messages %}<li class="{{ message.tags }}">{{ message }}</li>{% endfor %}</ul>{% endif %}
+    <section class="entrada-card entrada-card-full">
+        <form method="post" class="entrada-form-grid">{% csrf_token %}<input type="hidden" name="accion" value="recalcular_costeos">
+            <label>Fecha inicio<input type="date" name="fecha_inicio" value="{{ fecha_inicio|date:'Y-m-d' }}"></label>
+            <label>Fecha fin<input type="date" name="fecha_fin" value="{{ fecha_fin|date:'Y-m-d' }}"></label>
+            <div class="entrada-actions" style="grid-column:1/-1;"><button class="btn btn-warning" type="submit">Recalcular costeo</button></div>
+        </form>
+    </section>
+    <section class="entrada-card entrada-card-full">
+        <h3>Consolidado por orden / lote</h3>
+        <div class="tabla-wrap"><table class="tabla-material"><thead><tr><th>Referencia</th><th>Tipo</th><th>Material plan</th><th>Material real</th><th>Máquina</th><th>Operador</th><th>Total real</th><th>Ingreso estimado</th><th>Rentabilidad</th><th>Margen</th></tr></thead><tbody>{% for costeo in costeos %}<tr><td>{% if costeo.orden_fabricacion %}{{ costeo.orden_fabricacion.folio }}{% else %}{{ costeo.lote_produccion.folio }}{% endif %}</td><td>{% if costeo.lote_produccion %}Lote{% else %}Orden{% endif %}</td><td>${{ costeo.costo_material_plan|floatformat:2 }}</td><td>${{ costeo.costo_material_real|floatformat:2 }}</td><td>${{ costeo.costo_maquina_real|floatformat:2 }}</td><td>${{ costeo.costo_operador_real|floatformat:2 }}</td><td>${{ costeo.costo_total_real|floatformat:2 }}</td><td>${{ costeo.ingreso_estimado|floatformat:2 }}</td><td>${{ costeo.rentabilidad|floatformat:2 }}</td><td>{{ costeo.margen_pct|floatformat:2 }}%</td></tr>{% empty %}<tr><td colspan="10">No hay costeos generados en el periodo.</td></tr>{% endfor %}</tbody></table></div>
+    </section>
+</div>
+{% endblock %}

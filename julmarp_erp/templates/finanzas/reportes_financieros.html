@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Finanzas - Reportes{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/pages/inventario.css' %}">{% endblock %}
+{% block content %}
+<div class="entrada-container">
+    <div class="entrada-header"><h1>Reportes Financieros</h1><p>Informes de resultados, flujo de caja y KPIs financieros con exportación.</p></div>
+    {% if messages %}<ul class="messages" style="margin-bottom:20px;">{% for message in messages %}<li class="{{ message.tags }}">{{ message }}</li>{% endfor %}</ul>{% endif %}
+    <section class="entrada-card entrada-card-full">
+        <form method="post" class="entrada-form-grid">{% csrf_token %}<input type="hidden" name="accion" value="generar_reporte">
+            <label>Fecha inicio<input type="date" name="fecha_inicio" value="{{ fecha_inicio|date:'Y-m-d' }}"></label>
+            <label>Fecha fin<input type="date" name="fecha_fin" value="{{ fecha_fin|date:'Y-m-d' }}"></label>
+            <div class="entrada-actions" style="grid-column:1/-1;"><button class="btn btn-warning" type="submit">Generar reporte</button></div>
+        </form>
+    </section>
+    {% if reporte_actual %}
+    <section class="entrada-card entrada-card-full">
+        <h3>Reporte actual</h3>
+        <div class="entrada-actions">
+            <a class="btn btn-primary" href="{% url 'finanzas_reportes' %}?reporte_id={{ reporte_actual.id }}&export=excel">Exportar Excel</a>
+            <a class="btn btn-danger" href="{% url 'finanzas_reportes' %}?reporte_id={{ reporte_actual.id }}&export=pdf">Exportar PDF</a>
+        </div>
+        <div class="tabla-wrap" style="margin-top:14px;"><table class="tabla-material"><tbody>
+            <tr><th>Flujo de caja</th><td>${{ dashboard.kpis.flujo_caja|floatformat:2 }}</td></tr>
+            <tr><th>Rentabilidad</th><td>${{ dashboard.kpis.rentabilidad|floatformat:2 }}</td></tr>
+            <tr><th>Presupuesto total</th><td>${{ dashboard.kpis.presupuesto_total|floatformat:2 }}</td></tr>
+            <tr><th>Gasto real</th><td>${{ dashboard.kpis.gasto_real|floatformat:2 }}</td></tr>
+            <tr><th>OC pendientes</th><td>{{ dashboard.kpis.oc_pendientes }}</td></tr>
+        </tbody></table></div>
+    </section>
+    {% endif %}
+    <section class="entrada-card entrada-card-full">
+        <h3>Histórico de reportes</h3>
+        <div class="tabla-wrap"><table class="tabla-material"><thead><tr><th>Nombre</th><th>Tipo</th><th>Periodo</th><th>Fecha</th><th>Acciones</th></tr></thead><tbody>{% for reporte in reportes %}<tr><td>{{ reporte.nombre }}</td><td>{{ reporte.get_tipo_display }}</td><td>{{ reporte.fecha_inicio|date:'d/m/Y' }} - {{ reporte.fecha_fin|date:'d/m/Y' }}</td><td>{{ reporte.fecha_creacion|date:'d/m/Y H:i' }}</td><td><a class="btn btn-primary" href="{% url 'finanzas_reportes' %}?reporte_id={{ reporte.id }}">Ver</a> <a class="btn btn-danger" href="{% url 'finanzas_reportes' %}?reporte_id={{ reporte.id }}&export=pdf">PDF</a></td></tr>{% empty %}<tr><td colspan="5">Sin reportes generados.</td></tr>{% endfor %}</tbody></table></div>
+    </section>
+</div>
+{% endblock %}

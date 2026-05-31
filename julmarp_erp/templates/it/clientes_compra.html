@@ -1,0 +1,97 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}IT - Clientes de Compra{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/pages/qa.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="calidad-container">
+    <div class="calidad-header">
+        <h1>IT / Clientes de Compra</h1>
+        <p>Catalogo maestro de clientes autorizados para producto terminado, OQA y Customer Service.</p>
+    </div>
+
+    {% if messages %}
+    <ul class="messages" style="margin-bottom: 20px;">
+        {% for message in messages %}
+        <li class="{{ message.tags }}">{{ message }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    <div class="calidad-grid">
+        <section class="calidad-card">
+            <h3>Alta y actualizacion de cliente</h3>
+            <form method="post" class="calidad-form">
+                {% csrf_token %}
+                <label>
+                    Codigo cliente
+                    <input type="text" name="codigo" value="{{ form_data.codigo|default:'' }}" placeholder="Ej. CLI-LG" required>
+                </label>
+                <label>
+                    Nombre cliente
+                    <input type="text" name="nombre" value="{{ form_data.nombre|default:'' }}" placeholder="Ej. LG Electronics Mexico" required>
+                </label>
+                <label>
+                    Contacto principal
+                    <input type="text" name="contacto" value="{{ form_data.contacto|default:'' }}" placeholder="Ej. Comprador regional PT">
+                </label>
+                <label>
+                    Correo electronico
+                    <input type="email" name="email" value="{{ form_data.email|default:'' }}" placeholder="Ej. compras@cliente.com">
+                </label>
+                <label>
+                    Telefono
+                    <input type="text" name="telefono" value="{{ form_data.telefono|default:'' }}" placeholder="Ej. 55-1234-5678">
+                </label>
+                <label class="check-item"><input type="checkbox" name="activo" {% if form_data %}{% if form_data.activo %}checked{% endif %}{% else %}checked{% endif %}> Cliente activo</label>
+
+                <div class="calidad-actions">
+                    <button type="submit" class="btn btn-dark">Guardar cliente</button>
+                </div>
+            </form>
+        </section>
+
+        <section class="calidad-card">
+            <h3>Clientes registrados</h3>
+            <div class="tabla-wrap">
+                <table class="tabla-material">
+                    <thead>
+                        <tr>
+                            <th>Codigo</th>
+                            <th>Cliente</th>
+                            <th>Contacto</th>
+                            <th>Correo</th>
+                            <th>Estatus</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for cliente in clientes %}
+                        <tr>
+                            <td>{{ cliente.codigo }}</td>
+                            <td>{{ cliente.nombre }}</td>
+                            <td>{{ cliente.contacto|default:'-' }}</td>
+                            <td>{{ cliente.email|default:'-' }}</td>
+                            <td>
+                                {% if cliente.activo %}
+                                <span class="badge ok">Activo</span>
+                                {% else %}
+                                <span class="badge warn">Inactivo</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5">No hay clientes registrados en el catalogo.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+</div>
+{% endblock %}

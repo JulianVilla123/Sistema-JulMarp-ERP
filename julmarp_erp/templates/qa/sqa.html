@@ -28,8 +28,15 @@
             <form method="post" class="calidad-form">
                 {% csrf_token %}
                 <label>
-                    Lote a inspeccionar
-                    <input type="text" name="lote" placeholder="Ej. L260410-A" required>
+                    Recepción a inspeccionar
+                    <select name="recepcion_id" required>
+                        <option value="">Selecciona recepción pendiente</option>
+                        {% for recepcion in recepciones_pendientes %}
+                        <option value="{{ recepcion.id }}">
+                            REC-{{ recepcion.id }} | {{ recepcion.proveedor }} | {{ recepcion.fecha_recepcion|date:'d/m/Y' }}
+                        </option>
+                        {% endfor %}
+                    </select>
                 </label>
 
                 <label class="check-item"><input type="checkbox" name="chk_especificacion"> Cumple especificación técnica</label>
@@ -65,33 +72,60 @@
         </section>
 
         <section class="calidad-card">
-            <h3>Lotes pendientes SQA (Ejemplo)</h3>
+            <h3>Recepciones pendientes SQA</h3>
             <div class="tabla-wrap">
                 <table class="tabla-material">
                     <thead>
                         <tr>
-                            <th>Lote</th>
-                            <th>Material</th>
+                            <th>Recepción</th>
                             <th>Proveedor</th>
                             <th>Fecha recepción</th>
+                            <th>Materiales</th>
                             <th>Estatus</th>
                         </tr>
                     </thead>
                     <tbody>
+                        {% for recepcion in recepciones_pendientes %}
                         <tr>
-                            <td>L260410-A</td>
-                            <td>Lámina galvanizada 3mm</td>
-                            <td>Aceros Industriales del Norte</td>
-                            <td>10/04/2026</td>
+                            <td>REC-{{ recepcion.id }}</td>
+                            <td>{{ recepcion.proveedor }}</td>
+                            <td>{{ recepcion.fecha_recepcion|date:'d/m/Y' }}</td>
+                            <td>{{ recepcion.detalles.count }}</td>
                             <td><span class="badge warn">Pendiente</span></td>
                         </tr>
+                        {% empty %}
                         <tr>
-                            <td>ABS-26-04</td>
-                            <td>Resina ABS negro</td>
-                            <td>Polímeros del Bajío</td>
-                            <td>10/04/2026</td>
-                            <td><span class="badge warn">Pendiente</span></td>
+                            <td colspan="5">No hay recepciones pendientes de revisión SQA.</td>
                         </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <h3 style="margin-top: 20px;">Recepciones revisadas recientemente</h3>
+            <div class="tabla-wrap">
+                <table class="tabla-material">
+                    <thead>
+                        <tr>
+                            <th>Recepción</th>
+                            <th>Proveedor</th>
+                            <th>Fecha</th>
+                            <th>Acción QA</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for recepcion in recepciones_revisadas %}
+                        <tr>
+                            <td>REC-{{ recepcion.id }}</td>
+                            <td>{{ recepcion.proveedor }}</td>
+                            <td>{{ recepcion.fecha_recepcion|date:'d/m/Y' }}</td>
+                            <td>{{ recepcion.get_accion_recomendada_display|default:'Sin acción' }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4">Aún no hay recepciones revisadas por SQA.</td>
+                        </tr>
+                        {% endfor %}
                     </tbody>
                 </table>
             </div>

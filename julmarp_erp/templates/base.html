@@ -36,7 +36,7 @@
     <link rel="stylesheet" href="{% static 'css/base.css' %}">
     {% block extra_css %}{% endblock %}
 </head>
-<body class="{% block body_class %}{% endblock %}" data-workspace-enabled="{% if user.is_authenticated and request.resolver_match.url_name != 'login' and request.resolver_match.url_name != 'register' %}1{% else %}0{% endif %}" data-home-url="{% if user.is_authenticated %}{% url 'home' %}{% endif %}">
+<body class="{% block body_class %}{% endblock %}" data-workspace-enabled="{% if user.is_authenticated and request.resolver_match.url_name != 'login' and request.resolver_match.url_name != 'register' %}1{% else %}0{% endif %}" data-home-url="{% if user.is_authenticated %}{% url 'home' %}{% endif %}" data-dashboard-sync-token="{{ request.session.dashboard_sync_token|default:'' }}" data-dashboard-sync-scope="{{ request.session.dashboard_sync_scope|default:'global' }}">
     <div id="workspace-root">
         <header id="workspace-header" {% if request.GET.tab == '1' %}style="display: none;"{% endif %}>
             {% block header %}
@@ -91,6 +91,7 @@
             var maxTitleLength = 26;
             var homeUrl = document.body.getAttribute('data-home-url') || '';
             var homeKey = homeUrl ? normalizeKey(homeUrl) : '';
+            var currentEntryKey = normalizeKey(window.location.href);
 
             function normalizeKey(url) {
                 var u = new URL(url, window.location.origin);
@@ -195,6 +196,9 @@
                         return;
                     }
                     activateTab(key);
+                        if (event.detail !== 0) {
+                            tabButton.blur();
+                        }
                 });
 
                 tabsTrack.appendChild(tabButton);
@@ -207,7 +211,11 @@
 
             function openModuleTab(url, title) {
                 if (isHomeUrl(url)) {
-                    activateTab('__initial__');
+                    if (currentEntryKey === homeKey) {
+                        activateTab('__initial__');
+                    } else {
+                        window.location.href = url;
+                    }
                     return;
                 }
 
@@ -251,17 +259,107 @@
 
                     if (isHomeUrl(href)) {
                         event.preventDefault();
-                        activateTab('__initial__');
+                        if (currentEntryKey === homeKey) {
+                            activateTab('__initial__');
+                        } else {
+                            window.location.href = href;
+                        }
+                            if (event.detail !== 0) {
+                                requestAnimationFrame(function () {
+                                    link.blur();
+                                });
+                            }
                         return;
                     }
 
                     event.preventDefault();
                     openModuleTab(href, link.textContent || 'Módulo');
+                        if (event.detail !== 0) {
+                            requestAnimationFrame(function () {
+                                link.blur();
+                            });
+                        }
                 });
             });
 
             window.addEventListener('resize', function() {
                 resizeActiveIframe();
+            });
+        });
+    </script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            var syncKey = 'julmarp-dashboard-sync';
+            var scopeKey = 'julmarp-dashboard-sync-scope';
+            var url = new URL(window.location.href);
+            var serverToken = document.body.getAttribute('data-dashboard-sync-token') || '';
+            var serverScope = document.body.getAttribute('data-dashboard-sync-scope') || 'global';
+            var syncRequested = url.searchParams.get('dashboard_sync') === '1';
+            var isDashboardPage = document.getElementById('inv-chart-data') || document.getElementById('prod-chart-data') || document.getElementById('qa-chart-data');
+            var reloadScheduled = false;
+
+            function currentPath() {
+                return window.location.pathname || '';
+            }
+
+            function pageMatchesScope(scope) {
+                if (!scope || scope === 'global') return !!isDashboardPage;
+                if (scope === 'qa') {
+                    return !!isDashboardPage || currentPath().indexOf('/qa/') === 0;
+                }
+                if (scope === 'inventario') {
+                    return !!isDashboardPage || currentPath().indexOf('/inventario/') === 0;
+                }
+                if (scope === 'produccion') {
+                    return !!isDashboardPage || currentPath().indexOf('/produccion/') === 0;
+                }
+                return !!isDashboardPage;
+            }
+
+            function scheduleReload(scope) {
+                if (reloadScheduled || !pageMatchesScope(scope || localStorage.getItem(scopeKey) || serverScope)) {
+                    return;
+                }
+
+                reloadScheduled = true;
+                window.setTimeout(function () {
+                    window.location.reload();
+                }, 150);
+            }
+
+            function broadcastSync(token, scope) {
+                if (!token) {
+                    return;
+                }
+
+                localStorage.setItem(syncKey, token);
+                localStorage.setItem(scopeKey, scope || 'global');
+            }
+
+            if (serverToken && localStorage.getItem(syncKey) !== serverToken) {
+                broadcastSync(serverToken, serverScope);
+            }
+
+            if (syncRequested && serverToken) {
+                broadcastSync(serverToken, serverScope);
+                url.searchParams.delete('dashboard_sync');
+                window.history.replaceState({}, document.title, url.pathname + (url.search ? url.search : '') + url.hash);
+            }
+
+            window.addEventListener('storage', function (event) {
+                if (event.key === syncKey && event.newValue) {
+                    scheduleReload(localStorage.getItem(scopeKey) || serverScope);
+                }
+            });
+
+            document.addEventListener('visibilitychange', function () {
+                if (!document.hidden && isDashboardPage) {
+                    var localToken = localStorage.getItem(syncKey) || '';
+                    var localScope = localStorage.getItem(scopeKey) || serverScope;
+                    if (localToken && localToken !== serverToken) {
+                        scheduleReload(localScope);
+                    }
+                }
             });
         });
     </script>

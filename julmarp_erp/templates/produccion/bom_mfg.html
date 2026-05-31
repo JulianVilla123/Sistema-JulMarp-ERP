@@ -101,7 +101,7 @@
                         <table class="tabla-material material-captura-table bom-components-table">
                             <thead>
                                 <tr>
-                                    <th>SKU</th>
+                                    <th>Buscar material</th>
                                     <th>Material</th>
                                     <th>UM</th>
                                     <th>Cantidad</th>
@@ -114,10 +114,10 @@
                                 <tr>
                                     <td>
                                         <select name="material_id[]" class="bom-material-select" onchange="(function(sel){var row=sel.closest('tr');if(!row){return;}var opt=sel.options[sel.selectedIndex];var nombre=row.querySelector('.bom-material-nombre');var um=row.querySelector('.bom-material-um');if(nombre){nombre.value=(opt && opt.dataset.nombre) ? opt.dataset.nombre : '';}if(um){um.value=(opt && opt.dataset.um) ? opt.dataset.um : '';} })(this)">
-                                            <option value="">Selecciona material</option>
+                                            <option value="">Selecciona material por nombre</option>
                                             {% for m in materiales_catalogo %}
                                             <option value="{{ m.id }}" data-sku="{{ m.sku }}" data-nombre="{{ m.nombre }}" data-um="{{ m.um|default:'-' }}"
-                                                {% if comp.material_id == m.id|stringformat:'s' %}selected{% endif %}>{{ m.sku }}</option>
+                                                {% if comp.material_id == m.id|stringformat:'s' %}selected{% endif %}>{{ m.nombre }} - {{ m.sku }}</option>
                                             {% endfor %}
                                         </select>
                                     </td>

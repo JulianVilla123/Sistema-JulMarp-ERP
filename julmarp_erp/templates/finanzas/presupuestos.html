@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Finanzas - Presupuestos{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/pages/inventario.css' %}">{% endblock %}
+{% block content %}
+<div class="entrada-container">
+    <div class="entrada-header"><h1>Presupuestos</h1><p>Planificación de ingresos y gastos futuros con comparativo vs ejecución real.</p></div>
+    {% if messages %}<ul class="messages" style="margin-bottom:20px;">{% for message in messages %}<li class="{{ message.tags }}">{{ message }}</li>{% endfor %}</ul>{% endif %}
+    <div class="entrada-grid">
+        <section class="entrada-card entrada-card-full">
+            <h3>Nuevo presupuesto</h3>
+            <form method="post">{% csrf_token %}<input type="hidden" name="accion" value="guardar_presupuesto">
+                <div class="entrada-form-grid">
+                    <label>Nombre<input type="text" name="nombre" required></label>
+                    <label>Categoría<select name="categoria">{% for value,label in categorias %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></label>
+                    <label>Periodicidad<select name="periodicidad">{% for value,label in periodicidades %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></label>
+                    <label>Fecha inicio<input type="date" name="fecha_inicio" required></label>
+                    <label>Fecha fin<input type="date" name="fecha_fin" required></label>
+                    <label>Monto presupuestado<input type="number" step="0.01" min="0.01" name="monto_presupuestado" required></label>
+                    <label>Monto real<input type="number" step="0.01" min="0" name="monto_real"></label>
+                    <label style="grid-column:1/-1;">Descripción<textarea name="descripcion"></textarea></label>
+                    <label><input type="checkbox" name="activo" checked> Activo</label>
+                </div>
+                <div class="entrada-actions"><button class="btn btn-primary" type="submit">Guardar presupuesto</button></div>
+            </form>
+        </section>
+        <section class="entrada-card entrada-card-full">
+            <h3>Comparativo presupuesto vs real</h3>
+            <div class="tabla-wrap"><table class="tabla-material"><thead><tr><th>Nombre</th><th>Categoría</th><th>Periodo</th><th>Presupuesto</th><th>Real</th><th>Desviación</th><th>Acción</th></tr></thead><tbody>{% for presupuesto in presupuestos %}<tr><td>{{ presupuesto.nombre }}</td><td>{{ presupuesto.get_categoria_display }}</td><td>{{ presupuesto.fecha_inicio|date:'d/m/Y' }} - {{ presupuesto.fecha_fin|date:'d/m/Y' }}</td><td>${{ presupuesto.monto_presupuestado|floatformat:2 }}</td><td>${{ presupuesto.monto_real|floatformat:2 }}</td><td>${{ presupuesto.desviacion|floatformat:2 }}</td><td><form method="post" style="display:flex; gap:6px;">{% csrf_token %}<input type="hidden" name="accion" value="actualizar_real"><input type="hidden" name="presupuesto_id" value="{{ presupuesto.id }}"><input type="number" step="0.01" min="0" name="monto_real_actualizado" placeholder="Nuevo real"><button class="btn btn-warning" type="submit">Actualizar</button></form></td></tr>{% empty %}<tr><td colspan="7">Sin presupuestos registrados.</td></tr>{% endfor %}</tbody></table></div>
+        </section>
+    </div>
+</div>
+{% endblock %}

@@ -52,5 +52,14 @@
       "descripcion": "Quality Assurance: SQA para entrada, OQA para salida y Customer Service para reclamos",
       "activo": true
     }
+  },
+  {
+    "model": "autenticacion.departamento",
+    "pk": 7,
+    "fields": {
+      "nombre": "IT",
+      "descripcion": "Administracion de catalogos maestros y soporte a integraciones operativas",
+      "activo": true
+    }
   }
 ]

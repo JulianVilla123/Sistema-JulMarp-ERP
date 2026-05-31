@@ -1,0 +1,196 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}QA - QQA Defectos{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/pages/qa.css' %}">
+<style>
+    .qqaat-page { display:grid; gap:20px; }
+    .qqaat-card {
+        background:#fff;
+        border:1px solid #dfe9f5;
+        border-radius:16px;
+        padding:24px;
+        box-shadow:0 8px 18px rgba(31,62,103,.05);
+    }
+    .qqaat-card h2, .qqaat-card h3 { margin:0 0 14px; color:#18436b; }
+    .qqaat-grid { display:grid; grid-template-columns: 1.05fr .95fr; gap:20px; }
+    .qqaat-form {
+        display:grid;
+        grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+        gap:12px;
+    }
+    .qqaat-form label { display:flex; flex-direction:column; gap:6px; font-size:.85rem; font-weight:600; color:#48607a; }
+    .qqaat-form input,
+    .qqaat-form select,
+    .qqaat-form textarea {
+        border:1px solid #c6d6ea;
+        border-radius:10px;
+        padding:10px 12px;
+        background:#f8fbff;
+        color:#22344f;
+    }
+    .qqaat-form textarea { min-height:100px; resize:vertical; }
+    .qqaat-form label.full { grid-column:1/-1; }
+    .qqaat-kpis { display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:14px; }
+    .qqaat-kpi {
+        background:linear-gradient(135deg, #f5fbff 0%, #eef6ff 100%);
+        border:1px solid #dce6f5;
+        border-radius:12px;
+        padding:16px;
+        text-align:center;
+    }
+    .qqaat-kpi strong { display:block; font-size:1.8rem; color:#18436b; }
+    .qqaat-kpi span { font-size:.78rem; text-transform:uppercase; letter-spacing:.05em; color:#6b809b; }
+    .qqaat-tag {
+        display:inline-flex;
+        align-items:center;
+        padding:4px 10px;
+        border-radius:999px;
+        font-size:.75rem;
+        font-weight:700;
+        background:#eef5ff;
+        color:#18436b;
+    }
+    @media (max-width: 960px) { .qqaat-grid { grid-template-columns: 1fr; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="main-content qa-content">
+    <div class="qa-header">
+        <h1>QQA - Validación de Defectos</h1>
+        <p>QA revisa scrap y defectos capturados por Producción, valida si la causa proviene de falla de máquina y documenta el informe para trazabilidad y KPIs.</p>
+    </div>
+
+    {% if messages %}
+    <ul class="messages" style="margin-bottom: 20px;">
+        {% for message in messages %}
+        <li class="{{ message.tags }}">{{ message }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    <div class="qqaat-page">
+        <section class="qqaat-kpis">
+            <article class="qqaat-kpi"><strong>{{ defectos_pendientes|length }}</strong><span>Defectos pendientes</span></article>
+            <article class="qqaat-kpi"><strong>{{ informes_recientes|length }}</strong><span>Informes recientes</span></article>
+        </section>
+
+        <section class="qqaat-grid">
+            <article class="qqaat-card">
+                <h2>Emitir informe QA</h2>
+                <form method="post" class="qqaat-form">
+                    {% csrf_token %}
+                    <label class="full">
+                        Defecto / scrap a validar
+                        <select name="defecto_id" required>
+                            <option value="">Selecciona registro pendiente</option>
+                            {% for defecto in defectos_pendientes %}
+                            <option value="{{ defecto.id }}">
+                                {% if defecto.orden %}{{ defecto.orden.folio }}{% else %}Sin OF{% endif %}
+                                {% if defecto.lote %} | {{ defecto.lote.folio }}{% endif %}
+                                | {{ defecto.get_tipo_defecto_display }}
+                                | {{ defecto.cantidad_defectos }} pcs
+                                | {{ defecto.causa }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </label>
+                    <label>
+                        Resultado
+                        <select name="resultado_validacion" required>
+                            {% for value, label in resultado_choices %}
+                            <option value="{{ value }}">{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </label>
+                    <label style="justify-content:flex-end;">
+                        <span>Confirmar falla de máquina</span>
+                        <input type="checkbox" name="falla_maquina">
+                    </label>
+                    <label class="full">
+                        Informe QA
+                        <textarea name="informe_qa" placeholder="Describe el hallazgo, evidencia, método de validación y conclusión QA." required></textarea>
+                    </label>
+                    <label class="full">
+                        Acciones de contención
+                        <textarea name="acciones_contencion" placeholder="Ej. segregación de lote, paro de línea, mantenimiento correctivo, retrabajo."></textarea>
+                    </label>
+                    <div style="grid-column:1/-1; display:flex; gap:10px; flex-wrap:wrap;">
+                        <button type="submit" class="btn btn-primary">Guardar informe QA</button>
+                        <a href="{% url 'ordenes_fabricacion' %}" class="btn btn-secondary">Volver a Producción</a>
+                    </div>
+                </form>
+            </article>
+
+            <article class="qqaat-card">
+                <h3>Pendientes por revisar</h3>
+                <div class="qa-table-wrapper">
+                    <table class="qa-table">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>OF / Lote</th>
+                                <th>Tipo</th>
+                                <th>Cantidad</th>
+                                <th>Causa</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for defecto in defectos_pendientes %}
+                            <tr>
+                                <td>{{ defecto.fecha_creacion|date:'d/m/Y H:i' }}</td>
+                                <td>
+                                    {% if defecto.orden %}{{ defecto.orden.folio }}{% else %}Sin OF{% endif %}
+                                    {% if defecto.lote %}<br>{{ defecto.lote.folio }}{% endif %}
+                                </td>
+                                <td>{{ defecto.get_tipo_defecto_display }}</td>
+                                <td>{{ defecto.cantidad_defectos|floatformat:2 }}</td>
+                                <td>{{ defecto.causa }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="5">No hay defectos pendientes por validar.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </article>
+        </section>
+
+        <section class="qqaat-card">
+            <h3>Informes QA recientes</h3>
+            <div class="qa-table-wrapper">
+                <table class="qa-table">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>OF / Lote</th>
+                            <th>Resultado</th>
+                            <th>Falla máquina</th>
+                            <th>Validó</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for informe in informes_recientes %}
+                        <tr>
+                            <td>{{ informe.fecha_actualizacion|date:'d/m/Y H:i' }}</td>
+                            <td>
+                                {% if informe.defecto.orden %}{{ informe.defecto.orden.folio }}{% else %}Sin OF{% endif %}
+                                {% if informe.defecto.lote %}<br>{{ informe.defecto.lote.folio }}{% endif %}
+                            </td>
+                            <td><span class="qqaat-tag">{{ informe.get_resultado_validacion_display }}</span></td>
+                            <td>{% if informe.falla_maquina %}Sí{% else %}No{% endif %}</td>
+                            <td>{{ informe.validado_por.get_full_name|default:informe.validado_por.username }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="5">Aún no hay informes QA registrados.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+</div>
+{% endblock %}

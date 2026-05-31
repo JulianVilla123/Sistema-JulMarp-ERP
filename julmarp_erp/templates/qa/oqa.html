@@ -29,11 +29,21 @@
                 {% csrf_token %}
                 <label>
                     Lote de producto terminado
-                    <input type="text" name="lote_producto" placeholder="Ej. PT-260410-09" required>
+                    <select name="lote_id" required>
+                        <option value="">Selecciona lote pendiente</option>
+                        {% for lote in lotes_pendientes %}
+                        <option value="{{ lote.id }}">{{ lote.folio }} | {{ lote.bom.producto }} | {{ lote.fecha_captura|date:'d/m/Y' }}</option>
+                        {% endfor %}
+                    </select>
                 </label>
                 <label>
                     Cliente destino
-                    <input type="text" name="cliente" placeholder="Ej. LG Electronics México">
+                    <select name="cliente_destino" required>
+                        <option value="">Selecciona cliente destino</option>
+                        {% for cliente in clientes_compra %}
+                        <option value="{{ cliente.id }}">{{ cliente.codigo }} | {{ cliente.nombre }}</option>
+                        {% endfor %}
+                    </select>
                 </label>
 
                 <label class="check-item"><input type="checkbox" name="chk_funcional"> Prueba funcional aprobada</label>
@@ -68,7 +78,7 @@
         </section>
 
         <section class="calidad-card">
-            <h3>Lotes listos para OQA (Ejemplo)</h3>
+            <h3>Lotes pendientes OQA</h3>
             <div class="tabla-wrap">
                 <table class="tabla-material">
                     <thead>
@@ -76,25 +86,60 @@
                             <th>Lote PT</th>
                             <th>Producto</th>
                             <th>Cantidad</th>
-                            <th>Cliente</th>
+                            <th>OF</th>
                             <th>Estatus</th>
                         </tr>
                     </thead>
                     <tbody>
+                        {% for lote in lotes_pendientes %}
                         <tr>
-                            <td>PT-260410-09</td>
-                            <td>Panel Ensamble X5</td>
-                            <td>550</td>
-                            <td>LG Electronics México</td>
+                            <td>{{ lote.folio }}</td>
+                            <td>{{ lote.bom.producto }}</td>
+                            <td>{{ lote.cantidad_producida|floatformat:0 }}</td>
+                            <td>{{ lote.orden_fabricacion.folio|default:'Sin OF' }}</td>
                             <td><span class="badge warn">Pendiente</span></td>
                         </tr>
+                        {% empty %}
                         <tr>
-                            <td>PT-260410-11</td>
-                            <td>Módulo Control Z2</td>
-                            <td>400</td>
-                            <td>ElectroNorth</td>
-                            <td><span class="badge warn">Pendiente</span></td>
+                            <td colspan="5">No hay lotes pendientes de inspección OQA.</td>
                         </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <h3 style="margin-top: 20px;">Lotes revisados recientemente</h3>
+            <div class="tabla-wrap">
+                <table class="tabla-material">
+                    <thead>
+                        <tr>
+                            <th>Lote PT</th>
+                            <th>Producto</th>
+                            <th>Cliente</th>
+                            <th>Fecha</th>
+                            <th>Estatus</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for lote in lotes_revisados %}
+                        <tr>
+                            <td>{{ lote.folio }}</td>
+                            <td>{{ lote.bom.producto }}</td>
+                            <td>{{ lote.cliente_destino.nombre|default:'Sin cliente' }}</td>
+                            <td>{{ lote.fecha_captura|date:'d/m/Y' }}</td>
+                            <td>
+                                {% if lote.estado == 'VALIDADO' %}
+                                <span class="badge ok">Liberado</span>
+                                {% else %}
+                                <span class="badge warn">Retenido</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5">Aún no hay evaluaciones OQA registradas.</td>
+                        </tr>
+                        {% endfor %}
                     </tbody>
                 </table>
             </div>

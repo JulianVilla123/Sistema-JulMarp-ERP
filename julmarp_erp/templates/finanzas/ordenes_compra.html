@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Finanzas - Órdenes de Compra MFG{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/pages/inventario.css' %}">{% endblock %}
+{% block content %}
+<div class="entrada-container">
+    <div class="entrada-header"><h1>Órdenes de Compra desde MFG</h1><p>Recepción de folios enviados por Producción, asignación de proveedor, costo estimado y tiempo estimado de entrega.</p></div>
+    {% if messages %}<ul class="messages" style="margin-bottom:20px;">{% for message in messages %}<li class="{{ message.tags }}">{{ message }}</li>{% endfor %}</ul>{% endif %}
+    <div class="entrada-grid">
+        <section class="entrada-card entrada-card-full">
+            <h3>Generar orden desde requerimiento</h3>
+            <form method="post">{% csrf_token %}<input type="hidden" name="accion" value="crear_oc_desde_mfg">
+                <div class="entrada-form-grid">
+                    <label>Requerimiento<select name="requerimiento_id" required><option value="">Selecciona requerimiento</option>{% for req in requerimientos_pendientes %}<option value="{{ req.id }}">{{ req.folio }} - {{ req.bom.producto }}</option>{% endfor %}</select></label>
+                    <label>Proveedor<select name="proveedor_id" required><option value="">Selecciona proveedor</option>{% for proveedor in proveedores_catalogo %}<option value="{{ proveedor.id }}">{{ proveedor.nombre }}</option>{% endfor %}</select></label>
+                    <label>Fecha orden<input type="date" name="fecha_orden" required></label>
+                    <label>Fecha prometida<input type="date" name="fecha_prometida"></label>
+                    <label>Lead time días<input type="number" name="tiempo_entrega_estimado_dias" min="0" value="0"></label>
+                    <label>Condiciones pago<select name="condiciones_pago"><option value="">Selecciona condición</option>{% for opcion in opciones_condiciones_pago %}<option value="{{ opcion }}">{{ opcion }}</option>{% endfor %}</select></label>
+                    <label style="grid-column:1/-1;">Observaciones<textarea name="observaciones"></textarea></label>
+                </div>
+                <div class="entrada-actions"><button class="btn btn-warning" type="submit">Generar orden de compra</button></div>
+            </form>
+        </section>
+        <section class="entrada-card entrada-card-full">
+            <h3>Requerimientos pendientes</h3>
+            <ul class="recent-activity-list">{% for req in requerimientos_pendientes %}<li><div><p>{{ req.folio }} — {{ req.bom.producto }}</p><small>{{ req.fecha_envio_finanzas|date:'d/m/Y H:i' }} | {{ req.detalles.count }} materiales</small></div><strong>{{ req.cantidad_planificada|floatformat:0 }}</strong></li>{% empty %}<li><div><p>Sin requerimientos pendientes</p><small>MFG aún no envía faltantes o ya fueron convertidos en OC</small></div><strong>-</strong></li>{% endfor %}</ul>
+        </section>
+        <section class="entrada-card entrada-card-full">
+            <h3>Órdenes generadas</h3>
+            <div class="tabla-wrap"><table class="tabla-material"><thead><tr><th>Folio</th><th>Req. origen</th><th>Proveedor</th><th>Lead time</th><th>Total</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>{% for orden in ordenes %}<tr><td>{{ orden.folio }}</td><td>{{ orden.requerimiento_origen.folio|default:'-' }}</td><td>{{ orden.proveedor.nombre }}</td><td>{{ orden.tiempo_entrega_estimado_dias }} días</td><td>${{ orden.total_estimado|floatformat:2 }}</td><td>{{ orden.get_estado_display }}</td><td><div style="display:flex; gap:6px; flex-wrap:wrap;">{% if orden.estado == estado_borrador %}<form method="post">{% csrf_token %}<input type="hidden" name="orden_id" value="{{ orden.id }}"><button class="btn btn-primary" type="submit" name="accion_estado" value="APROBADA">Aprobar</button></form>{% endif %}{% if orden.estado == estado_aprobada %}<form method="post">{% csrf_token %}<input type="hidden" name="orden_id" value="{{ orden.id }}"><button class="btn btn-success" type="submit" name="accion_estado" value="ENVIADA">Enviar</button></form>{% endif %}{% if orden.estado == estado_enviada %}<form method="post">{% csrf_token %}<input type="hidden" name="orden_id" value="{{ orden.id }}"><button class="btn btn-info" type="submit" name="accion_estado" value="PARCIAL">Parcial</button></form>{% endif %}{% if orden.estado == estado_enviada or orden.estado == estado_parcial %}<form method="post">{% csrf_token %}<input type="hidden" name="orden_id" value="{{ orden.id }}"><button class="btn btn-success" type="submit" name="accion_estado" value="RECIBIDA">Recibida</button></form>{% endif %}</div></td></tr>{% empty %}<tr><td colspan="7">Sin órdenes generadas desde MFG.</td></tr>{% endfor %}</tbody></table></div>
+        </section>
+    </div>
+</div>
+{% endblock %}

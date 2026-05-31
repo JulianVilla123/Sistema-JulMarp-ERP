@@ -145,15 +145,191 @@
         flex-wrap: wrap;
     }
 
+    .planes-recientes-card {
+        margin-top: 24px;
+        overflow: hidden;
+    }
+
+    .planes-recientes-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 14px;
+        margin-bottom: 16px;
+    }
+
+    .planes-recientes-head h3 {
+        margin: 0;
+    }
+
+    .planes-recientes-head p {
+        margin: 6px 0 0;
+        color: #6f7f97;
+        font-size: 0.9rem;
+    }
+
+    .planes-recientes-wrap {
+        border: 1px solid #dbe5f3;
+        border-radius: 16px;
+        overflow: hidden;
+        background: linear-gradient(180deg, #fbfdff 0%, #f7faff 100%);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    }
+
+    .planes-recientes-table {
+        width: 100%;
+        min-width: 1060px;
+        border-collapse: separate;
+        border-spacing: 0;
+        table-layout: fixed;
+    }
+
+    .planes-recientes-table thead th {
+        background: #edf3fb;
+        color: #355075;
+        font-size: 0.74rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        padding: 12px 14px;
+        border-bottom: 1px solid #d8e4f2;
+        white-space: nowrap;
+    }
+
     .planes-recientes-table td {
+        padding: 14px;
         vertical-align: top;
+        border-bottom: 1px solid #e8eef6;
+        color: #25364f;
+        font-size: 0.9rem;
+        background: #ffffff;
+        overflow-wrap: anywhere;
+    }
+
+    .planes-recientes-table th:nth-child(1),
+    .planes-recientes-table td:nth-child(1) {
+        width: 12%;
+    }
+
+    .planes-recientes-table th:nth-child(2),
+    .planes-recientes-table td:nth-child(2) {
+        width: 24%;
+    }
+
+    .planes-recientes-table th:nth-child(3),
+    .planes-recientes-table td:nth-child(3),
+    .planes-recientes-table th:nth-child(4),
+    .planes-recientes-table td:nth-child(4),
+    .planes-recientes-table th:nth-child(5),
+    .planes-recientes-table td:nth-child(5) {
+        width: 11%;
+    }
+
+    .planes-recientes-table th:nth-child(6),
+    .planes-recientes-table td:nth-child(6) {
+        width: 16%;
+    }
+
+    .planes-recientes-table th:nth-child(7),
+    .planes-recientes-table td:nth-child(7) {
+        width: 10%;
+        text-align: center;
+    }
+
+    .planes-recientes-table th:nth-child(8),
+    .planes-recientes-table td:nth-child(8) {
+        width: 12%;
+    }
+
+    .planes-recientes-table th:nth-child(9),
+    .planes-recientes-table td:nth-child(9) {
+        width: 14%;
+        text-align: center;
+    }
+
+    .planes-recientes-table tbody tr:hover > td:not(.plan-detalle-cell) {
+        background: #f8fbff;
+    }
+
+    .planes-recientes-table td strong {
+        color: #183b63;
+    }
+
+    .plan-producto {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .plan-producto-nombre {
+        font-weight: 700;
+        color: #183b63;
+        line-height: 1.35;
+    }
+
+    .plan-producto small {
+        color: #6f7f97;
+        font-size: 0.8rem;
+    }
+
+    .plan-meta {
+        display: block;
+        color: #203651;
+        line-height: 1.45;
+    }
+
+    .plan-meta span {
+        color: #203651;
+    }
+
+    .badge-estado {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-size: 0.75rem;
+        font-weight: 800;
+        border: 1px solid transparent;
+        white-space: nowrap;
+    }
+
+    .badge-borrador {
+        background: #f3f4f6;
+        color: #6b7280;
+        border-color: #e5e7eb;
+    }
+
+    .badge-aprobado {
+        background: #e0f2fe;
+        color: #075985;
+        border-color: #bae6fd;
+    }
+
+    .badge-en_proceso {
+        background: #dbeafe;
+        color: #1d4ed8;
+        border-color: #bfdbfe;
+    }
+
+    .badge-completado,
+    .badge-completada {
+        background: #dcfce7;
+        color: #166534;
+        border-color: #bbf7d0;
+    }
+
+    .badge-cancelado,
+    .badge-cancelada {
+        background: #fee2e2;
+        color: #991b1b;
+        border-color: #fecaca;
     }
 
     .material-resumen {
         display: flex;
         flex-direction: column;
         gap: 4px;
-        min-width: 120px;
     }
 
     .material-resumen-total {
@@ -174,8 +350,11 @@
     }
 
     .btn-materiales-toggle {
-        min-width: 130px;
+        width: 100%;
         font-weight: 700;
+        border-radius: 10px;
+        box-shadow: 0 6px 16px rgba(31, 62, 103, 0.12);
+        white-space: normal;
     }
 
     .btn-materiales-toggle.is-open {
@@ -195,11 +374,25 @@
         background: linear-gradient(180deg, #f8fbff 0%, #f3f7fc 100%);
     }
 
+    .plan-detalle-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 10px;
+    }
+
     .plan-detalle-title {
         display: inline-block;
-        margin-bottom: 10px;
+        margin-bottom: 0;
         color: #1f3e67;
         font-size: 0.94rem;
+    }
+
+    .plan-detalle-summary {
+        color: #6f7f97;
+        font-size: 0.83rem;
+        font-weight: 600;
     }
 
     .detalle-materiales-wrap {
@@ -211,13 +404,17 @@
 
     .detalle-materiales-table {
         margin: 0;
+        width: 100%;
         min-width: 760px;
+        border-collapse: separate;
+        border-spacing: 0;
     }
 
     .detalle-materiales-table thead th {
         background: #ecf3fb;
         color: #2c4a70;
         font-size: 0.79rem;
+        padding: 11px 12px;
         text-transform: uppercase;
         letter-spacing: 0.03em;
         white-space: nowrap;
@@ -225,7 +422,9 @@
 
     .detalle-materiales-table tbody td {
         border-top: 1px solid #edf2f8;
+        padding: 9px 12px;
         white-space: nowrap;
+        font-size: 0.87rem;
     }
 
     .detalle-materiales-table tbody tr:nth-child(even) {
@@ -264,6 +463,12 @@
     }
 
     @media (max-width: 768px) {
+        .planes-recientes-head,
+        .plan-detalle-head {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
         .plan-detalle-panel {
             padding: 12px;
         }
@@ -398,10 +603,15 @@
         </section>
 
         <!-- LISTADO DE PLANES -->
-        <section class="entrada-card entrada-card-full" style="margin-top: 24px;">
-            <h3>Planes de Producción Recientes</h3>
+        <section class="entrada-card entrada-card-full planes-recientes-card">
+            <div class="planes-recientes-head">
+                <div>
+                    <h3>Planes de Producción Recientes</h3>
+                    <p>Consulta el resumen de cada plan, su estado y el detalle de materiales faltantes o parciales.</p>
+                </div>
+            </div>
             {% if planes_recientes %}
-            <div class="tabla-responsive">
+            <div class="tabla-responsive planes-recientes-wrap">
                 <table class="tabla-historial planes-recientes-table">
                     <thead>
                         <tr>
@@ -420,11 +630,32 @@
                         {% for plan in planes_recientes %}
                         <tr>
                             <td><strong>{{ plan.folio }}</strong></td>
-                            <td>{{ plan.producto }}<br><small class="text-muted">{{ plan.bom_codigo }}</small></td>
-                            <td>{{ plan.cantidad_planificada }}</td>
-                            <td>{{ plan.fecha_inicio }}</td>
-                            <td>{{ plan.fecha_fin }}</td>
-                            <td>{{ plan.linea_produccion|default:"—" }}</td>
+                            <td>
+                                <div class="plan-producto">
+                                    <span class="plan-producto-nombre">{{ plan.producto }}</span>
+                                    <small>{{ plan.bom_codigo }}</small>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="plan-meta">
+                                    <span>{{ plan.cantidad_planificada }}</span>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="plan-meta">
+                                    <span>{{ plan.fecha_inicio }}</span>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="plan-meta">
+                                    <span>{{ plan.fecha_fin }}</span>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="plan-meta">
+                                    <span>{{ plan.linea_produccion|default:"—" }}</span>
+                                </div>
+                            </td>
                             <td>
                                 <span class="badge badge-estado badge-{{ plan.estado|lower }}">{{ plan.estado_label }}</span>
                             </td>
@@ -450,7 +681,10 @@
                         <tr id="detalles-{{ plan.id }}" style="display: none;">
                             <td colspan="9" class="plan-detalle-cell">
                                 <div class="plan-detalle-panel">
-                                    <strong class="plan-detalle-title">Detalle de materiales — {{ plan.folio }}</strong>
+                                    <div class="plan-detalle-head">
+                                        <strong class="plan-detalle-title">Detalle de materiales — {{ plan.folio }}</strong>
+                                        <span class="plan-detalle-summary">{{ plan.total_materiales }} materiales evaluados</span>
+                                    </div>
                                     <div class="detalle-materiales-wrap">
                                     <table class="tabla-historial detalle-materiales-table">
                                         <thead>

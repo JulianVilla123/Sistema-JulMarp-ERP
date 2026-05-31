@@ -1,0 +1,34 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Finanzas - Pagos y Cobros{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/pages/inventario.css' %}">{% endblock %}
+{% block content %}
+<div class="entrada-container">
+    <div class="entrada-header"><h1>Pagos y Cobros</h1><p>Gestión de cuentas por pagar, por cobrar, facturas y vencimientos.</p></div>
+    {% if messages %}<ul class="messages" style="margin-bottom:20px;">{% for message in messages %}<li class="{{ message.tags }}">{{ message }}</li>{% endfor %}</ul>{% endif %}
+    <div class="entrada-grid">
+        <section class="entrada-card entrada-card-full">
+            <h3>Nueva cuenta</h3>
+            <form method="post">{% csrf_token %}<input type="hidden" name="accion" value="guardar_cuenta">
+                <div class="entrada-form-grid">
+                    <label>Tipo<select name="tipo">{% for value,label in tipos_cuenta %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></label>
+                    <label>Folio<input type="text" name="folio"></label>
+                    <label>Tercero<input type="text" name="tercero_nombre" required></label>
+                    <label>Cliente<select name="cliente_compra_id"><option value="">Sin cliente</option>{% for cliente in clientes_catalogo %}<option value="{{ cliente.id }}">{{ cliente.nombre }}</option>{% endfor %}</select></label>
+                    <label>Proveedor<select name="proveedor_id"><option value="">Sin proveedor</option>{% for proveedor in proveedores_catalogo %}<option value="{{ proveedor.id }}">{{ proveedor.nombre }}</option>{% endfor %}</select></label>
+                    <label>Orden de compra<select name="orden_compra_id"><option value="">Sin OC</option>{% for orden in ordenes_compra_catalogo %}<option value="{{ orden.id }}">{{ orden.folio }}</option>{% endfor %}</select></label>
+                    <label>Monto total<input type="number" step="0.01" min="0.01" name="monto_total" required></label>
+                    <label>Fecha emisión<input type="date" name="fecha_emision" required></label>
+                    <label>Fecha vencimiento<input type="date" name="fecha_vencimiento" required></label>
+                    <label style="grid-column:1/-1;">Observaciones<textarea name="observaciones"></textarea></label>
+                </div>
+                <div class="entrada-actions"><button class="btn btn-primary" type="submit">Guardar cuenta</button></div>
+            </form>
+        </section>
+        <section class="entrada-card entrada-card-full">
+            <h3>Cuentas registradas</h3>
+            <div class="tabla-wrap"><table class="tabla-material"><thead><tr><th>Folio</th><th>Tipo</th><th>Tercero</th><th>Total</th><th>Pagado</th><th>Vencimiento</th><th>Estado</th><th>Registrar movimiento</th></tr></thead><tbody>{% for cuenta in cuentas %}<tr><td>{{ cuenta.folio }}</td><td>{{ cuenta.get_tipo_display }}</td><td>{{ cuenta.tercero_nombre }}</td><td>${{ cuenta.monto_total|floatformat:2 }}</td><td>${{ cuenta.monto_pagado|floatformat:2 }}</td><td>{{ cuenta.fecha_vencimiento|date:'d/m/Y' }}</td><td>{{ cuenta.get_estado_display }}</td><td><form method="post" style="display:flex; gap:6px;">{% csrf_token %}<input type="hidden" name="accion" value="registrar_movimiento"><input type="hidden" name="cuenta_id" value="{{ cuenta.id }}"><input type="number" step="0.01" min="0.01" name="abono" placeholder="Abono"><button class="btn btn-success" type="submit">Aplicar</button></form></td></tr>{% empty %}<tr><td colspan="8">Sin cuentas registradas.</td></tr>{% endfor %}</tbody></table></div>
+        </section>
+    </div>
+</div>
+{% endblock %}

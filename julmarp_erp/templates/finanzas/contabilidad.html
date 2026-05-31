@@ -1,0 +1,92 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Finanzas - Contabilidad{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/pages/inventario.css' %}">
+<style>
+    .conta-grid {
+        display:grid;
+        gap:20px;
+    }
+    .conta-card {
+        min-height:100%;
+    }
+    .conta-actions {
+        display:grid;
+        grid-template-columns: 1fr 1fr;
+        gap:20px;
+    }
+    @media (max-width: 960px) {
+        .conta-actions { grid-template-columns: 1fr; }
+    }
+</style>
+{% endblock %}
+{% block content %}
+<div class="entrada-container">
+    <div class="entrada-header"><h1>Contabilidad</h1><p>Registro de cuentas, pólizas contables, asientos y estados financieros.</p></div>
+    {% if messages %}<ul class="messages" style="margin-bottom:20px;">{% for message in messages %}<li class="{{ message.tags }}">{{ message }}</li>{% endfor %}</ul>{% endif %}
+    <div class="conta-grid">
+        <section class="entrada-card entrada-card-full conta-card">
+            <h3>Nueva cuenta contable</h3>
+            <form method="post">{% csrf_token %}<input type="hidden" name="accion" value="crear_cuenta">
+                <div class="entrada-form-grid">
+                    <label>Código<input type="text" name="codigo" required></label>
+                    <label>Nombre<input type="text" name="nombre" required></label>
+                    <label>Tipo<select name="tipo" required>{% for value,label in tipos_cuenta %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></label>
+                    <label style="grid-column:1/-1;">Descripción<textarea name="descripcion"></textarea></label>
+                    <label><input type="checkbox" name="activa" checked> Activa</label>
+                </div>
+                <div class="entrada-actions"><button class="btn btn-primary" type="submit">Guardar cuenta</button></div>
+            </form>
+        </section>
+        <section class="entrada-card entrada-card-full conta-card">
+            <h3>Nueva póliza contable</h3>
+            <form method="post">{% csrf_token %}<input type="hidden" name="accion" value="crear_poliza">
+                <div class="entrada-form-grid">
+                    <label>Fecha<input type="date" name="fecha_poliza" required></label>
+                    <label>Tipo<select name="tipo_poliza">{% for value,label in tipos_poliza %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></label>
+                    <label>Concepto<input type="text" name="concepto" required></label>
+                    <label>Referencia<input type="text" name="referencia"></label>
+                </div>
+                <div class="tabla-wrap" style="margin-top:16px;">
+                    <table class="tabla-material">
+                        <thead><tr><th>Cuenta</th><th>Descripción</th><th>Debe</th><th>Haber</th></tr></thead>
+                        <tbody>
+                            {% for i in '1234' %}
+                            <tr>
+                                <td><select name="cuenta_id[]"><option value="">Selecciona cuenta</option>{% for cuenta in cuentas %}<option value="{{ cuenta.id }}">{{ cuenta.codigo }} - {{ cuenta.nombre }}</option>{% endfor %}</select></td>
+                                <td><input type="text" name="mov_descripcion[]"></td>
+                                <td><input type="number" name="debe[]" step="0.01" min="0"></td>
+                                <td><input type="number" name="haber[]" step="0.01" min="0"></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="entrada-actions"><button class="btn btn-success" type="submit">Contabilizar póliza</button></div>
+            </form>
+        </section>
+        <section class="entrada-card entrada-card-full">
+            <h3>Balances por cuenta</h3>
+            <div class="tabla-wrap"><table class="tabla-material"><thead><tr><th>Código</th><th>Cuenta</th><th>Debe</th><th>Haber</th><th>Saldo</th></tr></thead><tbody>{% for cuenta in balances %}<tr><td>{{ cuenta.codigo }}</td><td>{{ cuenta.nombre }}</td><td>${{ cuenta.total_debe|default:0|floatformat:2 }}</td><td>${{ cuenta.total_haber|default:0|floatformat:2 }}</td><td>${{ cuenta.total_debe|default:0|add:cuenta.total_haber|floatformat:2 }}</td></tr>{% empty %}<tr><td colspan="5">Sin balances aún.</td></tr>{% endfor %}</tbody></table></div>
+        </section>
+        <div class="conta-actions">
+            <section class="entrada-card conta-card">
+                <h3>Generar estado financiero</h3>
+                <form method="post">{% csrf_token %}<input type="hidden" name="accion" value="generar_estado">
+                    <div class="entrada-form-grid">
+                        <label>Tipo<select name="tipo_estado">{% for value,label in tipos_estado %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></label>
+                        <label>Fecha inicio<input type="date" name="fecha_inicio"></label>
+                        <label>Fecha fin<input type="date" name="fecha_fin"></label>
+                    </div>
+                    <div class="entrada-actions"><button class="btn btn-warning" type="submit">Generar estado</button></div>
+                </form>
+            </section>
+            <section class="entrada-card conta-card">
+                <h3>Estados financieros recientes</h3>
+                <ul class="recent-activity-list">{% for estado in estados_financieros %}<li><div><p>{{ estado.nombre }}</p><small>{{ estado.get_tipo_display }} | {{ estado.fecha_inicio|date:'d/m/Y' }} - {{ estado.fecha_fin|date:'d/m/Y' }}</small></div><strong>{{ estado.fecha_creacion|date:'d/m/Y' }}</strong></li>{% empty %}<li><div><p>Sin estados financieros</p><small>Genera uno desde el formulario</small></div><strong>-</strong></li>{% endfor %}</ul>
+            </section>
+        </div>
+    </div>
+</div>
+{% endblock %}

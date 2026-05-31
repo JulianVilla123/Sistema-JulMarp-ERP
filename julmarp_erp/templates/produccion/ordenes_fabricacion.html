@@ -212,7 +212,7 @@
 <div class="entrada-container">
     <div class="entrada-header">
         <h1>Órdenes de Fabricación</h1>
-        <p>Crea y gestiona órdenes de fabricación (OF) vinculadas a un plan de producción aprobado. Registra cantidades producidas reales y el consumo de materiales.</p>
+        <p>Crea y gestiona órdenes de fabricación (OF) vinculadas a un plan de producción aprobado. Registra cantidades producidas reales, el consumo de materiales, y el scrap de producción.</p>
     </div>
 
     {% if messages %}
@@ -523,6 +523,96 @@
                 <p style="font-size:0.82rem;">Crea la primera OF desde el formulario de arriba usando un Plan de Producción aprobado.</p>
             </div>
             {% endif %}
+        </div>
+
+        <div class="of-card">
+            <h3>Ejecución y seguimiento de scrap / defectos</h3>
+            <form method="post" class="of-form-grid">
+                {% csrf_token %}
+                <input type="hidden" name="scrap_action" value="registrar_scrap">
+                <label>
+                    Orden de fabricación
+                    <select name="scrap_orden_id">
+                        <option value="">Selecciona orden</option>
+                        {% for of in ofs_recientes %}
+                        <option value="{{ of.id }}">{{ of.folio }} — {{ of.producto }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <label>
+                    Lote asociado
+                    <select name="scrap_lote_id">
+                        <option value="">Sin lote</option>
+                        {% for lote in lotes_catalogo %}
+                        <option value="{{ lote.id }}">{{ lote.folio }}{% if lote.orden_fabricacion %} | {{ lote.orden_fabricacion.folio }}{% endif %}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <label>
+                    Cantidad de defectos
+                    <input type="number" name="scrap_cantidad" step="0.01" min="0.01" required>
+                </label>
+                <label>
+                    Tipo de defecto
+                    <select name="scrap_tipo_defecto" required>
+                        <option value="">Selecciona tipo</option>
+                        {% for value, label in tipos_defecto %}
+                        <option value="{{ value }}">{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <label>
+                    Causa
+                    <input type="text" name="scrap_causa" placeholder="Ej. falla boquilla, soldadura fría" required>
+                </label>
+                <label class="full">
+                    Descripción
+                    <textarea name="scrap_descripcion" placeholder="Describe evidencia, turno, contención inmediata y referencia visual."></textarea>
+                </label>
+                <div class="of-form-actions" style="grid-column:1/-1; margin-top: 0;">
+                    <button type="submit" class="btn btn-danger">Registrar scrap / defecto</button>
+                    <a href="{% url 'qa_qqa_defectos' %}" class="btn btn-warning">Ir a validación QQA</a>
+                </div>
+            </form>
+
+            <div class="of-table-wrap" style="margin-top:20px;">
+                <table class="of-table">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>OF</th>
+                            <th>Lote</th>
+                            <th>Tipo</th>
+                            <th>Cantidad</th>
+                            <th>Causa</th>
+                            <th>QA</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for scrap in scraps_recientes %}
+                        <tr>
+                            <td>{{ scrap.fecha_creacion|date:"d/m/Y H:i" }}</td>
+                            <td>{{ scrap.orden.folio|default:'Sin OF' }}</td>
+                            <td>{{ scrap.lote.folio|default:'Sin lote' }}</td>
+                            <td>{{ scrap.get_tipo_defecto_display }}</td>
+                            <td>{{ scrap.cantidad_defectos|floatformat:2 }}</td>
+                            <td>{{ scrap.causa }}</td>
+                            <td>
+                                {% if scrap.informe_qa %}
+                                <span class="of-chip completada">Validado QA</span>
+                                {% else %}
+                                <span class="of-chip pausada">Pendiente QA</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="7" class="of-empty">Aún no hay registros de scrap o defectos.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
         </div>
 
     </div><!-- .of-page -->

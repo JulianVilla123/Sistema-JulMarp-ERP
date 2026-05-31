@@ -77,6 +77,15 @@ html.embedded-frame #workspace-main {
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
+.workspace-tab:focus {
+    outline: none;
+}
+
+.workspace-tab:focus-visible {
+    border-color: #7c8fd6;
+    box-shadow: 0 0 0 2px rgba(124, 143, 214, 0.2);
+}
+
 .workspace-tab.is-active {
     background: linear-gradient(to bottom, #ffffff, #fafbff);
     color: #0f172a;
@@ -191,6 +200,19 @@ html.embedded-frame #workspace-main {
 .nav-item:hover > .nav-link {
     color: white;
     background-color: rgba(255, 255, 255, 0.08);
+}
+
+.nav-link:focus,
+.nav-link:active {
+    color: white;
+    background-color: rgba(255, 255, 255, 0.08);
+}
+
+.nav-link:focus-visible {
+    color: white;
+    background-color: rgba(255, 255, 255, 0.08);
+    outline: 2px solid rgba(255, 255, 255, 0.32);
+    outline-offset: -2px;
 }
 
 .arrow {
