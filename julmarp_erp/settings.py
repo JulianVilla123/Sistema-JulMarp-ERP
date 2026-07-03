@@ -70,7 +70,27 @@ SECRET_KEY = 'django-insecure-4xx2=+^a3l(u9q1a882fy8234m-pt7*k8zk5dcdsesqojdh8o-
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+DEFAULT_ALLOWED_HOSTS = [
+    '127.0.0.1',
+    'localhost',
+    'sistema-jul-marp-erp.vercel.app',
+]
+
+ALLOWED_HOSTS = [
+    host.strip()
+    for host in os.environ.get('ALLOWED_HOSTS', ','.join(DEFAULT_ALLOWED_HOSTS)).split(',')
+    if host.strip()
+]
+
+DEFAULT_CSRF_TRUSTED_ORIGINS = [
+    'https://sistema-jul-marp-erp.vercel.app',
+]
+
+CSRF_TRUSTED_ORIGINS = [
+    origin.strip()
+    for origin in os.environ.get('CSRF_TRUSTED_ORIGINS', ','.join(DEFAULT_CSRF_TRUSTED_ORIGINS)).split(',')
+    if origin.strip()
+]
 
 
 # Application definition
