@@ -58,6 +58,14 @@ def database_from_url(database_url):
     }
 
 
+def list_from_env(name, defaults):
+    return [
+        value.strip()
+        for value in os.environ.get(name, ','.join(defaults)).split(',')
+        if value.strip()
+    ]
+
+
 load_local_env()
 
 
@@ -75,24 +83,24 @@ DEFAULT_ALLOWED_HOSTS = [
     'localhost',
     'sistema-jul-marp-erp.vercel.app',
     'sistema-jul-marp-huacgyr1f-julianvilla123s-projects.vercel.app',
+    'sistema-jul-marp-79bq4wphc-julianvilla123s-projects.vercel.app',
 ]
 
-ALLOWED_HOSTS = [
-    host.strip()
-    for host in os.environ.get('ALLOWED_HOSTS', ','.join(DEFAULT_ALLOWED_HOSTS)).split(',')
-    if host.strip()
-]
+ALLOWED_HOSTS = list_from_env('ALLOWED_HOSTS', DEFAULT_ALLOWED_HOSTS)
+
+if os.environ.get('VERCEL_URL'):
+    ALLOWED_HOSTS.append(os.environ['VERCEL_URL'])
 
 DEFAULT_CSRF_TRUSTED_ORIGINS = [
     'https://sistema-jul-marp-erp.vercel.app',
     'https://sistema-jul-marp-huacgyr1f-julianvilla123s-projects.vercel.app',
+    'https://sistema-jul-marp-79bq4wphc-julianvilla123s-projects.vercel.app',
 ]
 
-CSRF_TRUSTED_ORIGINS = [
-    origin.strip()
-    for origin in os.environ.get('CSRF_TRUSTED_ORIGINS', ','.join(DEFAULT_CSRF_TRUSTED_ORIGINS)).split(',')
-    if origin.strip()
-]
+CSRF_TRUSTED_ORIGINS = list_from_env('CSRF_TRUSTED_ORIGINS', DEFAULT_CSRF_TRUSTED_ORIGINS)
+
+if os.environ.get('VERCEL_URL'):
+    CSRF_TRUSTED_ORIGINS.append(f"https://{os.environ['VERCEL_URL']}")
 
 
 # Application definition
