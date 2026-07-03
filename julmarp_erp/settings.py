@@ -74,6 +74,7 @@ DEFAULT_ALLOWED_HOSTS = [
     '127.0.0.1',
     'localhost',
     'sistema-jul-marp-erp.vercel.app',
+    'sistema-jul-marp-huacgyr1f-julianvilla123s-projects.vercel.app',
 ]
 
 ALLOWED_HOSTS = [
@@ -84,6 +85,7 @@ ALLOWED_HOSTS = [
 
 DEFAULT_CSRF_TRUSTED_ORIGINS = [
     'https://sistema-jul-marp-erp.vercel.app',
+    'https://sistema-jul-marp-huacgyr1f-julianvilla123s-projects.vercel.app',
 ]
 
 CSRF_TRUSTED_ORIGINS = [
