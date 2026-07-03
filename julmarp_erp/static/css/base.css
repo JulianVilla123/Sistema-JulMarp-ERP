@@ -19,6 +19,18 @@
     --jm-shadow-soft: 0 8px 22px rgba(31, 41, 51, 0.08);
 }
 
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    max-width: 100%;
+    overflow-x: hidden;
+}
+
 body {
     font-family: 'Inter', Arial, sans-serif;
     margin: 0;
@@ -30,6 +42,43 @@ body {
 
 main {
     padding: 0;
+    min-width: 0;
+}
+
+img,
+svg,
+canvas,
+video,
+iframe {
+    max-width: 100%;
+}
+
+form,
+fieldset,
+section,
+article,
+aside,
+header,
+footer,
+.card,
+.dashboard-card,
+.module-card,
+.calidad-card,
+.entrada-card {
+    min-width: 0;
+}
+
+input,
+select,
+textarea,
+button {
+    max-width: 100%;
+}
+
+input,
+select,
+textarea {
+    width: 100%;
 }
 
 .workspace-main {
@@ -148,6 +197,8 @@ html.embedded-frame #workspace-main {
 
 .workspace-pane {
     display: none;
+    min-width: 0;
+    max-width: 100%;
 }
 
 .workspace-pane.is-active {
@@ -157,10 +208,13 @@ html.embedded-frame #workspace-main {
 .workspace-panes {
     display: block;
     width: 100%;
+    min-width: 0;
+    max-width: 100%;
 }
 
 .workspace-frame {
     width: 100%;
+    max-width: 100%;
     min-height: 420px;
     border: none;
     display: block;
@@ -447,11 +501,16 @@ html.embedded-frame #workspace-main {
     border-radius: 8px;
     background: var(--jm-panel-soft);
     color: var(--jm-ink-soft);
+    min-width: 0;
+    overflow-wrap: anywhere;
 }
 
 .check-item input {
     width: 16px;
     height: 16px;
+    min-height: auto;
+    padding: 0;
+    flex: 0 0 auto;
 }
 
 .tabla-wrap {
@@ -748,6 +807,9 @@ html.embedded-frame #workspace-main {
     .btn {
         min-height: 40px;
         padding: 9px 14px;
+        width: auto;
+        max-width: 100%;
+        white-space: normal;
     }
 
     .messages li,

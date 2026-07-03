@@ -1,8 +1,60 @@
 /* QA pages */
+.qa-content {
+    width: 100%;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 40px 20px;
+    overflow-x: hidden;
+}
+
+.qa-header,
+.qqaat-page,
+.qqaat-card,
+.qqaat-grid,
+.qqaat-form,
+.qqaat-kpis {
+    min-width: 0;
+}
+
+.qa-header {
+    margin-bottom: 24px;
+}
+
+.qa-table-wrapper {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border: 1px solid var(--jm-line);
+    border-radius: 8px;
+}
+
+.qa-table {
+    width: 100%;
+    min-width: 620px;
+    border-collapse: collapse;
+}
+
+.qa-table th,
+.qa-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--jm-line);
+    text-align: left;
+    vertical-align: top;
+    overflow-wrap: anywhere;
+}
+
+.qa-table thead th {
+    background: #f1ece6;
+    color: var(--jm-ink);
+}
+
 .calidad-container {
     max-width: 1200px;
     margin: 0 auto;
     padding: 40px 20px;
+    width: 100%;
+    overflow-x: hidden;
 }
 
 .calidad-header {
@@ -20,7 +72,7 @@
 
 .calidad-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 20px;
 }
 
@@ -30,6 +82,8 @@
     padding: 22px;
     box-shadow: 0 4px 18px rgba(0, 0, 0, 0.08);
     border-top: 4px solid #c0392b;
+    min-width: 0;
+    overflow: hidden;
 }
 
 .calidad-card h3 {
@@ -41,6 +95,7 @@
     display: flex;
     flex-direction: column;
     gap: 12px;
+    min-width: 0;
 }
 
 .calidad-form label {
@@ -49,6 +104,8 @@
     gap: 6px;
     font-size: 0.88rem;
     color: #4f5562;
+    min-width: 0;
+    overflow-wrap: anywhere;
 }
 
 .calidad-form input,
@@ -59,11 +116,35 @@
     padding: 10px 12px;
     font-size: 0.95rem;
     background: #fcfdff;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
 }
 
 .calidad-form textarea {
     resize: vertical;
     min-height: 130px;
+    overflow-wrap: anywhere;
+}
+
+.calidad-form .check-item {
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 10px;
+    width: 100%;
+    padding: 10px 12px;
+    line-height: 1.35;
+}
+
+.calidad-form .check-item input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    min-height: 18px;
+    padding: 0;
+    margin: 1px 0 0;
+    flex: 0 0 18px;
+    appearance: auto;
 }
 
 .hallazgos-section {
@@ -72,6 +153,7 @@
     border-radius: 10px;
     background: #f8fafc;
     border: 1px solid #e7ecf3;
+    min-width: 0;
 }
 
 .hallazgos-section h4 {
@@ -96,6 +178,7 @@
     gap: 10px;
     flex-wrap: wrap;
     margin-top: 8px;
+    min-width: 0;
 }
 
 .calidad-actions .btn {
@@ -284,6 +367,16 @@
 }
 
 @media (max-width: 760px) {
+    .qa-content {
+        padding: 24px 12px;
+    }
+
+    .qa-header h1 {
+        font-size: 1.7rem;
+        line-height: 1.2;
+        overflow-wrap: anywhere;
+    }
+
     .calidad-container {
         padding: 24px 12px;
     }
@@ -294,6 +387,11 @@
 
     .calidad-card {
         padding: 16px;
+    }
+
+    .calidad-card h3 {
+        font-size: 1.3rem;
+        line-height: 1.2;
     }
 
     .it-users-table,
@@ -308,8 +406,16 @@
 }
 
 @media (max-width: 520px) {
+    .qa-content {
+        padding: 14px 8px;
+    }
+
+    .qa-table {
+        min-width: 560px;
+    }
+
     .calidad-container {
-        padding: 18px 10px;
+        padding: 14px 8px;
     }
 
     .calidad-header h1 {
@@ -318,7 +424,20 @@
     }
 
     .calidad-card {
-        padding: 14px;
+        padding: 14px 12px;
+    }
+
+    .hallazgos-section {
+        padding: 12px;
+    }
+
+    .hallazgos-section h4 {
+        font-size: 1rem;
+        line-height: 1.25;
+    }
+
+    .hallazgos-section p {
+        font-size: 0.84rem;
     }
 
     .calidad-form input,
