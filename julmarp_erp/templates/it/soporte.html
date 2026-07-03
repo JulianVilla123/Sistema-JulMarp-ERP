@@ -1,0 +1,82 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}IT - Soporte{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/pages/qa.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="calidad-container">
+    <div class="calidad-header">
+        <h1>IT / Solicitudes de soporte</h1>
+        <p>Atiende tickets levantados por usuarios desde su perfil.</p>
+    </div>
+
+    {% if messages %}
+    <ul class="messages" style="margin-bottom: 20px;">
+        {% for message in messages %}
+        <li class="{{ message.tags }}">{{ message }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    <section class="calidad-card">
+        <div class="tabla-wrap">
+            <table class="tabla-material it-support-table">
+                <thead>
+                    <tr>
+                        <th>Solicitud</th>
+                        <th>Usuario</th>
+                        <th>Estado</th>
+                        <th>Prioridad</th>
+                        <th>Respuesta IT</th>
+                        <th>Actualizar</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for ticket in tickets %}
+                    <tr>
+                        <td>
+                            <strong>{{ ticket.folio }} — {{ ticket.titulo }}</strong><br>
+                            <small>{{ ticket.descripcion }}</small><br>
+                            <small>Creado: {{ ticket.fecha_creacion|date:"d/m/Y H:i" }}</small>
+                        </td>
+                        <td>
+                            {{ ticket.solicitado_por.get_full_name|default:ticket.solicitado_por.username|default:'Usuario no disponible' }}<br>
+                            <small>{{ ticket.solicitado_por.departamento.nombre|default:'Sin departamento' }}</small>
+                        </td>
+                        <td><span class="badge {% if ticket.estado == 'RESUELTO' %}ok{% else %}warn{% endif %}">{{ ticket.get_estado_display }}</span></td>
+                        <td>{{ ticket.get_prioridad_display }}</td>
+                        <td>{{ ticket.respuesta|default:'Sin respuesta' }}</td>
+                        <td>
+                            <form method="post" class="inline-admin-form">
+                                {% csrf_token %}
+                                <input type="hidden" name="ticket_id" value="{{ ticket.id }}">
+                                <select name="estado">
+                                    {% for value, label in estados_soporte %}
+                                    <option value="{{ value }}" {% if ticket.estado == value %}selected{% endif %}>{{ label }}</option>
+                                    {% endfor %}
+                                </select>
+                                <select name="prioridad">
+                                    {% for value, label in prioridades_soporte %}
+                                    <option value="{{ value }}" {% if ticket.prioridad == value %}selected{% endif %}>{{ label }}</option>
+                                    {% endfor %}
+                                </select>
+                                <textarea name="respuesta" placeholder="Respuesta para el usuario">{{ ticket.respuesta }}</textarea>
+                                <button type="submit" class="btn btn-info">Guardar</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6">No hay solicitudes de soporte registradas.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+</div>
+{% endblock %}

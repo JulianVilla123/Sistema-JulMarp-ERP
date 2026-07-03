@@ -1,10 +1,31 @@
 /* Base layout and shared components */
+:root {
+    --jm-ink: #1f2933;
+    --jm-ink-soft: #394655;
+    --jm-charcoal: #241f21;
+    --jm-charcoal-2: #342529;
+    --jm-red: #b8211b;
+    --jm-red-2: #8f1814;
+    --jm-red-soft: #fff0ed;
+    --jm-paper: #f7f4ef;
+    --jm-panel: #ffffff;
+    --jm-panel-soft: #fbfaf7;
+    --jm-line: #e7dfd6;
+    --jm-line-strong: #d7ccc1;
+    --jm-steel: #325c78;
+    --jm-sage: #2f7a62;
+    --jm-amber: #b7791f;
+    --jm-shadow: 0 14px 34px rgba(31, 41, 51, 0.11);
+    --jm-shadow-soft: 0 8px 22px rgba(31, 41, 51, 0.08);
+}
+
 body {
     font-family: 'Inter', Arial, sans-serif;
     margin: 0;
     padding: 0;
-    background-color: #f3efe8;
-    color: #2f3a4a;
+    background-color: var(--jm-paper);
+    color: var(--jm-ink);
+    line-height: 1.5;
 }
 
 main {
@@ -13,12 +34,12 @@ main {
 
 .workspace-main {
     min-height: calc(100vh - 160px);
-    background: #ffffff;
+    background: linear-gradient(180deg, #fff 0%, var(--jm-panel-soft) 100%);
 }
 
 .workspace-main-embedded {
     padding: 0;
-    background: #ffffff;
+    background: var(--jm-panel-soft);
 }
 
 /* Safety fallback: if a page is loaded inside an iframe, force embedded layout. */
@@ -35,14 +56,14 @@ html.embedded-frame #workspace-main {
 }
 
 .workspace-tabs {
-    background: linear-gradient(to bottom, #ffffff 0%, #f5f7fb 100%);
-    border-bottom: 2px solid #dde3ed;
+    background: linear-gradient(180deg, #fff 0%, #f7f4ef 100%);
+    border-bottom: 1px solid var(--jm-line);
     padding: 4px 8px;
     overflow-x: auto;
     overflow-y: hidden;
     white-space: nowrap;
-    height: 52px;
-    box-shadow: inset 0 -1px 2px rgba(0, 0, 0, 0.03);
+    height: 50px;
+    box-shadow: inset 0 -1px 0 rgba(184, 33, 27, 0.08);
 }
 
 .workspace-tabs-track {
@@ -54,10 +75,10 @@ html.embedded-frame #workspace-main {
 
 .workspace-tab {
     height: 36px;
-    border: 1px solid #cbd5e1;
+    border: 1px solid var(--jm-line);
     border-radius: 6px 6px 0 0;
-    background: linear-gradient(to bottom, #f3f6fb, #eef2f9);
-    color: #475569;
+    background: #f8f5f1;
+    color: var(--jm-ink-soft);
     display: inline-flex;
     align-items: center;
     gap: 6px;
@@ -71,10 +92,10 @@ html.embedded-frame #workspace-main {
 }
 
 .workspace-tab:hover {
-    background: linear-gradient(to bottom, #ffffff, #f8fafd);
-    color: #1e293b;
-    border-color: #b8c5d8;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    background: #ffffff;
+    color: var(--jm-red-2);
+    border-color: #d4b7af;
+    box-shadow: var(--jm-shadow-soft);
 }
 
 .workspace-tab:focus {
@@ -82,23 +103,23 @@ html.embedded-frame #workspace-main {
 }
 
 .workspace-tab:focus-visible {
-    border-color: #7c8fd6;
-    box-shadow: 0 0 0 2px rgba(124, 143, 214, 0.2);
+    border-color: var(--jm-red);
+    box-shadow: 0 0 0 3px rgba(184, 33, 27, 0.14);
 }
 
 .workspace-tab.is-active {
-    background: linear-gradient(to bottom, #ffffff, #fafbff);
-    color: #0f172a;
-    border-color: #7c8fd6;
+    background: #ffffff;
+    color: var(--jm-red-2);
+    border-color: #caa99f;
     border-bottom-color: #ffffff;
     font-weight: 600;
-    box-shadow: 0 2px 6px rgba(124, 143, 214, 0.15);
+    box-shadow: 0 8px 18px rgba(143, 24, 20, 0.12);
     position: relative;
     z-index: 10;
 }
 
 .workspace-tab-icon {
-    color: #f59e0b;
+    color: var(--jm-amber);
     font-size: 0.65rem;
     line-height: 0;
     opacity: 0.85;
@@ -144,7 +165,7 @@ html.embedded-frame #workspace-main {
     border: none;
     display: block;
     background: #ffffff;
-    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.05);
+    box-shadow: inset 0 1px 0 rgba(31, 41, 51, 0.05);
 }
 
 /* ===== Navbar ===== */
@@ -152,13 +173,14 @@ html.embedded-frame #workspace-main {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    background-color: #2f3a4a;
+    background: linear-gradient(90deg, var(--jm-charcoal) 0%, var(--jm-charcoal-2) 54%, #5a1817 100%);
     padding: 0 2rem;
     height: 60px;
     position: sticky;
     top: 0;
     z-index: 1000;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 12px 24px rgba(22, 18, 19, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .nav-brand a {
@@ -166,7 +188,7 @@ html.embedded-frame #workspace-main {
     text-decoration: none;
     font-size: 1.2rem;
     font-weight: 700;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.02em;
 }
 
 .nav-menu {
@@ -185,7 +207,7 @@ html.embedded-frame #workspace-main {
 }
 
 .nav-link {
-    color: #ccd0d8;
+    color: rgba(255, 255, 255, 0.78);
     text-decoration: none;
     padding: 0 1.2rem;
     height: 100%;
@@ -199,7 +221,7 @@ html.embedded-frame #workspace-main {
 .nav-link:hover,
 .nav-item:hover > .nav-link {
     color: white;
-    background-color: rgba(255, 255, 255, 0.08);
+    background-color: rgba(255, 255, 255, 0.09);
 }
 
 .nav-link:focus,
@@ -226,27 +248,29 @@ html.embedded-frame #workspace-main {
     position: absolute;
     top: 100%;
     left: 0;
-    background-color: #1e2a36;
+    background: #2a2225;
     list-style: none;
     padding: 0.5rem 0;
     margin: 0;
     min-width: 220px;
     border-radius: 0 0 8px 8px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+    box-shadow: 0 18px 34px rgba(18, 14, 15, 0.28);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-top: 0;
     z-index: 999;
 }
 
 .dropdown-menu li a {
     display: block;
     padding: 0.7rem 1.25rem;
-    color: #ccd0d8;
+    color: rgba(255, 255, 255, 0.78);
     text-decoration: none;
     font-size: 0.9rem;
     transition: background-color 0.2s, color 0.2s;
 }
 
 .dropdown-menu li a:hover {
-    background-color: #d5433c;
+    background-color: var(--jm-red);
     color: white;
 }
 
@@ -267,7 +291,7 @@ html.embedded-frame #workspace-main {
     width: 38px;
     height: 38px;
     border-radius: 50%;
-    background-color: #d5433c;
+    background: linear-gradient(145deg, #d94c43, var(--jm-red-2));
     color: #ffffff;
     font-size: 0.85rem;
     font-weight: 700;
@@ -279,18 +303,18 @@ html.embedded-frame #workspace-main {
 }
 
 .nav-logout {
-    color: #ccd0d8;
+    color: rgba(255, 255, 255, 0.82);
     text-decoration: none;
     font-size: 0.85rem;
     border: 1px solid rgba(255, 255, 255, 0.3);
     padding: 5px 12px;
-    border-radius: 20px;
+    border-radius: 8px;
     transition: background-color 0.2s, color 0.2s;
 }
 
 .nav-logout:hover {
-    background-color: #d5433c;
-    border-color: #d5433c;
+    background-color: var(--jm-red);
+    border-color: var(--jm-red);
     color: white;
 }
 
@@ -302,23 +326,23 @@ html.embedded-frame #workspace-main {
 }
 
 .messages li {
-    color: #842029;
-    background-color: #f8d7da;
-    border: 1px solid #f5c2c7;
+    color: #7f1d1d;
+    background-color: var(--jm-red-soft);
+    border: 1px solid #f0c2bb;
     padding: 0.85rem 1rem;
     border-radius: 14px;
 }
 
 .messages li.success {
-    color: #0f5132;
-    background-color: #d1e7dd;
-    border: 1px solid #badbcc;
+    color: #175c48;
+    background-color: #e6f3ed;
+    border: 1px solid #b7d9cb;
 }
 
 .messages li.error {
-    color: #842029;
-    background-color: #f8d7da;
-    border: 1px solid #f5c2c7;
+    color: #7f1d1d;
+    background-color: var(--jm-red-soft);
+    border: 1px solid #f0c2bb;
 }
 
 .alert {
@@ -328,9 +352,9 @@ html.embedded-frame #workspace-main {
 }
 
 .alert-warning {
-    background-color: #fef5e7;
-    border-left: 5px solid #f39c12;
-    color: #7d6608;
+    background-color: #fff7e8;
+    border-left: 5px solid var(--jm-amber);
+    color: #76520f;
 }
 
 .alert-warning h4 {
@@ -344,55 +368,69 @@ html.embedded-frame #workspace-main {
     border-radius: 8px;
     text-decoration: none;
     display: inline-block;
-    transition: all 0.3s;
+    transition: transform 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
     border: none;
     cursor: pointer;
     font-weight: bold;
 }
 
+.btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 18px rgba(31, 41, 51, 0.12);
+}
+
 .btn-primary {
-    background-color: #3498db;
+    background-color: var(--jm-red);
     color: white;
 }
 
 .btn-primary:hover {
-    background-color: #2980b9;
+    background-color: var(--jm-red-2);
 }
 
 .btn-success {
-    background-color: #2ecc71;
+    background-color: var(--jm-sage);
     color: white;
 }
 
 .btn-success:hover {
-    background-color: #27ae60;
+    background-color: #25634f;
 }
 
 .btn-warning {
-    background-color: #f39c12;
+    background-color: var(--jm-amber);
     color: white;
 }
 
 .btn-warning:hover {
-    background-color: #e67e22;
+    background-color: #935f16;
 }
 
 .btn-info {
-    background-color: #1abc9c;
+    background-color: var(--jm-steel);
     color: white;
 }
 
 .btn-info:hover {
-    background-color: #16a085;
+    background-color: #264b63;
 }
 
 .btn-danger {
-    background-color: #e74c3c;
+    background-color: #a61b1b;
     color: white;
 }
 
 .btn-danger:hover {
-    background-color: #c0392b;
+    background-color: #811616;
+}
+
+.btn-dark {
+    background-color: var(--jm-ink);
+    color: #ffffff;
+}
+
+.btn-dark:hover {
+    background-color: #111820;
 }
 
 /* Shared data views */
@@ -401,10 +439,10 @@ html.embedded-frame #workspace-main {
     align-items: center;
     gap: 10px;
     padding: 9px 10px;
-    border: 1px solid #eceff4;
+    border: 1px solid var(--jm-line);
     border-radius: 8px;
-    background: #fafbfd;
-    color: #3b4353;
+    background: var(--jm-panel-soft);
+    color: var(--jm-ink-soft);
 }
 
 .check-item input {
@@ -414,6 +452,10 @@ html.embedded-frame #workspace-main {
 
 .tabla-wrap {
     overflow-x: auto;
+    border: 1px solid var(--jm-line);
+    border-radius: 8px;
+    background: #ffffff;
+    box-shadow: var(--jm-shadow-soft);
 }
 
 .tabla-material {
@@ -424,32 +466,94 @@ html.embedded-frame #workspace-main {
 
 .tabla-material th,
 .tabla-material td {
-    border-bottom: 1px solid #eceff4;
+    border-bottom: 1px solid var(--jm-line);
     padding: 10px;
     text-align: left;
     font-size: 0.88rem;
 }
 
 .tabla-material th {
-    background: #f7f9fc;
-    color: #3b4353;
+    background: #f1ece6;
+    color: var(--jm-ink);
     font-weight: 700;
+}
+
+.tabla-material tbody tr:hover {
+    background: #fff8f5;
 }
 
 .badge {
     display: inline-block;
     padding: 4px 10px;
-    border-radius: 20px;
+    border-radius: 999px;
     font-size: 0.75rem;
     font-weight: 700;
 }
 
 .badge.ok {
-    background: #eafaf1;
-    color: #1e8449;
+    background: #e6f3ed;
+    color: #175c48;
 }
 
 .badge.warn {
-    background: #fef5e7;
-    color: #b9770e;
+    background: #fff7e8;
+    color: #8c5b11;
+}
+
+/* Bootstrap/common component restyle used across department modules. */
+.card {
+    border: 1px solid var(--jm-line);
+    border-radius: 8px;
+    box-shadow: var(--jm-shadow-soft);
+}
+
+.card-header {
+    background: #f1ece6;
+    border-bottom: 1px solid var(--jm-line);
+    color: var(--jm-ink);
+    font-weight: 700;
+}
+
+.table {
+    color: var(--jm-ink);
+}
+
+.table thead th {
+    background: #f1ece6;
+    border-bottom-color: var(--jm-line-strong);
+    color: var(--jm-ink);
+}
+
+.table td,
+.table th {
+    border-color: var(--jm-line);
+}
+
+.table-hover tbody tr:hover {
+    background-color: #fff8f5;
+}
+
+.form-control,
+.form-select {
+    border-color: var(--jm-line-strong);
+    border-radius: 8px;
+    background-color: #fffdfa;
+    color: var(--jm-ink);
+}
+
+.form-control:focus,
+.form-select:focus {
+    border-color: var(--jm-red);
+    box-shadow: 0 0 0 3px rgba(184, 33, 27, 0.14);
+}
+
+.dropdown-toggle::after {
+    margin-left: 0.45rem;
+    opacity: 0.72;
+}
+
+.dropdown-item:active,
+.dropdown-item:hover {
+    background-color: var(--jm-red-soft);
+    color: var(--jm-red-2);
 }

@@ -36,7 +36,7 @@
     <link rel="stylesheet" href="{% static 'css/base.css' %}">
     {% block extra_css %}{% endblock %}
 </head>
-<body class="{% block body_class %}{% endblock %}" data-workspace-enabled="{% if user.is_authenticated and request.resolver_match.url_name != 'login' and request.resolver_match.url_name != 'register' %}1{% else %}0{% endif %}" data-home-url="{% if user.is_authenticated %}{% url 'home' %}{% endif %}" data-dashboard-sync-token="{{ request.session.dashboard_sync_token|default:'' }}" data-dashboard-sync-scope="{{ request.session.dashboard_sync_scope|default:'global' }}">
+<body class="{% block body_class %}{% endblock %}" data-workspace-enabled="{% if user.is_authenticated and request.resolver_match.url_name != 'login' %}1{% else %}0{% endif %}" data-home-url="{% if user.is_authenticated %}{% url 'home' %}{% endif %}" data-dashboard-sync-token="{{ request.session.dashboard_sync_token|default:'' }}" data-dashboard-sync-scope="{{ request.session.dashboard_sync_scope|default:'global' }}">
     <div id="workspace-root">
         <header id="workspace-header" {% if request.GET.tab == '1' %}style="display: none;"{% endif %}>
             {% block header %}
@@ -50,7 +50,7 @@
             {% endblock %}
         </nav>
 
-        {% if user.is_authenticated and request.resolver_match.url_name != 'login' and request.resolver_match.url_name != 'register' %}
+        {% if user.is_authenticated and request.resolver_match.url_name != 'login' %}
         <div id="workspace-tabs" class="workspace-tabs" {% if request.GET.tab == '1' %}style="display: none;"{% endif %}>
             <div class="workspace-tabs-track" id="workspace-tabs-track"></div>
         </div>
@@ -63,9 +63,6 @@
             <section id="workspace-panes" class="workspace-panes"></section>
         </main>
 
-        <footer id="workspace-footer" {% if request.GET.tab == '1' %}style="display: none;"{% endif %}>
-            {% include "partials/footer.html" %}
-        </footer>
     </div>
     
     <!-- Bootstrap JS -->

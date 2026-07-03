@@ -1,30 +1,21 @@
 {% extends "base.html" %}
 {% load static %}
 
-{% block body_class %}login-page{% endblock %}
+{% block body_class %}auth-admin-page{% endblock %}
 
-{% block title %}Registro{% endblock %}
+{% block title %}Crear usuario{% endblock %}
 
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/pages/auth.css' %}">
 {% endblock %}
 
-{% block header %}{% endblock %}
-{% block navbar %}{% endblock %}
-
 {% block content %}
 <div class="login-screen">
-    <div class="login-visual">
-        <p class="visual-label">JulMarp ERP</p>
-        <h1>Regístrate</h1>
-        <p>Crea tu cuenta para acceder al sistema de inventario, finanzas y recursos humanos.</p>
-    </div>
-
     <section class="login-panel">
         <div class="login-card">
             <div class="login-card__header">
                 <span class="login-card__logo">Nuevo</span>
-                <p>Completa tus datos para registrarte</p>
+                <p>Completa los datos del usuario</p>
             </div>
             {% if messages %}
             <ul class="messages">
@@ -41,11 +32,18 @@
                 <input type="email" name="email" placeholder="Correo electrónico" value="{{ form_data.email|default:'' }}" required>
                 <input type="text" name="telefono" placeholder="Teléfono" value="{{ form_data.telefono|default:'' }}" required>
                 <input type="text" name="numero_empleado" placeholder="Número de empleado" value="{{ form_data.numero_empleado|default:'' }}" required>
+                <select name="departamento">
+                    <option value="">Departamento</option>
+                    {% for departamento in departamentos %}
+                    <option value="{{ departamento.id }}" {% if form_data.departamento == departamento.id|stringformat:"s" %}selected{% endif %}>{{ departamento.nombre }}</option>
+                    {% endfor %}
+                </select>
                 <input type="password" name="password" id="password" placeholder="Contraseña" required>
                 <input type="password" name="confirm_password" id="confirm_password" placeholder="Confirmar contraseña" required>
-                <button type="submit">Registrarse</button>
+                <button type="submit">Crear usuario</button>
             </form>
-            <p class="login-card__note">Ya tienes cuenta? <a href="{% url 'login' %}">Inicia sesión</a></p>
+            <a href="{% url 'it_usuarios' %}" class="secondary-button">Volver a usuarios</a>
+            <p class="login-card__note">El usuario creado podrá iniciar sesión con estas credenciales.</p>
         </div>
     </section>
 </div>

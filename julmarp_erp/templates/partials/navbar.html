@@ -18,7 +18,7 @@
                     <a href="{% url 'entrada_linea' %}" class="nav-link">Distribucion</a>
                 </li>
                 <li class="nav-item dropdown">
-                    <a href="#" class="nav-link dropdown-toggle">Inventario <span class="arrow">&#9660;</span></a>
+                    <a href="#" class="nav-link dropdown-toggle">Inventario</a>
                     <ul class="dropdown-menu">
                         <li><a href="{% url 'inventario_almacen' %}">Almacen</a></li>
                         <li><a href="{% url 'historial_almacen' %}">Historial de Almacen</a></li>
@@ -62,35 +62,34 @@
                     <li class="nav-item">
                         <a href="{% url 'finanzas_dashboard' %}" class="nav-link">Dashboard Finanzas</a>
                     </li>
-                    <li class="nav-item">
-                        <a href="{% url 'finanzas_contabilidad' %}" class="nav-link">Contabilidad</a>
+                    <li class="nav-item dropdown">
+                        <a href="#" class="nav-link dropdown-toggle">Operación</a>
+                        <ul class="dropdown-menu">
+                            <li><a href="{% url 'finanzas_contabilidad' %}">Contabilidad</a></li>
+                            <li><a href="{% url 'finanzas_presupuestos' %}">Presupuestos</a></li>
+                            <li><a href="{% url 'finanzas_pagos_cobros' %}">Pagos y Cobros</a></li>
+                            <li><a href="{% url 'finanzas_impuestos' %}">Impuestos</a></li>
+                        </ul>
                     </li>
-                    <li class="nav-item">
-                        <a href="{% url 'finanzas_presupuestos' %}" class="nav-link">Presupuestos</a>
+                    <li class="nav-item dropdown">
+                        <a href="#" class="nav-link dropdown-toggle">Producción</a>
+                        <ul class="dropdown-menu">
+                            <li><a href="{% url 'finanzas_costeo_produccion' %}">Costeo Producción</a></li>
+                            <li><a href="{% url 'finanzas_ordenes_compra' %}">Órdenes Compra MFG</a></li>
+                            <li><a href="{% url 'indicadores_kpis_mfg' %}">KPIs Producción</a></li>
+                        </ul>
                     </li>
-                    <li class="nav-item">
-                        <a href="{% url 'finanzas_pagos_cobros' %}" class="nav-link">Pagos y Cobros</a>
+                    <li class="nav-item dropdown">
+                        <a href="#" class="nav-link dropdown-toggle">Reportes</a>
+                        <ul class="dropdown-menu">
+                            <li><a href="{% url 'finanzas_reportes' %}">Reportes Financieros</a></li>
+                        </ul>
                     </li>
-                    <li class="nav-item">
-                        <a href="{% url 'finanzas_costeo_produccion' %}" class="nav-link">Costeo Producción</a>
-                    </li>
-                    <li class="nav-item">
-                        <a href="{% url 'finanzas_reportes' %}" class="nav-link">Reportes Financieros</a>
-                    </li>
-                    <li class="nav-item">
-                        <a href="{% url 'finanzas_impuestos' %}" class="nav-link">Impuestos</a>
-                    </li>
-                    <li class="nav-item">
-                        <a href="{% url 'finanzas_ordenes_compra' %}" class="nav-link">Órdenes Compra MFG</a>
-                    </li>
-                    <li class="nav-item">
-                        <a href="{% url 'indicadores_kpis_mfg' %}" class="nav-link">KPIs Producción</a>
-                </li>
                 {% endif %}
 
                 {% if departamento == 'RRHH' or departamento == 'Admin' %}
                 <li class="nav-item dropdown">
-                    <a href="#" class="nav-link dropdown-toggle">RRHH <span class="arrow">&#9660;</span></a>
+                    <a href="#" class="nav-link dropdown-toggle">RRHH</a>
                     <ul class="dropdown-menu">
                         <li><a href="#">Gestión de Empleados</a></li>
                         <li><a href="#">Control de Overtime</a></li>
@@ -99,6 +98,18 @@
                 {% endif %}
 
                 {% if departamento == 'IT' or departamento == 'Admin' %}
+                <li class="nav-item">
+                    <a href="{% url 'register' %}" class="nav-link">Crear usuario</a>
+                </li>
+                <li class="nav-item">
+                    <a href="{% url 'it_usuarios' %}" class="nav-link">Usuarios</a>
+                </li>
+                <li class="nav-item">
+                    <a href="{% url 'it_soporte' %}" class="nav-link">Soporte</a>
+                </li>
+                <li class="nav-item">
+                    <a href="{% url 'it_bitacora' %}" class="nav-link">Bitácora</a>
+                </li>
                 <li class="nav-item">
                     <a href="{% url 'it_clientes_compra' %}" class="nav-link">Clientes PT</a>
                 </li>

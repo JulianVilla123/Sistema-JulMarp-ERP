@@ -152,6 +152,92 @@
     color: white;
 }
 
+.perfil-support-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.perfil-support-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    color: #4f5562;
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.perfil-support-form input,
+.perfil-support-form select,
+.perfil-support-form textarea {
+    border: 1px solid #d8dde6;
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 0.95rem;
+    background: #fcfdff;
+}
+
+.perfil-support-form textarea {
+    min-height: 110px;
+    resize: vertical;
+}
+
+.btn-perfil-submit {
+    border: none;
+    border-radius: 8px;
+    background: #c0392b;
+    color: #ffffff;
+    font-weight: 700;
+    padding: 11px 16px;
+    cursor: pointer;
+}
+
+.perfil-ticket-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.perfil-ticket-list li {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px;
+    border: 1px solid #e7ecf3;
+    border-radius: 10px;
+    background: #f8fbff;
+}
+
+.perfil-ticket-list strong,
+.perfil-ticket-list small,
+.perfil-ticket-list p {
+    display: block;
+}
+
+.perfil-ticket-list small {
+    color: #6e7480;
+    margin-top: 3px;
+}
+
+.perfil-ticket-list p {
+    color: #4f5562;
+    margin: 8px 0 0;
+}
+
+.perfil-ticket-status {
+    align-self: flex-start;
+    white-space: nowrap;
+    border-radius: 999px;
+    background: #eef5ff;
+    color: #1255a7;
+    font-size: 0.78rem;
+    font-weight: 700;
+    padding: 4px 10px;
+}
+
 @media (max-width: 640px) {
     .perfil-grid {
         grid-template-columns: 1fr;
@@ -161,4 +247,97 @@
         flex-direction: column;
         text-align: center;
     }
+}
+
+/* Acabado visual JulMarp para perfil y tickets. */
+.perfil-container {
+    color: var(--jm-ink);
+}
+
+.perfil-header {
+    background: radial-gradient(circle at 18% 12%, #cf3027 0%, #8f1814 42%, #2f1110 100%);
+    border-radius: 8px;
+    box-shadow: var(--jm-shadow);
+}
+
+.perfil-dept-badge,
+.perfil-avatar-grande {
+    border-radius: 8px;
+}
+
+.perfil-card {
+    background: linear-gradient(180deg, #ffffff 0%, #fbfaf7 100%);
+    border: 1px solid var(--jm-line);
+    border-top: 4px solid var(--jm-red);
+    border-radius: 8px;
+    box-shadow: var(--jm-shadow-soft);
+}
+
+.perfil-card-title {
+    color: var(--jm-red-2);
+}
+
+.perfil-label,
+.perfil-support-form label,
+.perfil-ticket-list small,
+.perfil-ticket-list p {
+    color: var(--jm-ink-soft);
+}
+
+.perfil-value,
+.perfil-ticket-list strong {
+    color: var(--jm-ink);
+}
+
+.perfil-info-list li {
+    border-bottom-color: var(--jm-line);
+}
+
+.perfil-badge-activo {
+    background: #e6f3ed;
+    color: #175c48;
+}
+
+.perfil-badge-inactivo {
+    background: var(--jm-red-soft);
+    color: var(--jm-red-2);
+}
+
+.btn-perfil-volver {
+    background: #f1ece6;
+    color: var(--jm-ink);
+    border-radius: 8px;
+}
+
+.btn-perfil-volver:hover,
+.btn-perfil-submit {
+    background: var(--jm-red);
+    color: #ffffff;
+}
+
+.perfil-support-form input,
+.perfil-support-form select,
+.perfil-support-form textarea {
+    border-color: var(--jm-line-strong);
+    background: #fffdfa;
+    color: var(--jm-ink);
+}
+
+.perfil-support-form input:focus,
+.perfil-support-form select:focus,
+.perfil-support-form textarea:focus {
+    outline: none;
+    border-color: var(--jm-red);
+    box-shadow: 0 0 0 3px rgba(184, 33, 27, 0.14);
+}
+
+.perfil-ticket-list li {
+    border-color: var(--jm-line);
+    border-radius: 8px;
+    background: #fbfaf7;
+}
+
+.perfil-ticket-status {
+    background: #e9f0f4;
+    color: var(--jm-steel);
 }

@@ -393,6 +393,26 @@
             <h2>Acciones rápidas de IT</h2>
             <div class="modules-grid">
                 <div class="module-card">
+                    <h4>Crear usuario</h4>
+                    <p>Da de alta usuarios internos del ERP de forma controlada desde IT.</p>
+                    <a href="{% url 'register' %}" class="btn btn-dark">Abrir módulo</a>
+                </div>
+                <div class="module-card">
+                    <h4>Administrar usuarios</h4>
+                    <p>Cambia departamentos, bloquea usuarios y restablece contraseñas.</p>
+                    <a href="{% url 'it_usuarios' %}" class="btn btn-dark">Abrir módulo</a>
+                </div>
+                <div class="module-card">
+                    <h4>Solicitudes de soporte</h4>
+                    <p>Da seguimiento a tickets levantados desde el perfil de cada usuario.</p>
+                    <a href="{% url 'it_soporte' %}" class="btn btn-dark">Abrir módulo</a>
+                </div>
+                <div class="module-card">
+                    <h4>Bitácora de IT</h4>
+                    <p>Consulta accesos e historial de cambios realizados a usuarios.</p>
+                    <a href="{% url 'it_bitacora' %}" class="btn btn-dark">Abrir módulo</a>
+                </div>
+                <div class="module-card">
                     <h4>Clientes de Compra PT</h4>
                     <p>Administra el catalogo oficial de clientes destino para producto terminado y reclamos.</p>
                     <a href="{% url 'it_clientes_compra' %}" class="btn btn-dark">Abrir módulo</a>
@@ -401,6 +421,34 @@
         </section>
 
         <section class="dashboard-grid" style="grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap:14px;">
+            <article class="dashboard-card" style="text-align:center; padding:18px 12px;">
+                <p style="font-size:2rem; font-weight:800; color:#1255a7; margin:0; line-height:1.1;">{{ it_usuarios_activos }}</p>
+                <p style="font-size:0.72rem; text-transform:uppercase; letter-spacing:.05em; color:#7a90ad; margin:4px 0 0;">Usuarios activos</p>
+            </article>
+            <article class="dashboard-card" style="text-align:center; padding:18px 12px;">
+                <p style="font-size:2rem; font-weight:800; color:#9b2121; margin:0; line-height:1.1;">{{ it_usuarios_bloqueados }}</p>
+                <p style="font-size:0.72rem; text-transform:uppercase; letter-spacing:.05em; color:#7a90ad; margin:4px 0 0;">Usuarios bloqueados</p>
+            </article>
+            <article class="dashboard-card" style="text-align:center; padding:18px 12px;">
+                <p style="font-size:2rem; font-weight:800; color:#b9770e; margin:0; line-height:1.1;">{{ it_usuarios_sin_departamento }}</p>
+                <p style="font-size:0.72rem; text-transform:uppercase; letter-spacing:.05em; color:#7a90ad; margin:4px 0 0;">Sin departamento</p>
+            </article>
+            <article class="dashboard-card" style="text-align:center; padding:18px 12px;">
+                <p style="font-size:2rem; font-weight:800; color:#1f3e67; margin:0; line-height:1.1;">{{ it_usuarios_staff }}</p>
+                <p style="font-size:0.72rem; text-transform:uppercase; letter-spacing:.05em; color:#7a90ad; margin:4px 0 0;">Con acceso admin</p>
+            </article>
+            <article class="dashboard-card" style="text-align:center; padding:18px 12px;">
+                <p style="font-size:2rem; font-weight:800; color:#b9770e; margin:0; line-height:1.1;">{{ it_tickets_abiertos }}</p>
+                <p style="font-size:0.72rem; text-transform:uppercase; letter-spacing:.05em; color:#7a90ad; margin:4px 0 0;">Tickets abiertos</p>
+            </article>
+            <article class="dashboard-card" style="text-align:center; padding:18px 12px;">
+                <p style="font-size:2rem; font-weight:800; color:#9b2121; margin:0; line-height:1.1;">{{ it_tickets_criticos }}</p>
+                <p style="font-size:0.72rem; text-transform:uppercase; letter-spacing:.05em; color:#7a90ad; margin:4px 0 0;">Tickets críticos</p>
+            </article>
+            <article class="dashboard-card" style="text-align:center; padding:18px 12px;">
+                <p style="font-size:2rem; font-weight:800; color:#9b2121; margin:0; line-height:1.1;">{{ it_accesos_fallidos }}</p>
+                <p style="font-size:0.72rem; text-transform:uppercase; letter-spacing:.05em; color:#7a90ad; margin:4px 0 0;">Accesos fallidos</p>
+            </article>
             <article class="dashboard-card" style="text-align:center; padding:18px 12px;">
                 <p style="font-size:2rem; font-weight:800; color:#1255a7; margin:0; line-height:1.1;">{{ it_clientes_activos }}</p>
                 <p style="font-size:0.72rem; text-transform:uppercase; letter-spacing:.05em; color:#7a90ad; margin:4px 0 0;">Clientes activos</p>
@@ -412,6 +460,92 @@
         </section>
 
         <section class="dashboard-grid" style="margin-top:16px;">
+            <article class="dashboard-card">
+                <h3>Usuarios recientes</h3>
+                <ul class="recent-activity-list">
+                    {% for usuario_it in it_usuarios_recientes %}
+                    <li>
+                        <div>
+                            <p>{{ usuario_it.get_full_name|default:usuario_it.username }}</p>
+                            <small>{{ usuario_it.username }}{% if usuario_it.departamento %} | {{ usuario_it.departamento.nombre }}{% else %} | Sin departamento{% endif %}</small>
+                        </div>
+                        <span class="activity-tag {% if usuario_it.is_active and usuario_it.activo %}entrada{% else %}salida_linea{% endif %}">
+                            {% if usuario_it.is_active and usuario_it.activo %}Activo{% else %}Bloqueado{% endif %}
+                        </span>
+                    </li>
+                    {% empty %}
+                    <li>
+                        <div><p>Sin usuarios registrados</p><small>Crea usuarios desde el módulo de IT</small></div>
+                        <span class="activity-tag">N/A</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </article>
+
+            <article class="dashboard-card">
+                <h3>Usuarios por departamento</h3>
+                <ul class="recent-activity-list">
+                    {% for depto in it_usuarios_por_departamento %}
+                    <li>
+                        <div>
+                            <p>{{ depto.nombre }}</p>
+                            <small>Usuarios asignados</small>
+                        </div>
+                        <strong>{{ depto.total_usuarios }}</strong>
+                    </li>
+                    {% empty %}
+                    <li>
+                        <div><p>Sin departamentos activos</p><small>Da de alta departamentos desde administración</small></div>
+                        <strong>-</strong>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </article>
+
+            <article class="dashboard-card">
+                <h3>Solicitudes recientes</h3>
+                <ul class="recent-activity-list">
+                    {% for ticket in it_tickets_recientes %}
+                    <li>
+                        <div>
+                            <p>{{ ticket.folio }} — {{ ticket.titulo }}</p>
+                            <small>{{ ticket.solicitado_por.get_full_name|default:ticket.solicitado_por.username|default:'Usuario no disponible' }} | {{ ticket.get_prioridad_display }}</small>
+                        </div>
+                        <span class="activity-tag {% if ticket.estado == 'RESUELTO' %}entrada{% elif ticket.estado == 'CANCELADO' %}salida_linea{% else %}transferencia{% endif %}">
+                            {{ ticket.get_estado_display }}
+                        </span>
+                    </li>
+                    {% empty %}
+                    <li>
+                        <div><p>Sin solicitudes recientes</p><small>Los usuarios pueden crear tickets desde su perfil</small></div>
+                        <span class="activity-tag">N/A</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </article>
+
+            <article class="dashboard-card">
+                <h3>Accesos recientes</h3>
+                <ul class="recent-activity-list">
+                    {% for acceso in it_accesos_recientes %}
+                    <li>
+                        <div>
+                            <p>{{ acceso.usuario_ingresado|default:acceso.usuario.username|default:'Sin usuario' }}</p>
+                            <small>{{ acceso.fecha|date:"d/m/Y H:i" }} | {{ acceso.accion }}</small>
+                        </div>
+                        <span class="activity-tag {% if acceso.exitoso %}entrada{% else %}salida_linea{% endif %}">
+                            {% if acceso.exitoso %}Correcto{% else %}Fallido{% endif %}
+                        </span>
+                    </li>
+                    {% empty %}
+                    <li>
+                        <div><p>Sin accesos registrados</p><small>La bitácora se llenará con nuevos inicios de sesión</small></div>
+                        <span class="activity-tag">N/A</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </article>
+
             <article class="dashboard-card">
                 <h3>Clientes recientes</h3>
                 <ul class="recent-activity-list">
@@ -427,7 +561,7 @@
                     </li>
                     {% empty %}
                     <li>
-                        <div><p>Sin clientes cargados</p><small>Registra clientes desde el modulo de IT</small></div>
+                        <div><p>Sin clientes cargados</p><small>Registra clientes desde el módulo de IT</small></div>
                         <span class="activity-tag">N/A</span>
                     </li>
                     {% endfor %}
@@ -584,6 +718,16 @@
                     <h4>Administración de Usuarios</h4>
                     <p>Gestiona usuarios y permisos del sistema</p>
                     <a href="/admin/" class="btn btn-danger">Acceder</a>
+                </div>
+                <div class="module-card">
+                    <h4>Crear usuario</h4>
+                    <p>Da de alta usuarios internos desde el flujo controlado de IT.</p>
+                    <a href="{% url 'register' %}" class="btn btn-danger">Acceder</a>
+                </div>
+                <div class="module-card">
+                    <h4>Administrar usuarios</h4>
+                    <p>Cambia departamentos, bloquea usuarios y restablece contraseñas.</p>
+                    <a href="{% url 'it_usuarios' %}" class="btn btn-danger">Acceder</a>
                 </div>
                 <div class="module-card">
                     <h4>Reportes Globales</h4>

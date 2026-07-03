@@ -7,6 +7,7 @@ from datetime import date, datetime, timedelta
 from django.db import IntegrityError
 from django.db import transaction
 from django.db.models import Case, Count, DecimalField, Q, Sum, Value, When
+from django.db.models.deletion import ProtectedError
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -18,6 +19,7 @@ import unicodedata
 from decimal import Decimal, InvalidOperation
 from .models import (
     Almacen,
+    BitacoraAcceso,
     BOM,
     BOMDetalle,
     BOMOperacion,
@@ -28,7 +30,9 @@ from .models import (
     CostoHoraOperador,
     CosteoProduccion,
     DeclaracionImpuesto,
+    Departamento,
     EstadoFinanciero,
+    HistorialCambioUsuario,
     InventarioAlmacen,
     InformeValidacionDefectoQA,
     LoteProduccion,
@@ -57,6 +61,7 @@ from .models import (
     SalidaLineaDetalle,
     TransferenciaAlmacen,
     TransferenciaAlmacenDetalle,
+    TicketSoporte,
     UsuarioERP,
 )
 from .kpi_produccion import (
@@ -92,6 +97,59 @@ def _usuario_puede_administrar_clientes(user):
 
     departamento = user.departamento.nombre if user.departamento else ''
     return departamento in {'IT', 'Admin'}
+
+
+def _usuario_puede_crear_usuarios(user):
+    if not user.is_authenticated:
+        return False
+
+    departamento = user.departamento.nombre if user.departamento else ''
+    return departamento in {'IT', 'Admin'}
+
+
+def _client_ip(request):
+    forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR', '')
+    if forwarded_for:
+        return forwarded_for.split(',')[0].strip()
+    return request.META.get('REMOTE_ADDR')
+
+
+def _registrar_acceso(request, username, exitoso, usuario=None, accion='login'):
+    BitacoraAcceso.objects.create(
+        usuario=usuario,
+        usuario_ingresado=(username or '').strip(),
+        exitoso=exitoso,
+        accion=accion,
+        ip=_client_ip(request),
+        user_agent=request.META.get('HTTP_USER_AGENT', '')[:1000],
+    )
+
+
+def _registrar_cambio_usuario(usuario_afectado, realizado_por, accion, detalle=''):
+    HistorialCambioUsuario.objects.create(
+        usuario_afectado=usuario_afectado,
+        realizado_por=realizado_por,
+        accion=accion,
+        detalle=detalle,
+    )
+
+
+def _next_ticket_folio():
+    current_year = date.today().year
+    prefix = f"SOP-{current_year}-"
+    last_folio = (
+        TicketSoporte.objects
+        .filter(folio__startswith=prefix)
+        .order_by('-id')
+        .values_list('folio', flat=True)
+        .first()
+    )
+    seq = 1
+    if last_folio:
+        match = re.match(rf"^{re.escape(prefix)}(\d+)$", last_folio)
+        if match:
+            seq = int(match.group(1)) + 1
+    return f"{prefix}{seq:04d}"
 
 
 def _usuario_puede_ver_kpis_mfg(user):
@@ -308,15 +366,24 @@ def login_usuario(request):
                 user = authenticate(request, username=normalized_username, password=password)
 
         if user is not None:
+            _registrar_acceso(request, username_input, True, usuario=user)
             login(request, user)
             return redirect('home')  # Redirigir a home después del login
         else:
+            _registrar_acceso(request, username_input, False)
             messages.error(request, 'Usuario o contraseña incorrectos.')
     return render(request, 'authentication/login.html')
 
 
+@login_required(login_url='login')
 @never_cache
 def register_usuario(request):
+    if not _usuario_puede_crear_usuarios(request.user):
+        messages.error(request, 'No tienes permisos para crear usuarios.')
+        return redirect('home')
+
+    departamentos = Departamento.objects.filter(activo=True).order_by('nombre')
+
     if request.method == 'POST':
         username_input = (request.POST.get('username') or '').strip()
         first_name = (request.POST.get('first_name') or '').strip()
@@ -324,8 +391,10 @@ def register_usuario(request):
         email = (request.POST.get('email') or '').strip()
         telefono = (request.POST.get('telefono') or '').strip()
         numero_empleado = (request.POST.get('numero_empleado') or '').strip()
+        departamento_id = (request.POST.get('departamento') or '').strip()
         password = request.POST.get('password')
         confirm_password = request.POST.get('confirm_password')
+        departamento_obj = Departamento.objects.filter(id=departamento_id, activo=True).first() if departamento_id else None
 
         username_base = _sanitize_username(username_input)
         if not username_base:
@@ -360,13 +429,20 @@ def register_usuario(request):
                 )
                 user.telefono = telefono
                 user.numero_empleado = numero_empleado
+                user.departamento = departamento_obj
                 user.save()
+                _registrar_cambio_usuario(
+                    user,
+                    request.user,
+                    'Creación de usuario',
+                    f'Usuario creado desde IT. Departamento: {departamento_obj.nombre if departamento_obj else "Sin departamento"}.',
+                )
 
                 if username_input != username:
                     messages.success(request, f'Usuario asignado automáticamente: {username}')
 
-                messages.success(request, 'Registro exitoso. Ya puedes iniciar sesión.')
-                return redirect('login')
+                messages.success(request, 'Usuario creado exitosamente.')
+                return redirect('register')
             except IntegrityError:
                 messages.error(request, 'El número de empleado ya está registrado.')
 
@@ -377,10 +453,11 @@ def register_usuario(request):
             'email': email,
             'telefono': telefono,
             'numero_empleado': numero_empleado,
+            'departamento': departamento_id,
         }
-        return render(request, 'authentication/register.html', {'form_data': form_data})
+        return render(request, 'authentication/register.html', {'form_data': form_data, 'departamentos': departamentos})
 
-    return render(request, 'authentication/register.html')
+    return render(request, 'authentication/register.html', {'departamentos': departamentos})
 
 
 @login_required(login_url='login')
@@ -567,11 +644,46 @@ def home(request):
         clientes_activos = ClienteCompra.objects.filter(activo=True).count()
         clientes_inactivos = ClienteCompra.objects.filter(activo=False).count()
         clientes_recientes = ClienteCompra.objects.order_by('-fecha_actualizacion')[:6]
+        usuarios_activos = User.objects.filter(is_active=True, activo=True).count()
+        usuarios_bloqueados = User.objects.filter(Q(is_active=False) | Q(activo=False)).count()
+        usuarios_sin_departamento = User.objects.filter(departamento__isnull=True).count()
+        usuarios_staff = User.objects.filter(is_staff=True).count()
+        usuarios_recientes = (
+            User.objects
+            .select_related('departamento')
+            .order_by('-fecha_creacion')[:6]
+        )
+        usuarios_por_departamento = (
+            Departamento.objects
+            .filter(activo=True)
+            .annotate(total_usuarios=Count('usuarioerp'))
+            .order_by('nombre')
+        )
+        tickets_abiertos = TicketSoporte.objects.filter(
+            estado__in=[TicketSoporte.Estado.NUEVO, TicketSoporte.Estado.EN_PROCESO]
+        ).count()
+        tickets_criticos = TicketSoporte.objects.filter(
+            prioridad=TicketSoporte.Prioridad.CRITICA
+        ).exclude(estado__in=[TicketSoporte.Estado.RESUELTO, TicketSoporte.Estado.CANCELADO]).count()
+        accesos_fallidos = BitacoraAcceso.objects.filter(exitoso=False).count()
+        accesos_recientes = BitacoraAcceso.objects.select_related('usuario').order_by('-fecha')[:6]
+        tickets_recientes = TicketSoporte.objects.select_related('solicitado_por').order_by('-fecha_actualizacion')[:6]
 
         context.update({
             'it_clientes_activos': clientes_activos,
             'it_clientes_inactivos': clientes_inactivos,
             'it_clientes_recientes': clientes_recientes,
+            'it_usuarios_activos': usuarios_activos,
+            'it_usuarios_bloqueados': usuarios_bloqueados,
+            'it_usuarios_sin_departamento': usuarios_sin_departamento,
+            'it_usuarios_staff': usuarios_staff,
+            'it_usuarios_recientes': usuarios_recientes,
+            'it_usuarios_por_departamento': usuarios_por_departamento,
+            'it_tickets_abiertos': tickets_abiertos,
+            'it_tickets_criticos': tickets_criticos,
+            'it_accesos_fallidos': accesos_fallidos,
+            'it_accesos_recientes': accesos_recientes,
+            'it_tickets_recientes': tickets_recientes,
         })
 
     if departamento == 'Finanzas':
@@ -1555,13 +1667,45 @@ def control_recursos_mfg(request):
 
 
 def logout_usuario(request):
+    if request.user.is_authenticated:
+        _registrar_acceso(request, request.user.username, True, usuario=request.user, accion='logout')
     logout(request)
     return redirect('login')
 
 
 @login_required(login_url='login')
 def perfil_usuario(request):
-    return render(request, 'authentication/perfil.html', {'usuario': request.user})
+    if request.method == 'POST':
+        titulo = (request.POST.get('titulo') or '').strip()
+        descripcion = (request.POST.get('descripcion') or '').strip()
+        prioridad = (request.POST.get('prioridad') or TicketSoporte.Prioridad.MEDIA).strip()
+        prioridades_validas = {choice[0] for choice in TicketSoporte.Prioridad.choices}
+
+        if not titulo or not descripcion:
+            messages.error(request, 'Captura el título y la descripción de la solicitud.')
+        elif prioridad not in prioridades_validas:
+            messages.error(request, 'Selecciona una prioridad válida.')
+        else:
+            ticket = TicketSoporte.objects.create(
+                folio=_next_ticket_folio(),
+                solicitado_por=request.user,
+                titulo=titulo,
+                descripcion=descripcion,
+                prioridad=prioridad,
+            )
+            messages.success(request, f'Solicitud de soporte {ticket.folio} creada correctamente.')
+            return redirect('perfil')
+
+    tickets = TicketSoporte.objects.filter(solicitado_por=request.user).order_by('-fecha_actualizacion')[:8]
+    return render(
+        request,
+        'authentication/perfil.html',
+        {
+            'usuario': request.user,
+            'tickets_soporte': tickets,
+            'prioridades_soporte': TicketSoporte.Prioridad.choices,
+        },
+    )
 
 
 @login_required(login_url='login')
@@ -3520,6 +3664,192 @@ def it_clientes_compra(request):
         'it/clientes_compra.html',
         {
             'clientes': clientes,
+        },
+    )
+
+
+@login_required(login_url='login')
+@never_cache
+def it_usuarios(request):
+    if not _usuario_puede_crear_usuarios(request.user):
+        messages.error(request, 'No tienes permisos para administrar usuarios.')
+        return redirect('home')
+
+    departamentos = Departamento.objects.filter(activo=True).order_by('nombre')
+
+    if request.method == 'POST':
+        action = (request.POST.get('action') or '').strip()
+        usuario_id = (request.POST.get('usuario_id') or '').strip()
+        usuario_obj = User.objects.filter(id=usuario_id).select_related('departamento').first() if usuario_id else None
+
+        if not usuario_obj:
+            messages.error(request, 'Selecciona un usuario válido.')
+            return redirect('it_usuarios')
+
+        if usuario_obj.is_superuser and not request.user.is_superuser:
+            messages.error(request, 'Solo un superusuario puede modificar otro superusuario.')
+            return redirect('it_usuarios')
+
+        if action == 'cambiar_departamento':
+            departamento_id = (request.POST.get('departamento') or '').strip()
+            departamento_obj = Departamento.objects.filter(id=departamento_id, activo=True).first() if departamento_id else None
+            departamento_anterior = usuario_obj.departamento.nombre if usuario_obj.departamento else 'Sin departamento'
+            usuario_obj.departamento = departamento_obj
+            usuario_obj.save(update_fields=['departamento'])
+            _registrar_cambio_usuario(
+                usuario_obj,
+                request.user,
+                'Cambio de departamento',
+                f'De {departamento_anterior} a {departamento_obj.nombre if departamento_obj else "Sin departamento"}.',
+            )
+            messages.success(request, f'Departamento actualizado para {usuario_obj.username}.')
+
+        elif action == 'bloquear':
+            if usuario_obj.id == request.user.id:
+                messages.error(request, 'No puedes bloquear tu propio usuario.')
+            else:
+                usuario_obj.is_active = False
+                usuario_obj.activo = False
+                usuario_obj.save(update_fields=['is_active', 'activo'])
+                _registrar_cambio_usuario(usuario_obj, request.user, 'Bloqueo de usuario', 'Usuario bloqueado desde IT.')
+                messages.success(request, f'Usuario {usuario_obj.username} bloqueado.')
+
+        elif action == 'desbloquear':
+            usuario_obj.is_active = True
+            usuario_obj.activo = True
+            usuario_obj.save(update_fields=['is_active', 'activo'])
+            _registrar_cambio_usuario(usuario_obj, request.user, 'Desbloqueo de usuario', 'Usuario activado desde IT.')
+            messages.success(request, f'Usuario {usuario_obj.username} desbloqueado.')
+
+        elif action == 'restablecer_password':
+            password = request.POST.get('password') or ''
+            confirm_password = request.POST.get('confirm_password') or ''
+            if len(password) < 8:
+                messages.error(request, 'La nueva contraseña debe tener al menos 8 caracteres.')
+            elif password != confirm_password:
+                messages.error(request, 'Las contraseñas no coinciden.')
+            else:
+                usuario_obj.set_password(password)
+                usuario_obj.save(update_fields=['password'])
+                _registrar_cambio_usuario(usuario_obj, request.user, 'Restablecimiento de contraseña', 'Contraseña restablecida desde IT.')
+                messages.success(request, f'Contraseña restablecida para {usuario_obj.username}.')
+
+        elif action == 'eliminar':
+            if usuario_obj.id == request.user.id:
+                messages.error(request, 'No puedes eliminar tu propio usuario.')
+            else:
+                username = usuario_obj.username
+                try:
+                    _registrar_cambio_usuario(usuario_obj, request.user, 'Eliminación de usuario', f'Usuario {username} eliminado desde IT.')
+                    usuario_obj.delete()
+                    messages.success(request, f'Usuario {username} eliminado.')
+                except ProtectedError:
+                    messages.error(request, f'No se puede eliminar {username} porque tiene registros asociados. Puedes bloquearlo.')
+                except IntegrityError:
+                    messages.error(request, f'No se puede eliminar {username} porque tiene registros asociados. Puedes bloquearlo.')
+
+        else:
+            messages.error(request, 'Acción no reconocida.')
+
+        return redirect('it_usuarios')
+
+    usuarios = (
+        User.objects
+        .select_related('departamento')
+        .order_by('-is_superuser', '-is_staff', 'username')
+    )
+
+    return render(
+        request,
+        'it/usuarios.html',
+        {
+            'usuarios': usuarios,
+            'departamentos': departamentos,
+        },
+    )
+
+
+@login_required(login_url='login')
+@never_cache
+def it_bitacora(request):
+    if not _usuario_puede_crear_usuarios(request.user):
+        messages.error(request, 'No tienes permisos para consultar bitácoras de IT.')
+        return redirect('home')
+
+    accesos = (
+        BitacoraAcceso.objects
+        .select_related('usuario')
+        .order_by('-fecha')[:200]
+    )
+    cambios = (
+        HistorialCambioUsuario.objects
+        .select_related('usuario_afectado', 'realizado_por')
+        .order_by('-fecha')[:200]
+    )
+
+    return render(
+        request,
+        'it/bitacora.html',
+        {
+            'accesos': accesos,
+            'cambios': cambios,
+        },
+    )
+
+
+@login_required(login_url='login')
+@never_cache
+def it_soporte(request):
+    if not _usuario_puede_crear_usuarios(request.user):
+        messages.error(request, 'No tienes permisos para administrar solicitudes de soporte.')
+        return redirect('home')
+
+    if request.method == 'POST':
+        ticket_id = (request.POST.get('ticket_id') or '').strip()
+        ticket = TicketSoporte.objects.filter(id=ticket_id).select_related('solicitado_por').first() if ticket_id else None
+
+        if not ticket:
+            messages.error(request, 'Selecciona una solicitud válida.')
+            return redirect('it_soporte')
+
+        estado = (request.POST.get('estado') or ticket.estado).strip()
+        prioridad = (request.POST.get('prioridad') or ticket.prioridad).strip()
+        respuesta = (request.POST.get('respuesta') or '').strip()
+        estados_validos = {choice[0] for choice in TicketSoporte.Estado.choices}
+        prioridades_validas = {choice[0] for choice in TicketSoporte.Prioridad.choices}
+
+        if estado not in estados_validos or prioridad not in prioridades_validas:
+            messages.error(request, 'Selecciona un estado y prioridad válidos.')
+            return redirect('it_soporte')
+
+        ticket.estado = estado
+        ticket.prioridad = prioridad
+        ticket.respuesta = respuesta
+        ticket.asignado_a = request.user
+        ticket.save(update_fields=['estado', 'prioridad', 'respuesta', 'asignado_a', 'fecha_actualizacion'])
+        messages.success(request, f'Solicitud {ticket.folio} actualizada correctamente.')
+        return redirect('it_soporte')
+
+    tickets = (
+        TicketSoporte.objects
+        .select_related('solicitado_por', 'asignado_a')
+        .order_by(
+            Case(
+                When(estado=TicketSoporte.Estado.NUEVO, then=Value(0)),
+                When(estado=TicketSoporte.Estado.EN_PROCESO, then=Value(1)),
+                default=Value(2),
+            ),
+            '-fecha_actualizacion',
+        )[:200]
+    )
+
+    return render(
+        request,
+        'it/soporte.html',
+        {
+            'tickets': tickets,
+            'estados_soporte': TicketSoporte.Estado.choices,
+            'prioridades_soporte': TicketSoporte.Prioridad.choices,
         },
     )
 

@@ -1140,6 +1140,157 @@
     }
 }
 
+/* Acabado visual JulMarp: aplica a Inventario, Finanzas y Produccion. */
+.entrada-container {
+    color: var(--jm-ink);
+}
+
+.entrada-header h1,
+.inventario-warehouse-detail .inventario-section-head h4,
+.dashboard-summary-card h4,
+.inventario-arribos-card h4,
+.warehouse-identity strong,
+.bom-composition-titlebar strong,
+.bom-composition-panel header h4 {
+    color: var(--jm-ink);
+}
+
+.entrada-header p,
+.inventario-filter-caption,
+.inventario-warehouse-detail .inventario-section-head p,
+.inventario-arribos-card small,
+.dashboard-summary-card small,
+.dashboard-footnote,
+.warehouse-identity small,
+.warehouse-stats,
+.dashboard-bar-label small,
+.dashboard-movimiento-label,
+.inventario-mini-metric small,
+.inventario-arribo-stat small {
+    color: var(--jm-ink-soft);
+}
+
+.entrada-card,
+.inventario-dashboard-card,
+.dashboard-kpi-card,
+.inventario-warehouse-tab,
+.inventario-warehouse-detail,
+.inventario-mini-metric,
+.inventario-arribos-card,
+.inventario-arribo-stat,
+.dashboard-summary-card,
+.dashboard-movimiento-item,
+.proveedor-combobox-menu,
+.bom-composition-content,
+.bom-composition-panel,
+.bom-composition-item,
+.bom-composition-empty {
+    border-color: var(--jm-line);
+    border-radius: 8px;
+    background: linear-gradient(180deg, #ffffff 0%, #fbfaf7 100%);
+    box-shadow: var(--jm-shadow-soft);
+}
+
+.entrada-card {
+    border-top-color: var(--jm-red);
+}
+
+.entrada-form-grid input,
+.entrada-form-grid select,
+.entrada-form-grid textarea,
+.proveedor-combobox-input,
+.inventario-historico-form input[type="date"],
+.material-captura-table input,
+.material-captura-table select,
+.bom-components-table input,
+.bom-components-table select,
+.proveedores-materiales-select {
+    border-color: var(--jm-line-strong);
+    border-radius: 8px;
+    background: #fffdfa;
+    color: var(--jm-ink);
+}
+
+.entrada-form-grid input:focus,
+.entrada-form-grid select:focus,
+.entrada-form-grid textarea:focus,
+.proveedor-combobox-input:focus,
+.inventario-historico-form input[type="date"]:focus,
+.material-captura-table input:focus,
+.material-captura-table select:focus,
+.bom-components-table input:focus,
+.bom-components-table select:focus {
+    outline: none;
+    border-color: var(--jm-red);
+    box-shadow: 0 0 0 3px rgba(184, 33, 27, 0.14);
+}
+
+.inventario-dashboard-pill,
+.inventario-stock-pill,
+.warehouse-code,
+.bom-composition-meta span,
+.bom-composition-panel header span,
+.bom-detail-trigger {
+    border-color: #e8c9c2;
+    background: var(--jm-red-soft);
+    color: var(--jm-red-2);
+}
+
+.dashboard-kpi-card strong,
+.inventario-arribo-stat strong,
+.inventario-mini-metric strong,
+.dashboard-movimiento-item strong,
+.warehouse-identity strong {
+    color: var(--jm-steel);
+}
+
+.inventario-warehouse-tab:hover,
+.inventario-warehouse-tab.is-active {
+    border-color: var(--jm-red);
+    box-shadow: 0 14px 28px rgba(184, 33, 27, 0.12);
+}
+
+.dashboard-bar-track,
+.inventario-progress-labels + div,
+.proveedores-materiales-select option:checked {
+    background: #f1ece6;
+}
+
+.dashboard-bar-fill,
+.inventario-progress-fill {
+    background: linear-gradient(90deg, var(--jm-red) 0%, var(--jm-steel) 100%);
+}
+
+.proveedor-option {
+    color: var(--jm-ink);
+}
+
+.proveedor-option:hover,
+.proveedor-option:focus {
+    background: var(--jm-red-soft);
+}
+
+.tabla-wrap {
+    border-radius: 8px;
+    background: #ffffff;
+}
+
+.tabla-material thead th {
+    background: #f1ece6;
+    color: var(--jm-ink);
+    border-bottom-color: var(--jm-line-strong);
+}
+
+.tabla-material th,
+.tabla-material td {
+    color: var(--jm-ink);
+    border-bottom-color: var(--jm-line);
+}
+
+.tabla-material tbody tr:hover {
+    background: #fff8f5;
+}
+
 @media (max-width: 900px) {
     .entrada-grid {
         grid-template-columns: 1fr;

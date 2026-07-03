@@ -1,0 +1,89 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}IT - Bitácora{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/pages/qa.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="calidad-container it-bitacora-container">
+    <div class="calidad-header">
+        <h1>IT / Bitácora</h1>
+        <p>Consulta accesos al sistema e historial de cambios realizados a usuarios.</p>
+    </div>
+
+    <div class="it-bitacora-grid">
+        <section class="calidad-card">
+            <h3>Bitácora de accesos</h3>
+            <div class="tabla-wrap">
+                <table class="tabla-material">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Usuario</th>
+                            <th>Acción</th>
+                            <th>Resultado</th>
+                            <th>IP</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for acceso in accesos %}
+                        <tr>
+                            <td>{{ acceso.fecha|date:"d/m/Y H:i" }}</td>
+                            <td>{{ acceso.usuario_ingresado|default:acceso.usuario.username|default:'Sin usuario' }}</td>
+                            <td>{{ acceso.accion }}</td>
+                            <td>
+                                {% if acceso.exitoso %}
+                                <span class="badge ok">Correcto</span>
+                                {% else %}
+                                <span class="badge warn">Fallido</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ acceso.ip|default:'-' }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5">No hay accesos registrados.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="calidad-card">
+            <h3>Historial de cambios de usuarios</h3>
+            <div class="tabla-wrap">
+                <table class="tabla-material">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Usuario afectado</th>
+                            <th>Realizado por</th>
+                            <th>Acción</th>
+                            <th>Detalle</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for cambio in cambios %}
+                        <tr>
+                            <td>{{ cambio.fecha|date:"d/m/Y H:i" }}</td>
+                            <td>{{ cambio.usuario_afectado.username|default:'Usuario eliminado' }}</td>
+                            <td>{{ cambio.realizado_por.username|default:'Sistema' }}</td>
+                            <td>{{ cambio.accion }}</td>
+                            <td>{{ cambio.detalle|default:'-' }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5">No hay cambios registrados.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+</div>
+{% endblock %}

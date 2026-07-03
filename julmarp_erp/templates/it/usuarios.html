@@ -1,0 +1,125 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}IT - Usuarios{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/pages/qa.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="calidad-container">
+    <div class="calidad-header">
+        <h1>IT / Usuarios</h1>
+        <p>Administra accesos, departamentos, bloqueos y contraseñas de usuarios internos.</p>
+    </div>
+
+    {% if messages %}
+    <ul class="messages" style="margin-bottom: 20px;">
+        {% for message in messages %}
+        <li class="{{ message.tags }}">{{ message }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    <section class="calidad-card">
+        <div class="calidad-actions" style="justify-content:flex-start; margin:0 0 16px;">
+            <a href="{% url 'register' %}" class="btn btn-dark">Crear usuario</a>
+        </div>
+
+        <div class="tabla-wrap">
+            <table class="tabla-material it-users-table">
+                <thead>
+                    <tr>
+                        <th>Usuario</th>
+                        <th>Nombre</th>
+                        <th>Departamento</th>
+                        <th>Estatus</th>
+                        <th>Cambiar departamento</th>
+                        <th>Restablecer contraseña</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for usuario in usuarios %}
+                    <tr>
+                        <td>
+                            <strong>{{ usuario.username }}</strong><br>
+                            <small>{{ usuario.email|default:'Sin correo' }}</small>
+                        </td>
+                        <td>
+                            {{ usuario.get_full_name|default:'-' }}<br>
+                            <small>{{ usuario.numero_empleado|default:'Sin número' }}</small>
+                        </td>
+                        <td>{{ usuario.departamento.nombre|default:'Sin departamento' }}</td>
+                        <td>
+                            {% if usuario.is_superuser %}
+                            <span class="badge warn">Superusuario</span>
+                            {% elif usuario.is_active and usuario.activo %}
+                            <span class="badge ok">Activo</span>
+                            {% else %}
+                            <span class="badge warn">Bloqueado</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <form method="post" class="inline-admin-form">
+                                {% csrf_token %}
+                                <input type="hidden" name="action" value="cambiar_departamento">
+                                <input type="hidden" name="usuario_id" value="{{ usuario.id }}">
+                                <select name="departamento">
+                                    <option value="">Sin departamento</option>
+                                    {% for departamento in departamentos %}
+                                    <option value="{{ departamento.id }}" {% if usuario.departamento_id == departamento.id %}selected{% endif %}>{{ departamento.nombre }}</option>
+                                    {% endfor %}
+                                </select>
+                                <button type="submit" class="btn btn-info">Guardar</button>
+                            </form>
+                        </td>
+                        <td>
+                            <form method="post" class="inline-admin-form password-form">
+                                {% csrf_token %}
+                                <input type="hidden" name="action" value="restablecer_password">
+                                <input type="hidden" name="usuario_id" value="{{ usuario.id }}">
+                                <input type="password" name="password" placeholder="Nueva contraseña" required>
+                                <input type="password" name="confirm_password" placeholder="Confirmar" required>
+                                <button type="submit" class="btn btn-warning">Restablecer</button>
+                            </form>
+                        </td>
+                        <td>
+                            <div class="user-row-actions">
+                                {% if usuario.is_active and usuario.activo %}
+                                <form method="post">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="action" value="bloquear">
+                                    <input type="hidden" name="usuario_id" value="{{ usuario.id }}">
+                                    <button type="submit" class="btn btn-warning">Bloquear</button>
+                                </form>
+                                {% else %}
+                                <form method="post">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="action" value="desbloquear">
+                                    <input type="hidden" name="usuario_id" value="{{ usuario.id }}">
+                                    <button type="submit" class="btn btn-success">Activar</button>
+                                </form>
+                                {% endif %}
+
+                                <form method="post" onsubmit="return confirm('Eliminar este usuario? Esta accion no se puede deshacer.');">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="action" value="eliminar">
+                                    <input type="hidden" name="usuario_id" value="{{ usuario.id }}">
+                                    <button type="submit" class="btn btn-danger">Eliminar</button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7">No hay usuarios registrados.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+</div>
+{% endblock %}

@@ -10,6 +10,14 @@
 {% block content %}
 <div class="perfil-container">
 
+    {% if messages %}
+    <ul class="messages" style="margin-bottom: 20px;">
+        {% for message in messages %}
+        <li class="{{ message.tags }}">{{ message }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
     <div class="perfil-header">
         <div class="perfil-avatar-grande">{{ usuario.iniciales }}</div>
         <div class="perfil-header-info">
@@ -81,6 +89,57 @@
             </ul>
         </div>
 
+    </div>
+
+    <div class="perfil-grid">
+        <div class="perfil-card">
+            <h3 class="perfil-card-title">Levantar ticket de soporte</h3>
+            <form method="post" class="perfil-support-form">
+                {% csrf_token %}
+                <label>
+                    Título
+                    <input type="text" name="titulo" placeholder="Ej. No puedo abrir inventario" required>
+                </label>
+                <label>
+                    Prioridad
+                    <select name="prioridad">
+                        {% for value, label in prioridades_soporte %}
+                        <option value="{{ value }}">{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <label>
+                    Descripción
+                    <textarea name="descripcion" placeholder="Describe qué pasa, en qué módulo y desde cuándo." required></textarea>
+                </label>
+                <button type="submit" class="btn-perfil-submit">Enviar solicitud</button>
+            </form>
+        </div>
+
+        <div class="perfil-card">
+            <h3 class="perfil-card-title">Mis tickets recientes</h3>
+            <ul class="perfil-ticket-list">
+                {% for ticket in tickets_soporte %}
+                <li>
+                    <div>
+                        <strong>{{ ticket.folio }} — {{ ticket.titulo }}</strong>
+                        <small>{{ ticket.fecha_actualizacion|date:"d/m/Y H:i" }} | {{ ticket.get_prioridad_display }}</small>
+                        {% if ticket.respuesta %}
+                        <p>{{ ticket.respuesta }}</p>
+                        {% endif %}
+                    </div>
+                    <span class="perfil-ticket-status">{{ ticket.get_estado_display }}</span>
+                </li>
+                {% empty %}
+                <li>
+                    <div>
+                        <strong>Sin tickets registrados</strong>
+                        <small>Cuando levantes una solicitud aparecerá aquí.</small>
+                    </div>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
     </div>
 
     <div class="perfil-actions">

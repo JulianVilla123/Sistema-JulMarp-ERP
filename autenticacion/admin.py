@@ -2,6 +2,7 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from .models import (
     Almacen,
+    BitacoraAcceso,
     BOM,
     BOMDetalle,
     ClienteCompra,
@@ -13,6 +14,7 @@ from .models import (
     DeclaracionImpuesto,
     Departamento,
     EstadoFinanciero,
+    HistorialCambioUsuario,
     InformeValidacionDefectoQA,
     InventarioAlmacen,
     Material,
@@ -31,6 +33,7 @@ from .models import (
     SalidaLineaDetalle,
     TransferenciaAlmacen,
     TransferenciaAlmacenDetalle,
+    TicketSoporte,
     UsuarioERP,
 )
 
@@ -64,6 +67,29 @@ class UsuarioERPAdmin(UserAdmin):
     )
     list_filter = ('departamento', 'is_staff', 'is_superuser', 'is_active')
     search_fields = ('username', 'email', 'numero_empleado', 'first_name', 'last_name')
+
+
+@admin.register(BitacoraAcceso)
+class BitacoraAccesoAdmin(admin.ModelAdmin):
+    list_display = ('fecha', 'usuario', 'usuario_ingresado', 'accion', 'exitoso', 'ip')
+    search_fields = ('usuario__username', 'usuario_ingresado', 'ip')
+    list_filter = ('accion', 'exitoso', 'fecha')
+    readonly_fields = ('fecha',)
+
+
+@admin.register(HistorialCambioUsuario)
+class HistorialCambioUsuarioAdmin(admin.ModelAdmin):
+    list_display = ('fecha', 'usuario_afectado', 'realizado_por', 'accion')
+    search_fields = ('usuario_afectado__username', 'realizado_por__username', 'accion', 'detalle')
+    list_filter = ('accion', 'fecha')
+    readonly_fields = ('fecha',)
+
+
+@admin.register(TicketSoporte)
+class TicketSoporteAdmin(admin.ModelAdmin):
+    list_display = ('folio', 'titulo', 'solicitado_por', 'asignado_a', 'prioridad', 'estado', 'fecha_actualizacion')
+    search_fields = ('folio', 'titulo', 'descripcion', 'solicitado_por__username')
+    list_filter = ('estado', 'prioridad', 'fecha_creacion')
 
 
 @admin.register(Material)

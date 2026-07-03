@@ -108,6 +108,94 @@
     padding: 10px 14px;
 }
 
+.it-users-table {
+    min-width: 1180px;
+}
+
+.it-users-table small {
+    color: #64748b;
+}
+
+.inline-admin-form,
+.user-row-actions {
+    display: grid;
+    gap: 8px;
+}
+
+.inline-admin-form select,
+.inline-admin-form input,
+.inline-admin-form textarea {
+    width: 100%;
+    border: 1px solid #d8dde6;
+    border-radius: 8px;
+    padding: 9px 10px;
+    font-size: 0.86rem;
+    background: #fcfdff;
+}
+
+.inline-admin-form textarea {
+    min-height: 84px;
+    resize: vertical;
+}
+
+.inline-admin-form .btn,
+.user-row-actions .btn {
+    width: 100%;
+    min-height: 38px;
+    padding: 8px 10px;
+    font-size: 0.82rem;
+}
+
+.password-form {
+    min-width: 180px;
+}
+
+.it-support-table {
+    min-width: 1180px;
+}
+
+.it-support-table small {
+    color: #64748b;
+}
+
+.it-bitacora-container {
+    max-width: min(1180px, calc(100vw - 48px));
+}
+
+.it-bitacora-container .calidad-header {
+    max-width: 760px;
+    margin-left: auto;
+    margin-right: auto;
+    text-align: center;
+}
+
+.it-bitacora-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 20px;
+    width: 100%;
+}
+
+.it-bitacora-grid .calidad-card {
+    width: 100%;
+    overflow: hidden;
+}
+
+.it-bitacora-grid .tabla-wrap {
+    width: 100%;
+}
+
+.it-bitacora-grid .tabla-material {
+    min-width: 0;
+    table-layout: fixed;
+}
+
+.it-bitacora-grid .tabla-material th,
+.it-bitacora-grid .tabla-material td {
+    overflow-wrap: anywhere;
+    vertical-align: top;
+}
+
 @media (max-width: 900px) {
     .calidad-grid {
         grid-template-columns: 1fr;
@@ -116,4 +204,81 @@
     .calidad-actions .btn {
         width: 100%;
     }
+}
+
+@media (max-width: 700px) {
+    .it-bitacora-container {
+        max-width: 100%;
+        padding: 24px 12px;
+    }
+
+    .it-bitacora-container .calidad-header {
+        text-align: left;
+    }
+
+    .it-bitacora-grid .tabla-wrap {
+        overflow-x: auto;
+    }
+
+    .it-bitacora-grid .tabla-material {
+        min-width: 620px;
+    }
+}
+
+/* Acabado visual JulMarp para QA, IT y soporte. */
+.calidad-container {
+    color: var(--jm-ink);
+}
+
+.calidad-header h1,
+.calidad-card h3,
+.hallazgos-section h4 {
+    color: var(--jm-ink);
+}
+
+.calidad-header p,
+.hallazgos-section p,
+.it-users-table small,
+.it-support-table small {
+    color: var(--jm-ink-soft);
+}
+
+.calidad-card {
+    background: linear-gradient(180deg, #ffffff 0%, #fbfaf7 100%);
+    border: 1px solid var(--jm-line);
+    border-top: 4px solid var(--jm-red);
+    border-radius: 8px;
+    box-shadow: var(--jm-shadow-soft);
+}
+
+.hallazgos-section {
+    background: #fbfaf7;
+    border: 1px solid var(--jm-line);
+    border-radius: 8px;
+}
+
+.calidad-form label {
+    color: var(--jm-ink-soft);
+}
+
+.calidad-form input,
+.calidad-form select,
+.calidad-form textarea,
+.inline-admin-form select,
+.inline-admin-form input,
+.inline-admin-form textarea {
+    border-color: var(--jm-line-strong);
+    background: #fffdfa;
+    color: var(--jm-ink);
+}
+
+.calidad-form input:focus,
+.calidad-form select:focus,
+.calidad-form textarea:focus,
+.inline-admin-form select:focus,
+.inline-admin-form input:focus,
+.inline-admin-form textarea:focus {
+    outline: none;
+    border-color: var(--jm-red);
+    box-shadow: 0 0 0 3px rgba(184, 33, 27, 0.14);
 }

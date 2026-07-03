@@ -66,29 +66,39 @@
 }
 
 .kpi-card {
-    background: linear-gradient(165deg, #ffffff, #f6f8fa);
-    border: 1px solid #e5e9ef;
-    border-radius: 16px;
+    background: linear-gradient(165deg, #ffffff, #fbfaf7);
+    border: 1px solid var(--jm-line);
+    border-radius: 8px;
     padding: 18px 20px;
-    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+    box-shadow: var(--jm-shadow-soft);
+    position: relative;
+    overflow: hidden;
+}
+
+.kpi-card::before {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 4px;
+    background: linear-gradient(180deg, var(--jm-red), var(--jm-charcoal));
 }
 
 .kpi-card p {
     margin: 0 0 8px;
-    color: #5f6a7b;
+    color: var(--jm-ink-soft);
     font-size: 0.9rem;
 }
 
 .kpi-card strong {
     font-family: 'Space Grotesk', sans-serif;
     font-size: 1.5rem;
-    color: #1d2430;
+    color: var(--jm-ink);
 }
 
 .modules-section h2 {
     font-size: 1.55rem;
     margin-bottom: 18px;
-    color: #1e2530;
+    color: var(--jm-ink);
 }
 
 .modules-grid {
@@ -98,28 +108,28 @@
 }
 
 .module-card {
-    background: white;
-    border-radius: 14px;
+    background: linear-gradient(180deg, #ffffff 0%, #fbfaf7 100%);
+    border-radius: 8px;
     padding: 25px;
-    box-shadow: 0 8px 22px rgba(18, 27, 45, 0.09);
+    box-shadow: var(--jm-shadow-soft);
     transition: transform 0.3s, box-shadow 0.3s;
-    border-left: 5px solid #b6211a;
-    border-top: 1px solid #edf1f5;
+    border-left: 5px solid var(--jm-red);
+    border-top: 1px solid var(--jm-line);
 }
 
 .module-card:hover {
     transform: translateY(-3px);
-    box-shadow: 0 16px 28px rgba(15, 23, 42, 0.13);
+    box-shadow: var(--jm-shadow);
 }
 
 .module-card h4 {
-    color: #1f2a39;
+    color: var(--jm-ink);
     margin-bottom: 10px;
     font-size: 1.2em;
 }
 
 .module-card p {
-    color: #647084;
+    color: var(--jm-ink-soft);
     margin-bottom: 20px;
     font-size: 0.95em;
 }
@@ -140,7 +150,7 @@
 
 .chart-card {
     min-height: 340px;
-    background: linear-gradient(180deg, #ffffff 0%, #f7f9fc 100%);
+    background: linear-gradient(180deg, #ffffff 0%, #fbfaf7 100%);
 }
 
 .chart-card canvas {
@@ -151,30 +161,30 @@
 .chart-subtitle {
     margin-top: -4px;
     margin-bottom: 12px;
-    color: #6b7280;
+    color: var(--jm-ink-soft);
     font-size: 0.9rem;
 }
 
 .chart-stage {
-    border: 1px solid #e6ebf2;
-    border-radius: 14px;
-    background: linear-gradient(180deg, #fcfdff 0%, #f2f5fa 100%);
+    border: 1px solid var(--jm-line);
+    border-radius: 8px;
+    background: linear-gradient(180deg, #ffffff 0%, #f7f4ef 100%);
     padding: 10px 12px;
 }
 
 .dashboard-card {
     background: #ffffff;
-    border: 1px solid #e8edf4;
-    border-radius: 16px;
+    border: 1px solid var(--jm-line);
+    border-radius: 8px;
     padding: 20px;
-    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+    box-shadow: var(--jm-shadow-soft);
 }
 
 .dashboard-card h3 {
     margin-top: 0;
     margin-bottom: 14px;
     font-size: 1.1rem;
-    color: #1f2937;
+    color: var(--jm-ink);
 }
 
 .top-material-list,
@@ -193,19 +203,19 @@
     align-items: center;
     gap: 10px;
     padding: 10px 12px;
-    border-radius: 10px;
-    background: #f9fbfd;
-    border: 1px solid #edf2f7;
+    border-radius: 8px;
+    background: #fbfaf7;
+    border: 1px solid var(--jm-line);
 }
 
 .top-material-list span {
-    color: #374151;
+    color: var(--jm-ink-soft);
     font-size: 0.93rem;
 }
 
 .top-material-list strong,
 .recent-activity-list strong {
-    color: #0f172a;
+    color: var(--jm-ink);
     font-size: 0.9rem;
 }
 
@@ -216,11 +226,11 @@
 .recent-activity-list p {
     margin: 0;
     font-size: 0.92rem;
-    color: #253041;
+    color: var(--jm-ink);
 }
 
 .recent-activity-list small {
-    color: #6b7686;
+    color: var(--jm-ink-soft);
 }
 
 .activity-tag {
@@ -229,23 +239,23 @@
     border-radius: 999px;
     font-size: 0.72rem;
     font-weight: 800;
-    background: #dbeafe;
-    color: #1d4ed8;
+    background: #e9f0f4;
+    color: var(--jm-steel);
 }
 
 .activity-tag.entrada {
-    background: #dcfce7;
-    color: #166534;
+    background: #e6f3ed;
+    color: #175c48;
 }
 
 .activity-tag.salida_linea {
-    background: #ffedd5;
-    color: #9a3412;
+    background: #fff7e8;
+    color: #8c5b11;
 }
 
 .activity-tag.transferencia {
-    background: #ede9fe;
-    color: #5b21b6;
+    background: #f1ece6;
+    color: #65443b;
 }
 
 @keyframes hero-in {

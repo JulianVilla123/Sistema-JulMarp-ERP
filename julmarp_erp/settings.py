@@ -11,9 +11,54 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 import os
 from pathlib import Path
+from urllib.parse import parse_qsl, unquote, urlparse
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+
+def load_local_env():
+    env_path = BASE_DIR / '.env'
+    if not env_path.exists():
+        return
+
+    for raw_line in env_path.read_text(encoding='utf-8').splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith('#') or '=' not in line:
+            continue
+        key, value = line.split('=', 1)
+        os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+
+
+def database_from_url(database_url):
+    parsed_url = urlparse(database_url)
+    engine_by_scheme = {
+        'postgres': 'django.db.backends.postgresql',
+        'postgresql': 'django.db.backends.postgresql',
+    }
+    engine = engine_by_scheme.get(parsed_url.scheme)
+    if not engine:
+        raise ValueError('DATABASE_URL debe usar postgresql:// o postgres://')
+
+    options = dict(parse_qsl(parsed_url.query))
+    sslmode = options.pop('sslmode', 'require')
+
+    return {
+        'ENGINE': engine,
+        'NAME': unquote(parsed_url.path.lstrip('/')),
+        'USER': unquote(parsed_url.username or ''),
+        'PASSWORD': unquote(parsed_url.password or ''),
+        'HOST': parsed_url.hostname or '',
+        'PORT': str(parsed_url.port or ''),
+        'CONN_MAX_AGE': 60,
+        'OPTIONS': {
+            'sslmode': sslmode,
+            **options,
+        },
+    }
+
+
+load_local_env()
 
 
 # Quick-start development settings - unsuitable for production
@@ -76,8 +121,10 @@ WSGI_APPLICATION = 'julmarp_erp.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
+DATABASE_URL = os.environ.get('DATABASE_URL')
+
 DATABASES = {
-    'default': {
+    'default': database_from_url(DATABASE_URL) if DATABASE_URL else {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db.sqlite3',
     }

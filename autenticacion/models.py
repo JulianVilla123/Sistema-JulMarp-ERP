@@ -58,6 +58,104 @@ class UsuarioERP(AbstractUser):
         verbose_name_plural = 'Usuarios ERP'
 
 
+class BitacoraAcceso(models.Model):
+    usuario = models.ForeignKey(
+        UsuarioERP,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='bitacoras_acceso',
+    )
+    usuario_ingresado = models.CharField(max_length=150, blank=True)
+    exitoso = models.BooleanField(default=False)
+    accion = models.CharField(max_length=30, default='login')
+    ip = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True)
+    fecha = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        estado = 'exitoso' if self.exitoso else 'fallido'
+        return f"{self.accion} {estado} - {self.usuario_ingresado or self.usuario}"
+
+    class Meta:
+        verbose_name = 'Bitácora de acceso'
+        verbose_name_plural = 'Bitácora de accesos'
+        ordering = ['-fecha']
+
+
+class HistorialCambioUsuario(models.Model):
+    usuario_afectado = models.ForeignKey(
+        UsuarioERP,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='historial_cambios_recibidos',
+    )
+    realizado_por = models.ForeignKey(
+        UsuarioERP,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='historial_cambios_realizados',
+    )
+    accion = models.CharField(max_length=80)
+    detalle = models.TextField(blank=True)
+    fecha = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.accion} - {self.usuario_afectado}"
+
+    class Meta:
+        verbose_name = 'Historial de cambio de usuario'
+        verbose_name_plural = 'Historial de cambios de usuarios'
+        ordering = ['-fecha']
+
+
+class TicketSoporte(models.Model):
+    class Estado(models.TextChoices):
+        NUEVO = 'NUEVO', 'Nuevo'
+        EN_PROCESO = 'EN_PROCESO', 'En proceso'
+        RESUELTO = 'RESUELTO', 'Resuelto'
+        CANCELADO = 'CANCELADO', 'Cancelado'
+
+    class Prioridad(models.TextChoices):
+        BAJA = 'BAJA', 'Baja'
+        MEDIA = 'MEDIA', 'Media'
+        ALTA = 'ALTA', 'Alta'
+        CRITICA = 'CRITICA', 'Crítica'
+
+    folio = models.CharField(max_length=30, unique=True)
+    solicitado_por = models.ForeignKey(
+        UsuarioERP,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='tickets_soporte',
+    )
+    asignado_a = models.ForeignKey(
+        UsuarioERP,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='tickets_soporte_asignados',
+    )
+    titulo = models.CharField(max_length=160)
+    descripcion = models.TextField()
+    prioridad = models.CharField(max_length=20, choices=Prioridad.choices, default=Prioridad.MEDIA)
+    estado = models.CharField(max_length=20, choices=Estado.choices, default=Estado.NUEVO)
+    respuesta = models.TextField(blank=True)
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.folio} - {self.titulo}"
+
+    class Meta:
+        verbose_name = 'Ticket de soporte'
+        verbose_name_plural = 'Tickets de soporte'
+        ordering = ['-fecha_actualizacion']
+
+
 class RegistroAuditable(models.Model):
     creado_por = models.ForeignKey(
         'UsuarioERP',
