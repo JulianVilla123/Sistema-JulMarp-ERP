@@ -5,3 +5,4 @@ psycopg[binary]>=3.2,<4
 reportlab==4.4.1
 sqlparse==0.5.5
 tzdata==2026.2
+whitenoise>=6.8,<7
