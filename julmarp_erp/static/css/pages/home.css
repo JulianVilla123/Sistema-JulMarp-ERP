@@ -312,3 +312,52 @@
         margin-top: 8px;
     }
 }
+
+@media (max-width: 520px) {
+    .home-container {
+        padding: 18px 10px;
+    }
+
+    .welcome-card {
+        padding: 20px 16px;
+        border-radius: 8px;
+    }
+
+    .welcome-card h1 {
+        font-size: 1.75rem;
+        overflow-wrap: anywhere;
+    }
+
+    .welcome-card h3 {
+        font-size: 1.05rem;
+    }
+
+    .department-badge {
+        max-width: 100%;
+        white-space: normal;
+        text-align: left;
+    }
+
+    .modules-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .module-card,
+    .dashboard-card,
+    .kpi-card {
+        padding: 16px;
+    }
+
+    .recent-activity-list li {
+        grid-template-columns: 1fr;
+        align-items: start;
+    }
+
+    .top-material-list li {
+        grid-template-columns: 1fr;
+    }
+
+    .chart-card canvas {
+        height: 210px !important;
+    }
+}

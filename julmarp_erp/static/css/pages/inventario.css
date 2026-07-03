@@ -1309,3 +1309,117 @@
         min-width: 560px;
     }
 }
+
+@media (max-width: 760px) {
+    .entrada-container {
+        padding: 24px 12px;
+    }
+
+    .entrada-header h1 {
+        font-size: 1.7rem;
+    }
+
+    .entrada-header p {
+        font-size: 0.94rem;
+    }
+
+    .entrada-card,
+    .inventario-dashboard-card,
+    .dashboard-kpi-card,
+    .dashboard-summary-card,
+    .inventario-warehouse-detail {
+        padding: 16px;
+    }
+
+    .inventario-dashboard-head,
+    .inventario-warehouse-detail .inventario-section-head,
+    .dashboard-summary-card header,
+    .dashboard-warehouse-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .inventario-dashboard-actions,
+    .entrada-actions,
+    .proveedores-actions,
+    .bom-actions-row {
+        width: 100%;
+    }
+
+    .inventario-dashboard-actions .btn,
+    .entrada-actions .btn,
+    .proveedores-actions .btn,
+    .bom-actions-row .btn {
+        flex: 1 1 160px;
+        text-align: center;
+    }
+
+    .inventario-metric-grid,
+    .dashboard-movimientos-grid,
+    .bom-composition-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .dashboard-bar-row {
+        grid-template-columns: 1fr;
+        gap: 8px;
+    }
+
+    .warehouse-stats {
+        justify-content: flex-start;
+    }
+
+    .inventario-stock-pill {
+        white-space: normal;
+    }
+}
+
+@media (max-width: 520px) {
+    .entrada-container {
+        padding: 18px 10px;
+    }
+
+    .entrada-header {
+        margin-bottom: 18px;
+    }
+
+    .entrada-header h1 {
+        font-size: 1.45rem;
+        overflow-wrap: anywhere;
+    }
+
+    .entrada-card,
+    .inventario-dashboard-card,
+    .dashboard-kpi-card,
+    .dashboard-summary-card,
+    .inventario-warehouse-detail,
+    .inventario-arribos-card {
+        padding: 14px;
+    }
+
+    .entrada-form-grid input,
+    .entrada-form-grid select,
+    .entrada-form-grid textarea,
+    .proveedor-combobox-input,
+    .inventario-historico-form input[type="date"] {
+        min-height: 42px;
+        font-size: 0.92rem;
+    }
+
+    .tabla-material,
+    .material-captura-table,
+    .bom-components-table,
+    .bom-list-table {
+        min-width: 620px;
+    }
+
+    .inventario-arribos-grid,
+    .inventario-dashboard-grid,
+    .inventario-dashboard-graphs {
+        grid-template-columns: 1fr;
+    }
+
+    .dashboard-kpi-card {
+        min-height: 160px;
+    }
+}

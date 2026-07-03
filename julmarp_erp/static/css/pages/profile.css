@@ -341,3 +341,55 @@
     background: #e9f0f4;
     color: var(--jm-steel);
 }
+
+@media (max-width: 760px) {
+    .perfil-container {
+        padding: 24px 12px;
+    }
+
+    .perfil-header {
+        padding: 26px;
+        gap: 18px;
+    }
+
+    .perfil-grid {
+        gap: 16px;
+    }
+
+    .perfil-card {
+        padding: 20px;
+    }
+}
+
+@media (max-width: 520px) {
+    .perfil-container {
+        padding: 18px 10px;
+    }
+
+    .perfil-header {
+        padding: 20px 16px;
+    }
+
+    .perfil-avatar-grande {
+        width: 72px;
+        height: 72px;
+        font-size: 1.45rem;
+    }
+
+    .perfil-header-info h1 {
+        font-size: 1.45rem;
+        overflow-wrap: anywhere;
+    }
+
+    .perfil-card {
+        padding: 16px;
+    }
+
+    .perfil-ticket-list li {
+        flex-direction: column;
+    }
+
+    .perfil-ticket-status {
+        align-self: flex-start;
+    }
+}
