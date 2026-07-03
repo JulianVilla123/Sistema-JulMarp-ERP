@@ -10,124 +10,196 @@
 
         {% if user.is_authenticated %}
             {% with departamento=user.departamento.nombre|default:'' %}
-                {% if departamento == 'Inventario' or departamento == 'Admin' %}
-                <li class="nav-item">
-                    <a href="{% url 'entrada_planta' %}" class="nav-link">Importacion</a>
-                </li>
-                <li class="nav-item">
-                    <a href="{% url 'entrada_linea' %}" class="nav-link">Distribucion</a>
-                </li>
-                <li class="nav-item dropdown">
-                    <a href="#" class="nav-link dropdown-toggle">Inventario</a>
-                    <ul class="dropdown-menu">
-                        <li><a href="{% url 'inventario_almacen' %}">Almacen</a></li>
-                        <li><a href="{% url 'historial_almacen' %}">Historial de Almacen</a></li>
-                        <li><a href="{% url 'historial_recepciones' %}">Historial de Recepciones</a></li>
-                        <li><a href="{% url 'transferencias_almacenes' %}">Transferencias entre Almacenes</a></li>
-                    </ul>
-                </li>
-                <li class="nav-item">
-                    <a href="{% url 'bom_lista_materiales' %}" class="nav-link">BOM</a>
-                </li>
-                <li class="nav-item">
-                    <a href="{% url 'proveedores_alta' %}" class="nav-link">Proveedores</a>
-                </li>
-                {% endif %}
-
-                {% if departamento == 'Producción' or departamento == 'Admin' %}
-                <li class="nav-item">
-                    <a href="{% url 'plan_produccion_diario' %}" class="nav-link"></i> Plan Diario</a>
-                </li>
-                <li class="nav-item">
-                    <a href="{% url 'bom_mfg' %}" class="nav-link">BOM MFG</a>
-                </li>
-                <li class="nav-item">
-                    <a href="{% url 'planificacion_produccion' %}" class="nav-link">Planificación Producción</a>
-                </li>
-                    <li class="nav-item">
-                        <a href="{% url 'control_recursos_mfg' %}" class="nav-link">Control Recursos</a>
-                    </li>
-                    <li class="nav-item">
-                        <a href="{% url 'indicadores_kpis_mfg' %}" class="nav-link">Indicadores MFG</a>
-                    </li>
-                    <li class="nav-item">
-                        <a href="{% url 'ordenes_fabricacion' %}" class="nav-link">Órdenes de Fabricación</a>
-                    </li>
-                    <li class="nav-item">
-                        <a href="{% url 'requerimiento_materiales_produccion' %}" class="nav-link">Req. Materiales</a>
-                    </li>
-                    {% endif %}
-
-                {% if departamento == 'Finanzas' or departamento == 'Admin' %}
-                    <li class="nav-item">
-                        <a href="{% url 'finanzas_dashboard' %}" class="nav-link">Dashboard Finanzas</a>
-                    </li>
+                {% if departamento == 'Admin' %}
                     <li class="nav-item dropdown">
-                        <a href="#" class="nav-link dropdown-toggle">Operación</a>
+                        <a href="#" class="nav-link dropdown-toggle">Inventario</a>
                         <ul class="dropdown-menu">
+                            <li><a href="{% url 'entrada_planta' %}">Importacion</a></li>
+                            <li><a href="{% url 'entrada_linea' %}">Distribucion</a></li>
+                            <li><a href="{% url 'inventario_almacen' %}">Almacen</a></li>
+                            <li><a href="{% url 'historial_almacen' %}">Historial de almacen</a></li>
+                            <li><a href="{% url 'historial_recepciones' %}">Historial de recepciones</a></li>
+                            <li><a href="{% url 'transferencias_almacenes' %}">Transferencias entre almacenes</a></li>
+                            <li><a href="{% url 'bom_lista_materiales' %}">BOM</a></li>
+                            <li><a href="{% url 'proveedores_alta' %}">Proveedores</a></li>
+                        </ul>
+                    </li>
+
+                    <li class="nav-item dropdown">
+                        <a href="#" class="nav-link dropdown-toggle">Produccion</a>
+                        <ul class="dropdown-menu">
+                            <li><a href="{% url 'plan_produccion_diario' %}">Plan diario</a></li>
+                            <li><a href="{% url 'bom_mfg' %}">BOM MFG</a></li>
+                            <li><a href="{% url 'planificacion_produccion' %}">Planificacion</a></li>
+                            <li><a href="{% url 'control_recursos_mfg' %}">Control de recursos</a></li>
+                            <li><a href="{% url 'indicadores_kpis_mfg' %}">Indicadores MFG</a></li>
+                            <li><a href="{% url 'ordenes_fabricacion' %}">Ordenes de fabricacion</a></li>
+                            <li><a href="{% url 'requerimiento_materiales_produccion' %}">Req. materiales</a></li>
+                        </ul>
+                    </li>
+
+                    <li class="nav-item dropdown">
+                        <a href="#" class="nav-link dropdown-toggle">Finanzas</a>
+                        <ul class="dropdown-menu">
+                            <li><a href="{% url 'finanzas_dashboard' %}">Dashboard Finanzas</a></li>
                             <li><a href="{% url 'finanzas_contabilidad' %}">Contabilidad</a></li>
                             <li><a href="{% url 'finanzas_presupuestos' %}">Presupuestos</a></li>
-                            <li><a href="{% url 'finanzas_pagos_cobros' %}">Pagos y Cobros</a></li>
+                            <li><a href="{% url 'finanzas_pagos_cobros' %}">Pagos y cobros</a></li>
                             <li><a href="{% url 'finanzas_impuestos' %}">Impuestos</a></li>
+                            <li><a href="{% url 'finanzas_costeo_produccion' %}">Costeo produccion</a></li>
+                            <li><a href="{% url 'finanzas_ordenes_compra' %}">Ordenes compra MFG</a></li>
+                            <li><a href="{% url 'finanzas_reportes' %}">Reportes financieros</a></li>
                         </ul>
                     </li>
+
                     <li class="nav-item dropdown">
-                        <a href="#" class="nav-link dropdown-toggle">Producción</a>
+                        <a href="#" class="nav-link dropdown-toggle">IT</a>
                         <ul class="dropdown-menu">
-                            <li><a href="{% url 'finanzas_costeo_produccion' %}">Costeo Producción</a></li>
-                            <li><a href="{% url 'finanzas_ordenes_compra' %}">Órdenes Compra MFG</a></li>
-                            <li><a href="{% url 'indicadores_kpis_mfg' %}">KPIs Producción</a></li>
+                            <li><a href="{% url 'register' %}">Crear usuario</a></li>
+                            <li><a href="{% url 'it_usuarios' %}">Usuarios</a></li>
+                            <li><a href="{% url 'it_soporte' %}">Soporte</a></li>
+                            <li><a href="{% url 'it_bitacora' %}">Bitacora</a></li>
+                            <li><a href="{% url 'it_clientes_compra' %}">Clientes PT</a></li>
                         </ul>
                     </li>
+
                     <li class="nav-item dropdown">
-                        <a href="#" class="nav-link dropdown-toggle">Reportes</a>
+                        <a href="#" class="nav-link dropdown-toggle">QA</a>
                         <ul class="dropdown-menu">
-                            <li><a href="{% url 'finanzas_reportes' %}">Reportes Financieros</a></li>
+                            <li><a href="{% url 'qa_sqa' %}">SQA</a></li>
+                            <li><a href="{% url 'qa_oqa' %}">OQA</a></li>
+                            <li><a href="{% url 'qa_qqa_defectos' %}">Defectos y scrap</a></li>
+                            <li><a href="{% url 'qa_customer_service' %}">Customer Service</a></li>
                         </ul>
                     </li>
-                {% endif %}
 
-                {% if departamento == 'RRHH' or departamento == 'Admin' %}
-                <li class="nav-item dropdown">
-                    <a href="#" class="nav-link dropdown-toggle">RRHH</a>
-                    <ul class="dropdown-menu">
-                        <li><a href="#">Gestión de Empleados</a></li>
-                        <li><a href="#">Control de Overtime</a></li>
-                    </ul>
-                </li>
-                {% endif %}
+                    <li class="nav-item dropdown">
+                        <a href="#" class="nav-link dropdown-toggle">RRHH</a>
+                        <ul class="dropdown-menu">
+                            <li><a href="#">Gestion de empleados</a></li>
+                            <li><a href="#">Control de overtime</a></li>
+                        </ul>
+                    </li>
+                {% else %}
+                    {% if departamento == 'Inventario' %}
+                        <li class="nav-item">
+                            <a href="{% url 'entrada_planta' %}" class="nav-link">Importacion</a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{% url 'entrada_linea' %}" class="nav-link">Distribucion</a>
+                        </li>
+                        <li class="nav-item dropdown">
+                            <a href="#" class="nav-link dropdown-toggle">Inventario</a>
+                            <ul class="dropdown-menu">
+                                <li><a href="{% url 'inventario_almacen' %}">Almacen</a></li>
+                                <li><a href="{% url 'historial_almacen' %}">Historial de almacen</a></li>
+                                <li><a href="{% url 'historial_recepciones' %}">Historial de recepciones</a></li>
+                                <li><a href="{% url 'transferencias_almacenes' %}">Transferencias entre almacenes</a></li>
+                            </ul>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{% url 'bom_lista_materiales' %}" class="nav-link">BOM</a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{% url 'proveedores_alta' %}" class="nav-link">Proveedores</a>
+                        </li>
+                    {% endif %}
 
-                {% if departamento == 'IT' or departamento == 'Admin' %}
-                <li class="nav-item">
-                    <a href="{% url 'register' %}" class="nav-link">Crear usuario</a>
-                </li>
-                <li class="nav-item">
-                    <a href="{% url 'it_usuarios' %}" class="nav-link">Usuarios</a>
-                </li>
-                <li class="nav-item">
-                    <a href="{% url 'it_soporte' %}" class="nav-link">Soporte</a>
-                </li>
-                <li class="nav-item">
-                    <a href="{% url 'it_bitacora' %}" class="nav-link">Bitácora</a>
-                </li>
-                <li class="nav-item">
-                    <a href="{% url 'it_clientes_compra' %}" class="nav-link">Clientes PT</a>
-                </li>
-                {% endif %}
+                    {% if departamento == 'Produccion' or departamento == 'Producción' %}
+                        <li class="nav-item">
+                            <a href="{% url 'plan_produccion_diario' %}" class="nav-link">Plan diario</a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{% url 'bom_mfg' %}" class="nav-link">BOM MFG</a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{% url 'planificacion_produccion' %}" class="nav-link">Planificacion produccion</a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{% url 'control_recursos_mfg' %}" class="nav-link">Control recursos</a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{% url 'indicadores_kpis_mfg' %}" class="nav-link">Indicadores MFG</a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{% url 'ordenes_fabricacion' %}" class="nav-link">Ordenes de fabricacion</a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{% url 'requerimiento_materiales_produccion' %}" class="nav-link">Req. materiales</a>
+                        </li>
+                    {% endif %}
 
-                {% if departamento == 'QA' or departamento == 'Calidad' or departamento == 'Admin' %}
-                <li class="nav-item">
-                    <a href="{% url 'qa_sqa' %}" class="nav-link">SQA</a>
-                </li>
-                <li class="nav-item">
-                    <a href="{% url 'qa_oqa' %}" class="nav-link">OQA</a>
-                </li>
-                <li class="nav-item">
-                    <a href="{% url 'qa_qqa_defectos' %}" class="nav-link">Defectos y Scrap</a>
-                </li>
-                <li class="nav-item">
-                    <a href="{% url 'qa_customer_service' %}" class="nav-link">Customer Service</a>
-                </li>
+                    {% if departamento == 'Finanzas' %}
+                        <li class="nav-item">
+                            <a href="{% url 'finanzas_dashboard' %}" class="nav-link">Dashboard Finanzas</a>
+                        </li>
+                        <li class="nav-item dropdown">
+                            <a href="#" class="nav-link dropdown-toggle">Operacion</a>
+                            <ul class="dropdown-menu">
+                                <li><a href="{% url 'finanzas_contabilidad' %}">Contabilidad</a></li>
+                                <li><a href="{% url 'finanzas_presupuestos' %}">Presupuestos</a></li>
+                                <li><a href="{% url 'finanzas_pagos_cobros' %}">Pagos y cobros</a></li>
+                                <li><a href="{% url 'finanzas_impuestos' %}">Impuestos</a></li>
+                            </ul>
+                        </li>
+                        <li class="nav-item dropdown">
+                            <a href="#" class="nav-link dropdown-toggle">Produccion</a>
+                            <ul class="dropdown-menu">
+                                <li><a href="{% url 'finanzas_costeo_produccion' %}">Costeo produccion</a></li>
+                                <li><a href="{% url 'finanzas_ordenes_compra' %}">Ordenes compra MFG</a></li>
+                                <li><a href="{% url 'indicadores_kpis_mfg' %}">KPIs produccion</a></li>
+                            </ul>
+                        </li>
+                        <li class="nav-item dropdown">
+                            <a href="#" class="nav-link dropdown-toggle">Reportes</a>
+                            <ul class="dropdown-menu">
+                                <li><a href="{% url 'finanzas_reportes' %}">Reportes financieros</a></li>
+                            </ul>
+                        </li>
+                    {% endif %}
+
+                    {% if departamento == 'RRHH' %}
+                        <li class="nav-item dropdown">
+                            <a href="#" class="nav-link dropdown-toggle">RRHH</a>
+                            <ul class="dropdown-menu">
+                                <li><a href="#">Gestion de empleados</a></li>
+                                <li><a href="#">Control de overtime</a></li>
+                            </ul>
+                        </li>
+                    {% endif %}
+
+                    {% if departamento == 'IT' %}
+                        <li class="nav-item">
+                            <a href="{% url 'register' %}" class="nav-link">Crear usuario</a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{% url 'it_usuarios' %}" class="nav-link">Usuarios</a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{% url 'it_soporte' %}" class="nav-link">Soporte</a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{% url 'it_bitacora' %}" class="nav-link">Bitacora</a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{% url 'it_clientes_compra' %}" class="nav-link">Clientes PT</a>
+                        </li>
+                    {% endif %}
+
+                    {% if departamento == 'QA' or departamento == 'Calidad' %}
+                        <li class="nav-item">
+                            <a href="{% url 'qa_sqa' %}" class="nav-link">SQA</a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{% url 'qa_oqa' %}" class="nav-link">OQA</a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{% url 'qa_qqa_defectos' %}" class="nav-link">Defectos y scrap</a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{% url 'qa_customer_service' %}" class="nav-link">Customer Service</a>
+                        </li>
+                    {% endif %}
                 {% endif %}
             {% endwith %}
         {% endif %}
@@ -136,7 +208,7 @@
     <div class="nav-user">
         {% if user.is_authenticated %}
             <a href="{% url 'perfil' %}" class="nav-avatar" title="{{ user.get_full_name|default:user.username }}">{{ user.iniciales }}</a>
-            <a href="{% url 'logout' %}" class="nav-logout">Cerrar sesión</a>
+            <a href="{% url 'logout' %}" class="nav-logout">Cerrar sesion</a>
         {% endif %}
     </div>
 </nav>
