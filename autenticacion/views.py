@@ -79,6 +79,12 @@ from .finanzas import (
     generar_estado_financiero,
     generar_reporte_financiero,
 )
+from .ml_analytics import (
+    analizar_riesgo_inventario,
+    calcular_predicciones_financieras,
+    calcular_predicciones_mfg,
+    preparar_dataset_ml_produccion,
+)
 
 # Create your views here.
 
@@ -277,6 +283,30 @@ def _build_unique_username(base):
         suffix += 1
 
 
+def _resolve_login_username(identifier):
+    identifier = (identifier or '').strip()
+    if not identifier:
+        return ''
+
+    user = (
+        User.objects
+        .filter(
+            Q(username__iexact=identifier) |
+            Q(email__iexact=identifier) |
+            Q(numero_empleado__iexact=identifier)
+        )
+        .only('username')
+        .first()
+    )
+    if user:
+        return user.username
+
+    normalized_username = _sanitize_username(identifier)
+    if normalized_username and normalized_username != identifier:
+        return normalized_username
+    return identifier
+
+
 def _decimal_to_float(value):
     if value is None:
         return 0.0
@@ -357,13 +387,9 @@ def login_usuario(request):
     if request.method == 'POST':
         username_input = (request.POST.get('username') or '').strip()
         password = request.POST.get('password')
+        resolved_username = _resolve_login_username(username_input)
 
-        user = authenticate(request, username=username_input, password=password)
-
-        if user is None:
-            normalized_username = _sanitize_username(username_input)
-            if normalized_username and normalized_username != username_input:
-                user = authenticate(request, username=normalized_username, password=password)
+        user = authenticate(request, username=resolved_username, password=password)
 
         if user is not None:
             _registrar_acceso(request, username_input, True, usuario=user)
@@ -914,6 +940,8 @@ def indicadores_kpis_mfg(request):
     }
 
     kpi_context = calcular_kpis_produccion(fecha_inicio=fecha_inicio, fecha_fin=fecha_fin)
+    ml_forecast = calcular_predicciones_mfg()
+    ml_dataset = preparar_dataset_ml_produccion(fecha_inicio=fecha_inicio, fecha_fin=fecha_fin)
 
     return render(
         request,
@@ -928,6 +956,8 @@ def indicadores_kpis_mfg(request):
             'fecha_inicio': fecha_inicio,
             'fecha_fin': fecha_fin,
             'kpi_snapshot': kpi_context,
+            'ml_forecast': ml_forecast,
+            'ml_dataset': ml_dataset,
         },
     )
 
@@ -973,6 +1003,7 @@ def finanzas_dashboard(request):
         return response
 
     dashboard = calcular_dashboard_finanzas(fecha_inicio=fecha_inicio, fecha_fin=fecha_fin)
+    ml_finanzas = calcular_predicciones_financieras()
     return render(
         request,
         'finanzas/dashboard.html',
@@ -982,6 +1013,7 @@ def finanzas_dashboard(request):
             'chart_data': dashboard['charts'],
             'fecha_inicio': fecha_inicio,
             'fecha_fin': fecha_fin,
+            'ml_finanzas': ml_finanzas,
         },
     )
 
@@ -3440,6 +3472,7 @@ def inventario_almacen(request):
         'fecha_historial_value': fecha_historial_raw,
         'fecha_historial': fecha_historial,
         'historico_almacenes': historico_almacenes,
+        'ml_inventario': analizar_riesgo_inventario(),
     }
     return render(request, 'inventario/almacen.html', context)
 

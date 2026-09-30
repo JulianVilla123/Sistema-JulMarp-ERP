@@ -35,7 +35,7 @@
             {% endif %}
             <form method="POST">
                 {% csrf_token %}
-                <input type="text" name="username" placeholder="Usuario" required>
+                <input type="text" name="username" placeholder="Usuario, correo o numero de empleado" required>
                 <input type="password" name="password" placeholder="Contraseña" required>
                 <button type="submit">Ingresar</button>
             </form>

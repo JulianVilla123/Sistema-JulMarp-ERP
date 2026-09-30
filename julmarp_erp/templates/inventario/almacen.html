@@ -36,6 +36,50 @@
         {% else %}
         <p class="inventario-filter-caption">Inventario Actual.</p>
         {% endif %}
+
+        <article class="dashboard-summary-card inventario-arribos-card" style="margin-bottom:16px;">
+            <header>
+                <h4>Prediccion ML de inventario</h4>
+                <small>{{ ml_inventario.method }} | horizonte {{ ml_inventario.horizon_days }} dias</small>
+            </header>
+            <div class="tabla-wrap">
+                <table class="tabla-material">
+                    <thead>
+                        <tr>
+                            <th>SKU</th>
+                            <th>Material</th>
+                            <th>Stock</th>
+                            <th>Consumo diario</th>
+                            <th>Demanda prevista</th>
+                            <th>Cobertura</th>
+                            <th>Riesgo</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in ml_inventario.risks %}
+                        <tr>
+                            <td>{{ item.sku }}</td>
+                            <td>{{ item.descripcion }}</td>
+                            <td>{{ item.stock }}</td>
+                            <td>{{ item.consumo_diario }}</td>
+                            <td>{{ item.demanda_proyectada }}</td>
+                            <td>{{ item.cobertura_dias }} dias</td>
+                            <td>
+                                <span class="inventario-stock-pill">
+                                    {% if item.status == 'rojo' %}Alto{% elif item.status == 'amarillo' %}Medio{% else %}Bajo{% endif %}
+                                </span>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="7">Sin salidas a linea suficientes para entrenar el modelo de consumo.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </article>
+
         <div class="inventario-warehouse-layout">
             <aside class="inventario-warehouse-list">
                 {% for bloque in almacenes_data|slice:":5" %}

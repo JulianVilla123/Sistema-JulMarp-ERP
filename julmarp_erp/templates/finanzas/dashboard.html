@@ -45,6 +45,36 @@
         flex-wrap:wrap;
         margin-top:16px;
     }
+    .fin-ml-panel {
+        background:#fff;
+        border:1px solid #d8e4f2;
+        border-radius:16px;
+        padding:18px;
+        margin-bottom:18px;
+        box-shadow:0 10px 22px rgba(15, 23, 42, 0.06);
+    }
+    .fin-ml-head {
+        display:flex;
+        justify-content:space-between;
+        gap:14px;
+        align-items:flex-start;
+        margin-bottom:14px;
+    }
+    .fin-ml-head h3 { margin:0 0 4px; color:#163a66; }
+    .fin-ml-head p { margin:0; color:#65768d; }
+    .fin-ml-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(190px, 1fr)); gap:12px; }
+    .fin-ml-card {
+        border:1px solid #edf1f6;
+        border-left:5px solid #159947;
+        border-radius:12px;
+        padding:14px;
+        background:#f9fbff;
+    }
+    .fin-ml-card.amarillo { border-left-color:#d28a0f; }
+    .fin-ml-card.rojo { border-left-color:#c53030; }
+    .fin-ml-card p { margin:0 0 6px; color:#65768d; font-weight:700; }
+    .fin-ml-value { font-size:1.45rem; font-weight:800; color:#163a66; overflow-wrap:anywhere; }
+    .fin-ml-meta { margin-top:6px; color:#7a90ad; font-size:.78rem; }
     @media (max-width: 900px) {
         .fin-hero { flex-direction:column; }
     }
@@ -92,6 +122,31 @@
         <article class="dashboard-card fin-kpi-card"><p class="fin-kpi-value" style="color:#d28a0f;">{{ dashboard.kpis.oc_pendientes }}</p><p class="fin-kpi-label">OC pendientes</p></article>
         <article class="dashboard-card fin-kpi-card"><p class="fin-kpi-value" style="color:#159947;">{{ dashboard.kpis.oc_completadas }}</p><p class="fin-kpi-label">OC completadas</p></article>
         <article class="dashboard-card fin-kpi-card"><p class="fin-kpi-value" style="color:{% if dashboard.kpis.impuestos_pendientes > 0 %}#9b2121{% else %}#159947{% endif %};">{{ dashboard.kpis.impuestos_pendientes }}</p><p class="fin-kpi-label">Impuestos pendientes</p></article>
+    </section>
+
+    <section class="fin-ml-panel">
+        <div class="fin-ml-head">
+            <div>
+                <h3>Prediccion ML financiera</h3>
+                <p>{{ ml_finanzas.method }}{% if ml_finanzas.samples %} | {{ ml_finanzas.samples }} muestras{% endif %}</p>
+            </div>
+            <strong>{% if ml_finanzas.enabled %}Modelo activo{% else %}Historial pendiente{% endif %}</strong>
+        </div>
+        <div class="fin-ml-grid">
+            {% for item in ml_finanzas.predictions %}
+            <article class="fin-ml-card {{ item.status }}">
+                <p>{{ item.label }}</p>
+                <div class="fin-ml-value">{{ item.prefix }}{{ item.value }}{{ item.suffix }}</div>
+                <div class="fin-ml-meta">Confianza {{ item.confidence }}% | {{ item.detail }}</div>
+            </article>
+            {% empty %}
+            <article class="fin-ml-card amarillo">
+                <p>Entrenamiento pendiente</p>
+                <div class="fin-ml-value">$0.00</div>
+                <div class="fin-ml-meta">Genera reportes financieros para alimentar el modelo.</div>
+            </article>
+            {% endfor %}
+        </div>
     </section>
 
     <section class="dashboard-grid chart-grid">

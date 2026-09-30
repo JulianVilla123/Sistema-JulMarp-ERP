@@ -100,6 +100,73 @@
     .metric-card.verde .metric-dot { background: #159947; }
     .metric-card.amarillo .metric-dot { background: #d28a0f; }
     .metric-card.rojo .metric-dot { background: #c53030; }
+    .ml-panel {
+        background: #fff;
+        border: 1px solid #d8e4f2;
+        border-radius: 16px;
+        padding: 20px;
+        margin-bottom: 18px;
+        box-shadow: 0 10px 22px rgba(15, 23, 42, 0.06);
+    }
+    .ml-panel-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 14px;
+        align-items: flex-start;
+        margin-bottom: 14px;
+    }
+    .ml-panel h3 { margin: 0 0 4px; color: #163a66; }
+    .ml-panel p { margin: 0; color: #65768d; }
+    .ml-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 12px;
+    }
+    .ml-card {
+        border: 1px solid #edf1f6;
+        border-left: 5px solid #9ca3af;
+        border-radius: 12px;
+        padding: 14px;
+        background: #f9fbff;
+    }
+    .ml-card.verde { border-left-color: #159947; }
+    .ml-card.amarillo { border-left-color: #d28a0f; }
+    .ml-card.rojo { border-left-color: #c53030; }
+    .ml-value { font-size: 1.5rem; font-weight: 800; color: #163a66; }
+    .ml-meta { margin-top: 6px; font-size: .78rem; color: #65768d; }
+    .ml-chart-stage {
+        height: 150px;
+        margin-top: 12px;
+    }
+    .ml-chart-stage canvas {
+        width: 100% !important;
+        height: 150px !important;
+    }
+    .ml-summary {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+        gap: 12px;
+        margin-bottom: 14px;
+    }
+    .ml-summary-item {
+        border: 1px solid #edf1f6;
+        border-radius: 12px;
+        padding: 12px;
+        background: #f9fbff;
+    }
+    .ml-summary-item span {
+        display: block;
+        color: #65768d;
+        font-size: .78rem;
+        font-weight: 800;
+        text-transform: uppercase;
+    }
+    .ml-summary-item strong {
+        display: block;
+        margin-top: 6px;
+        color: #163a66;
+        font-size: 1.35rem;
+    }
     .alert-strip {
         display: grid;
         gap: 10px;
@@ -213,6 +280,94 @@
             <div class="metric-traffic"><span class="metric-dot"></span>{{ metric.status }}</div>
         </article>
         {% endfor %}
+    </section>
+
+    <section class="ml-panel">
+        <div class="ml-panel-head">
+            <div>
+                <h3>Prediccion ML de produccion</h3>
+                <p>{{ ml_forecast.method }}{% if ml_forecast.samples %} | {{ ml_forecast.samples }} muestras{% endif %}</p>
+            </div>
+            <span class="status-chip {% if ml_forecast.enabled %}verde{% else %}amarillo{% endif %}">
+                {% if ml_forecast.enabled %}Activo{% else %}Sin historial{% endif %}
+            </span>
+        </div>
+        <div class="ml-grid">
+            {% for item in ml_forecast.predictions %}
+            <article class="ml-card {{ item.status }}">
+                <p>{{ item.label }}</p>
+                <div class="ml-value">{{ item.value }}{{ item.unit }}</div>
+                <div class="ml-meta">Confianza {{ item.confidence }}% | {{ item.detail }}</div>
+                <div class="ml-chart-stage">
+                    <canvas id="chart-ml-{{ item.code }}"></canvas>
+                </div>
+            </article>
+            {% empty %}
+            <article class="ml-card amarillo">
+                <p>Entrenamiento pendiente</p>
+                <div class="ml-value">0%</div>
+                <div class="ml-meta">Genera reportes KPI para alimentar el modelo.</div>
+            </article>
+            {% endfor %}
+        </div>
+    </section>
+
+    <section class="ml-panel">
+        <div class="ml-panel-head">
+            <div>
+                <h3>Dataset ML semanal</h3>
+                <p>Variables: {{ ml_dataset.features|join:', ' }} | Salidas: {{ ml_dataset.targets|join:', ' }}</p>
+            </div>
+            <span class="status-chip {% if ml_dataset.enabled %}verde{% else %}amarillo{% endif %}">
+                {% if ml_dataset.enabled %}Listo{% else %}Sin datos{% endif %}
+            </span>
+        </div>
+        <div class="ml-summary">
+            <div class="ml-summary-item"><span>Scrap semanal</span><strong>{{ ml_dataset.summary.scrap_pct }}%</strong></div>
+            <div class="ml-summary-item"><span>Entrada - consumo</span><strong>{{ ml_dataset.summary.diferencia_materiales }}</strong></div>
+            <div class="ml-summary-item"><span>Costo real</span><strong>${{ ml_dataset.summary.costo_real }}</strong></div>
+            <div class="ml-summary-item"><span>Costo planificado</span><strong>${{ ml_dataset.summary.costo_planificado }}</strong></div>
+        </div>
+        <div class="tabla-wrap">
+            <table class="tabla-material">
+                <thead>
+                    <tr>
+                        <th>OF</th>
+                        <th>Producto</th>
+                        <th>Piezas</th>
+                        <th>Scrap</th>
+                        <th>Tipos defecto</th>
+                        <th>Consumo</th>
+                        <th>Costo real</th>
+                        <th>Objetivo ML</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in ml_dataset.rows %}
+                    <tr>
+                        <td>{{ row.folio }}</td>
+                        <td>{{ row.producto }}</td>
+                        <td>{{ row.piezas_producidas }}</td>
+                        <td>{{ row.scrap }} ({{ row.scrap_pct }}%)</td>
+                        <td>
+                            {% for defect, qty in row.tipos_defecto.items %}
+                                {{ defect }}: {{ qty }}{% if not forloop.last %}, {% endif %}
+                            {% empty %}
+                                Sin defectos
+                            {% endfor %}
+                        </td>
+                        <td>{{ row.consumo_materiales }}</td>
+                        <td>${{ row.costo_real }}</td>
+                        <td>Scrap {{ row.target_scrap_futuro }} | Costo ${{ row.target_costo_futuro }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8">No hay ordenes de produccion en el periodo para entrenar el dataset.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </section>
 
     <section class="dashboard-grid chart-grid">
@@ -423,6 +578,7 @@
 </div>
 
 {{ chart_data|json_script:"mfg-kpi-chart-data" }}
+{{ ml_forecast.trend_charts|json_script:"mfg-ml-trend-data" }}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
@@ -440,6 +596,90 @@ document.addEventListener('DOMContentLoaded', function () {
         amarillo: '#d28a0f',
         rojo: '#c53030',
     };
+    const mlTrendNode = document.getElementById('mfg-ml-trend-data');
+    const mlTrendData = mlTrendNode ? JSON.parse(mlTrendNode.textContent || '[]') : [];
+
+    mlTrendData.forEach(function (item) {
+        const ctx = document.getElementById('chart-ml-' + item.code);
+        if (!ctx) {
+            return;
+        }
+        const accent = statusColors[item.status] || '#1255a7';
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: item.labels || [],
+                datasets: [
+                    {
+                        label: 'Histórico',
+                        data: item.history || [],
+                        borderColor: '#1255a7',
+                        backgroundColor: 'rgba(18, 85, 167, 0.10)',
+                        pointBackgroundColor: '#1255a7',
+                        pointRadius: 3,
+                        tension: 0.32,
+                        fill: true,
+                        spanGaps: true,
+                    },
+                    {
+                        label: 'Predicción',
+                        data: item.forecast || [],
+                        borderColor: accent,
+                        backgroundColor: 'transparent',
+                        pointBackgroundColor: accent,
+                        pointBorderColor: '#ffffff',
+                        pointBorderWidth: 2,
+                        pointRadius: 4,
+                        borderDash: [6, 5],
+                        tension: 0.32,
+                        fill: false,
+                        spanGaps: true,
+                    },
+                ],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { intersect: false, mode: 'index' },
+                plugins: {
+                    legend: {
+                        display: true,
+                        labels: {
+                            boxWidth: 10,
+                            usePointStyle: true,
+                            pointStyle: 'circle',
+                            font: { size: 10, weight: 700 },
+                        },
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function (context) {
+                                const value = context.parsed.y;
+                                if (value === null || Number.isNaN(value)) {
+                                    return '';
+                                }
+                                return context.dataset.label + ': ' + value.toFixed(2) + item.unit;
+                            },
+                        },
+                    },
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        suggestedMax: 100,
+                        grid: { color: '#e9edf3', drawBorder: false },
+                        border: { display: false },
+                        ticks: { font: { size: 10 } },
+                    },
+                    x: {
+                        grid: { display: false },
+                        border: { display: false },
+                        ticks: { font: { size: 10 }, maxRotation: 0 },
+                    },
+                },
+            },
+        });
+    });
 
     const metricCtx = document.getElementById('chart-kpis-mfg');
     if (metricCtx) {
