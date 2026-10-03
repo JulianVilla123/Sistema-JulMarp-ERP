@@ -847,7 +847,7 @@ def indicadores_kpis_mfg(request):
 
     reporte = (
         ReporteKPIProduccion.objects
-        .filter(fecha_inicio=fecha_inicio, fecha_fin=fecha_fin)
+        .filter(fecha_inicio=periodo_inicio_real, fecha_fin=periodo_fin_real)
         .order_by('-fecha_generacion')
         .first()
     )
@@ -929,6 +929,74 @@ def indicadores_kpis_mfg(request):
         },
     ]
 
+    alert_guidance = {
+        'oee': {
+            'title': 'OEE bajo',
+            'explanation': 'La eficiencia global de produccion esta por debajo del rango esperado. Puede haber perdidas por disponibilidad, rendimiento o calidad.',
+            'action': 'Revisar disponibilidad, rendimiento y calidad para ubicar el principal cuello de botella.',
+        },
+        'tiempo_ciclo': {
+            'title': 'Tiempo de ciclo critico',
+            'explanation': 'La produccion esta tardando mas de lo esperado por unidad contra el tiempo ideal del BOM.',
+            'action': 'Revisar ordenes con mayor duracion real, setup, maquina asignada y capturas de operador.',
+        },
+        'tasa_rechazo': {
+            'title': 'Rechazo fuera de limite',
+            'explanation': 'El porcentaje de piezas rechazadas esta por encima del nivel recomendado y puede elevar costos o retrabajos.',
+            'action': 'Identificar las ordenes con mas scrap y validar causas con Produccion y QA.',
+        },
+        'cumplimiento_ordenes': {
+            'title': 'Cumplimiento bajo',
+            'explanation': 'Menos ordenes estan terminando dentro del plan esperado para el periodo.',
+            'action': 'Revisar atrasos por linea, material, capacidad y fechas reales de cierre.',
+        },
+        'variacion_costos_pct': {
+            'title': 'Variacion de costos alta',
+            'explanation': 'El costo real se esta alejando del costo planificado, lo que puede afectar margen y presupuesto.',
+            'action': 'Comparar consumo real, horas maquina, horas operador y materiales contra el plan.',
+        },
+        'utilizacion_recursos': {
+            'title': 'Recursos fuera de rango',
+            'explanation': 'La utilizacion de recursos esta fuera de la banda saludable. Puede indicar saturacion, subutilizacion o captura incompleta.',
+            'action': 'Validar horas reales contra horas programadas y revisar si hay sobrecarga de maquina o personal.',
+        },
+    }
+    alert_cards = []
+    for metric in metric_cards:
+        if metric['status'] != 'rojo':
+            continue
+        guidance = alert_guidance.get(metric['code'], {})
+        alert_cards.append({
+            'title': guidance.get('title', metric['label']),
+            'metric': metric['label'],
+            'value': f"{metric['value']}{metric['unit']}",
+            'explanation': guidance.get('explanation', 'Este indicador esta fuera del rango esperado para el periodo.'),
+            'action': guidance.get('action', 'Revisar el detalle operativo relacionado con este KPI.'),
+        })
+
+    qa_pending = detail.get('defectos_pendientes_qa', 0) or 0
+    if qa_pending > 0:
+        alert_cards.append({
+            'title': 'Defectos pendientes de QA',
+            'metric': 'Validacion QA',
+            'value': qa_pending,
+            'explanation': 'Hay defectos registrados que todavia no tienen validacion de calidad, por lo que la causa raiz puede no estar confirmada.',
+            'action': 'Priorizar la revision de QA para cerrar la causa y decidir contencion, retrabajo o liberacion.',
+        })
+
+    machine_failure_qty = detail.get('defectos_falla_maquina', 0) or 0
+    if machine_failure_qty > 0:
+        alert_cards.append({
+            'title': 'Falla de maquina confirmada',
+            'metric': 'Defectos por maquina',
+            'value': f"{machine_failure_qty} piezas",
+            'explanation': 'QA ya confirmo defectos relacionados con maquina. Esto puede impactar calidad, disponibilidad y costo de scrap.',
+            'action': 'Revisar mantenimiento, condiciones de proceso y ordenes afectadas antes de continuar con mas carga.',
+        })
+
+    alert_summary = ''
+    if alert_cards:
+        alert_summary = f"Se detectaron {len(alert_cards)} alertas criticas. Revisa primero las que impactan calidad, capacidad y costo."
     chart_data = {
         'metric_labels': [card['label'] for card in metric_cards],
         'metric_values': [float(card['value']) for card in metric_cards],
@@ -940,8 +1008,6 @@ def indicadores_kpis_mfg(request):
     }
 
     kpi_context = calcular_kpis_produccion(fecha_inicio=fecha_inicio, fecha_fin=fecha_fin)
-    ml_forecast = calcular_predicciones_mfg()
-    ml_dataset = preparar_dataset_ml_produccion(fecha_inicio=fecha_inicio, fecha_fin=fecha_fin)
 
     return render(
         request,
@@ -951,11 +1017,84 @@ def indicadores_kpis_mfg(request):
             'metric_cards': metric_cards,
             'chart_data': chart_data,
             'alertas': reporte.alertas or [],
+            'alert_cards': alert_cards,
+            'alert_summary': alert_summary,
             'detalle': detail,
             'ordenes_recientes': detail.get('ordenes_recientes', []),
             'fecha_inicio': fecha_inicio,
             'fecha_fin': fecha_fin,
             'kpi_snapshot': kpi_context,
+        },
+    )
+
+
+@login_required(login_url='login')
+@never_cache
+def prediccion_produccion(request):
+    if not _usuario_puede_ver_kpis_mfg(request.user):
+        messages.error(request, 'No tienes permisos para consultar la prediccion de produccion.')
+        return redirect('home')
+
+    fecha_fin = timezone.localdate()
+    fecha_inicio = fecha_fin - timedelta(days=29)
+
+    fecha_inicio_raw = (request.GET.get('fecha_inicio') or '').strip()
+    fecha_fin_raw = (request.GET.get('fecha_fin') or '').strip()
+    horizonte_raw = (request.GET.get('horizonte') or '4').strip()
+    horizon_options = [1, 4, 8, 12]
+    try:
+        horizonte = int(horizonte_raw)
+    except ValueError:
+        horizonte = 4
+    if horizonte not in horizon_options:
+        horizonte = 4
+
+    try:
+        if fecha_inicio_raw:
+            fecha_inicio = date.fromisoformat(fecha_inicio_raw)
+        if fecha_fin_raw:
+            fecha_fin = date.fromisoformat(fecha_fin_raw)
+    except ValueError:
+        messages.error(request, 'El rango de fechas no es valido. Se uso el periodo por defecto de 30 dias.')
+        fecha_fin = timezone.localdate()
+        fecha_inicio = fecha_fin - timedelta(days=29)
+
+    if fecha_inicio > fecha_fin:
+        fecha_inicio, fecha_fin = fecha_fin, fecha_inicio
+
+    hoy = timezone.localdate()
+    periodo_fin_real = min(fecha_fin, hoy)
+    periodo_inicio_real = min(fecha_inicio, periodo_fin_real)
+    if fecha_fin > hoy:
+        messages.info(request, 'La fecha fin esta en el futuro; se usan datos reales hasta hoy y el horizonte para proyectar semanas futuras.')
+
+    reporte = (
+        ReporteKPIProduccion.objects
+        .filter(fecha_inicio=periodo_inicio_real, fecha_fin=periodo_fin_real)
+        .order_by('-fecha_generacion')
+        .first()
+    )
+    if reporte is None:
+        reporte = generar_reporte_kpis_produccion(
+            usuario=request.user,
+            fecha_inicio=periodo_inicio_real,
+            fecha_fin=periodo_fin_real,
+        )
+
+    ml_forecast = calcular_predicciones_mfg(horizon_weeks=horizonte)
+    ml_dataset = preparar_dataset_ml_produccion(fecha_inicio=periodo_inicio_real, fecha_fin=periodo_fin_real)
+
+    return render(
+        request,
+        'produccion/prediccion_produccion.html',
+        {
+            'fecha_inicio': fecha_inicio,
+            'fecha_fin': fecha_fin,
+            'periodo_inicio_real': periodo_inicio_real,
+            'periodo_fin_real': periodo_fin_real,
+            'horizonte': horizonte,
+            'horizon_options': horizon_options,
+            'reporte': reporte,
             'ml_forecast': ml_forecast,
             'ml_dataset': ml_dataset,
         },

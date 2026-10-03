@@ -32,9 +32,16 @@
                             <li><a href="{% url 'bom_mfg' %}">BOM MFG</a></li>
                             <li><a href="{% url 'planificacion_produccion' %}">Planificacion</a></li>
                             <li><a href="{% url 'control_recursos_mfg' %}">Control de recursos</a></li>
-                            <li><a href="{% url 'indicadores_kpis_mfg' %}">Indicadores MFG</a></li>
                             <li><a href="{% url 'ordenes_fabricacion' %}">Ordenes de fabricacion</a></li>
                             <li><a href="{% url 'requerimiento_materiales_produccion' %}">Req. materiales</a></li>
+                        </ul>
+                    </li>
+
+                    <li class="nav-item dropdown">
+                        <a href="#" class="nav-link dropdown-toggle">Indicadores</a>
+                        <ul class="dropdown-menu">
+                            <li><a href="{% url 'indicadores_kpis_mfg' %}">Indicadores de MFG</a></li>
+                            <li><a href="{% url 'prediccion_produccion' %}">Prediccion de produccion</a></li>
                         </ul>
                     </li>
 
@@ -118,8 +125,12 @@
                         <li class="nav-item">
                             <a href="{% url 'control_recursos_mfg' %}" class="nav-link">Control recursos</a>
                         </li>
-                        <li class="nav-item">
-                            <a href="{% url 'indicadores_kpis_mfg' %}" class="nav-link">Indicadores MFG</a>
+                        <li class="nav-item dropdown">
+                            <a href="#" class="nav-link dropdown-toggle">Indicadores</a>
+                            <ul class="dropdown-menu">
+                                <li><a href="{% url 'indicadores_kpis_mfg' %}">Indicadores de MFG</a></li>
+                                <li><a href="{% url 'prediccion_produccion' %}">Prediccion de produccion</a></li>
+                            </ul>
                         </li>
                         <li class="nav-item">
                             <a href="{% url 'ordenes_fabricacion' %}" class="nav-link">Ordenes de fabricacion</a>

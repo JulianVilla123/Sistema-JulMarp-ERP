@@ -1,0 +1,400 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Prediccion de produccion{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/pages/home.css' %}">
+<style>
+    .predict-page {
+        max-width: 1280px;
+        margin: 0 auto;
+        padding: 36px 20px 48px;
+    }
+    .predict-title { margin-bottom: 18px; }
+    .predict-title h1 {
+        margin: 0;
+        color: #163a66;
+        font-size: 1.9rem;
+        font-weight: 800;
+    }
+    .predict-title p {
+        margin: 4px 0 0;
+        color: #52657e;
+        font-size: 1rem;
+    }
+    .predict-filter-card {
+        background: #fff;
+        border: 1px solid #dde7f2;
+        border-radius: 16px;
+        padding: 18px 20px;
+        margin-bottom: 18px;
+        box-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
+    }
+    .predict-filter-form {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 12px;
+        align-items: end;
+    }
+    .predict-filter-form label {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        font-size: .85rem;
+        color: #49607d;
+        font-weight: 700;
+    }
+    .predict-filter-form input,
+    .predict-filter-form select {
+        border: 1px solid #d1dceb;
+        border-radius: 9px;
+        padding: 10px 12px;
+        background: #f8fbff;
+    }
+    .predict-note {
+        margin-top: 12px;
+        color: #52657e;
+        font-size: .88rem;
+    }
+    .ml-panel {
+        background: #fff;
+        border: 1px solid #d8e4f2;
+        border-radius: 16px;
+        padding: 24px;
+        margin-bottom: 18px;
+        box-shadow: 0 10px 22px rgba(15, 23, 42, 0.06);
+    }
+    .ml-panel-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 14px;
+        align-items: flex-start;
+        margin-bottom: 18px;
+    }
+    .ml-panel h2 { margin: 0 0 4px; color: #163a66; font-size: 2rem; font-weight: 500; }
+    .ml-panel p { margin: 0; color: #52657e; }
+    .status-chip {
+        display: inline-flex;
+        align-items: center;
+        padding: 8px 12px;
+        border-radius: 999px;
+        font-size: .78rem;
+        font-weight: 800;
+        text-transform: uppercase;
+    }
+    .status-chip.verde { background: #e7f8ee; color: #187d43; }
+    .status-chip.amarillo { background: #fff7e5; color: #996300; }
+    .ml-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 14px;
+    }
+    .ml-card {
+        border: 1px solid #edf1f6;
+        border-left: 5px solid #9ca3af;
+        border-radius: 12px;
+        padding: 18px;
+        background: #f9fbff;
+    }
+    .ml-card.verde { border-left-color: #159947; }
+    .ml-card.amarillo { border-left-color: #d28a0f; }
+    .ml-card.rojo { border-left-color: #c53030; }
+    .ml-card p { color: #52657e; font-size: 1rem; }
+    .ml-value { font-size: 1.85rem; font-weight: 800; color: #0f3769; line-height: 1.1; margin-top: 8px; }
+    .ml-meta { margin-top: 12px; font-size: .82rem; color: #49607d; min-height: 42px; }
+    .ml-chart-stage { height: 180px; margin-top: 14px; }
+    .ml-chart-stage canvas { width: 100% !important; height: 180px !important; }
+    .ml-summary {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+        gap: 12px;
+        margin-bottom: 14px;
+    }
+    .ml-summary-item {
+        border: 1px solid #edf1f6;
+        border-radius: 12px;
+        padding: 12px;
+        background: #f9fbff;
+    }
+    .ml-summary-item span {
+        display: block;
+        color: #65768d;
+        font-size: .78rem;
+        font-weight: 800;
+        text-transform: uppercase;
+    }
+    .ml-summary-item strong {
+        display: block;
+        margin-top: 6px;
+        color: #163a66;
+        font-size: 1.35rem;
+    }
+    .ml-explanation {
+        border: 1px solid #dce8f5;
+        border-left: 4px solid #287a69;
+        border-radius: 10px;
+        background: #f7fbfa;
+        padding: 14px 16px;
+        margin-bottom: 16px;
+    }
+    .ml-explanation h3 { margin: 0 0 8px; color: #163a66; font-size: 1rem; }
+    .ml-explanation p { margin: 0 0 6px; font-size: .9rem; }
+    .ml-explanation ul { margin: 8px 0 0; padding-left: 20px; color: #334155; }
+    .ml-explanation li + li { margin-top: 5px; }
+    .ml-range { margin-top: 8px; font-size: .82rem; color: #49607d; }
+    .ml-table-wrap { overflow-x: auto; margin-top: 16px; }
+    .ml-table { width: 100%; border-collapse: collapse; font-size: .84rem; }
+    .ml-table th, .ml-table td { padding: 10px 12px; border-bottom: 1px solid #e8edf4; text-align: left; white-space: nowrap; }
+    .ml-table th { color: #52657e; font-size: .76rem; text-transform: uppercase; }
+    .ml-table td { color: #26384d; }
+    .ml-table-wrap { overflow-x: auto; margin-top: 16px; }
+    .ml-table { width: 100%; border-collapse: collapse; font-size: .84rem; }
+    .ml-table th, .ml-table td { padding: 10px 12px; border-bottom: 1px solid #e8edf4; text-align: left; white-space: nowrap; }
+    .ml-table th { color: #52657e; font-size: .76rem; text-transform: uppercase; }
+    .ml-table td { color: #26384d; }
+    @media (max-width: 760px) {
+        .ml-panel-head { flex-direction: column; }
+        .ml-panel h2 { font-size: 1.55rem; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="predict-page">
+    <section class="predict-title">
+        <h1>Prediccion de produccion</h1>
+        <p>Pronostico ML separado del tablero operativo general.</p>
+    </section>
+
+    <section class="predict-filter-card">
+        <form method="get" class="predict-filter-form">
+            <label>
+                Fecha inicio
+                <input type="date" name="fecha_inicio" value="{{ fecha_inicio|date:'Y-m-d' }}">
+            </label>
+            <label>
+                Fecha fin
+                <input type="date" name="fecha_fin" value="{{ fecha_fin|date:'Y-m-d' }}">
+            </label>
+            <label>
+                Horizonte de prediccion
+                <select name="horizonte">
+                    {% for option in horizon_options %}
+                    <option value="{{ option }}" {% if option == horizonte %}selected{% endif %}>{{ option }} semana{% if option != 1 %}s{% endif %}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <div>
+                <button type="submit" class="btn btn-primary">Actualizar analisis</button>
+            </div>
+        </form>
+        <p class="predict-note">Periodo de ordenes: {{ periodo_inicio_real|date:'d/m/Y' }} al {{ periodo_fin_real|date:'d/m/Y' }}. Proyeccion: {{ horizonte }} semana{% if horizonte != 1 %}s{% endif %} hacia adelante, con reportes KPI de hasta 104 semanas historicas.</p>
+    </section>
+
+    <section class="ml-panel">
+        <div class="ml-panel-head">
+            <div>
+                <h2>Pronostico de produccion</h2>
+                <p>{{ ml_forecast.method }}{% if ml_forecast.samples %} | {{ ml_forecast.samples }} muestras{% endif %} | Horizonte {{ ml_forecast.horizon_weeks }} semana{% if ml_forecast.horizon_weeks != 1 %}s{% endif %}</p>
+            </div>
+            <span class="status-chip {% if ml_forecast.enabled %}verde{% else %}amarillo{% endif %}">
+                {% if ml_forecast.enabled %}Activo{% else %}Sin historial{% endif %}
+            </span>
+        </div>
+        <div class="ml-explanation">
+            <h3>Resumen del analisis</h3>
+            <p>{{ ml_forecast.data_quality }} Se usa el reporte mas reciente de cada semana y se conserva su fecha de cierre. Si un reporte resume varios dias, sus valores representan ese rango; procura comparar periodos similares. La confianza baja cuando hay poco historial, mucho error o un horizonte largo.</p>
+            <p>Validacion retrospectiva: {{ ml_forecast.backtest_periods }} periodos reservados para comparar pronostico y resultado real.</p>
+            <ul>
+                {% for insight in ml_forecast.explanation %}<li>{{ insight }}</li>{% endfor %}
+            </ul>
+        </div>
+        <div class="ml-grid">
+            {% for item in ml_forecast.predictions %}
+            <article class="ml-card {{ item.status }}">
+                <p>{{ item.label }}</p>
+                <div class="ml-value">{% if item.has_value %}{{ item.value }}{{ item.unit }}{% else %}Sin datos{% endif %}</div>
+                <div class="ml-meta">
+                    Confianza {{ item.confidence }}% | {{ item.detail }}
+                    {% if item.backtests %}<br>Error medio: {{ item.mae }}{{ item.unit }} en {{ item.backtests }} pruebas historicas.
+                    {% if item.has_mape %}<br>Error porcentual medio: {{ item.mape }}%.{% endif %}
+                    {% if item.has_skill %}<br>{% if item.skill >= 0 %}Mejora{% else %}Rinde por debajo{% endif %} {{ item.skill }}% frente a usar el ultimo dato como pronostico.{% endif %}{% endif %}
+                </div>
+                {% if item.enough_data %}
+                <div class="ml-range">Rango estimado: {{ item.lower }}{{ item.unit }} a {{ item.upper }}{{ item.unit }}</div>
+                {% endif %}
+                <div class="ml-range"><strong>Siguiente paso:</strong> {{ item.action }}</div>
+                <div class="ml-chart-stage">
+                    <canvas id="chart-ml-{{ item.code }}"></canvas>
+                </div>
+            </article>
+            {% empty %}
+            <article class="ml-card amarillo">
+                <p>Entrenamiento pendiente</p>
+                <div class="ml-value">0%</div>
+                <div class="ml-meta">Genera reportes KPI para alimentar el modelo.</div>
+            </article>
+            {% endfor %}
+        </div>
+    </section>
+
+    <section class="ml-panel">
+        <div class="ml-panel-head">
+            <div>
+                <h2>Base de analisis predictivo</h2>
+                <p>Datos registrados de ordenes de fabricacion en el periodo seleccionado. El costo real suma recursos registrados por orden; el costo planeado requiere una fuente presupuestal por orden.</p>
+            </div>
+            <span class="status-chip {% if ml_dataset.enabled %}verde{% else %}amarillo{% endif %}">
+                {% if ml_dataset.enabled %}Listo{% else %}Sin datos{% endif %}
+            </span>
+        </div>
+        <div class="ml-summary">
+            <div class="ml-summary-item"><span>Scrap del periodo</span><strong>{{ ml_dataset.summary.scrap_pct }}%</strong></div>
+            <div class="ml-summary-item"><span>Entrada - consumo</span><strong>{{ ml_dataset.summary.diferencia_materiales }}</strong></div>
+            <div class="ml-summary-item"><span>Costo real</span><strong>${{ ml_dataset.summary.costo_real }}</strong></div>
+            <div class="ml-summary-item"><span>Costo planificado</span><strong>{% if ml_dataset.summary.costo_planificado != None %}${{ ml_dataset.summary.costo_planificado }}{% else %}No disponible{% endif %}</strong></div>
+        </div>
+        {% if ml_dataset.rows %}
+        <div class="ml-table-wrap">
+            <table class="ml-table">
+                <thead>
+                    <tr>
+                        <th>Orden</th><th>Producto</th><th>Producido</th><th>Scrap</th><th>Scrap %</th>
+                        <th>Diferencia de material</th><th>Horas maquina</th><th>Horas operador</th><th>Costo real</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in ml_dataset.rows %}
+                    <tr>
+                        <td>{{ row.folio }}</td><td>{{ row.producto }}</td><td>{{ row.piezas_producidas }}</td>
+                        <td>{{ row.scrap }}</td><td>{{ row.scrap_pct }}%</td><td>{{ row.diferencia_materiales }}</td>
+                        <td>{{ row.horas_maquina }}</td><td>{{ row.horas_operador }}</td><td>${{ row.costo_real }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="predict-note">No hay ordenes de fabricacion registradas dentro de este periodo.</p>
+        {% endif %}
+    </section>
+</div>
+
+{{ ml_forecast.trend_charts|json_script:"mfg-ml-trend-data" }}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    if (typeof Chart === 'undefined') return;
+    Chart.defaults.font.family = "Manrope, Segoe UI, sans-serif";
+    Chart.defaults.color = '#5b6475';
+
+    const statusColors = {
+        verde: '#159947',
+        amarillo: '#d28a0f',
+        rojo: '#c53030',
+    };
+    const mlTrendNode = document.getElementById('mfg-ml-trend-data');
+    const mlTrendData = mlTrendNode ? JSON.parse(mlTrendNode.textContent || '[]') : [];
+
+    mlTrendData.forEach(function (item) {
+        const ctx = document.getElementById('chart-ml-' + item.code);
+        if (!ctx) return;
+        const accent = statusColors[item.status] || '#1255a7';
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: item.labels || [],
+                datasets: [
+                    {
+                        label: 'Historico',
+                        data: item.history || [],
+                        borderColor: '#1255a7',
+                        backgroundColor: 'rgba(18, 85, 167, 0.10)',
+                        pointBackgroundColor: '#1255a7',
+                        pointRadius: 3,
+                        tension: 0.32,
+                        fill: true,
+                        spanGaps: true,
+                    },
+                    {
+                        label: 'Limite inferior',
+                        data: item.lower || [],
+                        borderColor: 'transparent',
+                        backgroundColor: 'transparent',
+                        pointRadius: 0,
+                        fill: false,
+                    },
+                    {
+                        label: 'Rango de incertidumbre',
+                        data: item.upper || [],
+                        borderColor: 'transparent',
+                        backgroundColor: 'rgba(40, 122, 105, 0.12)',
+                        pointRadius: 0,
+                        fill: '-1',
+                    },
+                    {
+                        label: 'Prediccion',
+                        data: item.forecast || [],
+                        borderColor: accent,
+                        backgroundColor: 'transparent',
+                        pointBackgroundColor: accent,
+                        pointBorderColor: '#ffffff',
+                        pointBorderWidth: 2,
+                        pointRadius: 4,
+                        borderDash: [6, 5],
+                        tension: 0.32,
+                        fill: false,
+                        spanGaps: true,
+                    },
+                ],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { intersect: false, mode: 'index' },
+                plugins: {
+                    legend: {
+                        display: true,
+                        labels: {
+                            boxWidth: 10,
+                            usePointStyle: true,
+                            pointStyle: 'circle',
+                            font: { size: 10, weight: 700 },
+                        },
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function (context) {
+                                const value = context.parsed.y;
+                                if (value === null || Number.isNaN(value)) return '';
+                                return context.dataset.label + ': ' + value.toFixed(2) + item.unit;
+                            },
+                        },
+                    },
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        suggestedMax: item.bounded ? 100 : undefined,
+                        grid: { color: '#e9edf3', drawBorder: false },
+                        border: { display: false },
+                        ticks: {
+                            font: { size: 10 },
+                            callback: function (value) {
+                                return item.unit === '%' ? value + '%' : value;
+                            },
+                        },
+                    },
+                    x: {
+                        grid: { display: false },
+                        border: { display: false },
+                        ticks: { font: { size: 10 }, maxRotation: 0 },
+                    },
+                },
+            },
+        });
+    });
+});
+</script>
+{% endblock %}

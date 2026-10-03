@@ -62,31 +62,39 @@ def _weighted_average(values: list[Decimal]) -> Decimal:
     return _safe_div(weighted_total, weight_total)
 
 
-def _linear_forecast(values: list[Decimal]) -> tuple[Decimal, Decimal, str]:
+def _linear_forecast(
+    values: list[Decimal],
+    steps: int = 1,
+    x_values: list[Decimal] | None = None,
+    future_x_values: list[Decimal] | None = None,
+) -> tuple[list[Decimal], Decimal, str]:
+    steps = max(1, int(steps or 1))
     clean_values = [_to_decimal(value) for value in values]
     if not clean_values:
-        return ZERO, ZERO, 'Sin datos historicos suficientes.'
+        return [], ZERO, 'Sin datos historicos suficientes.'
     if len(clean_values) == 1:
-        return clean_values[0], ZERO, 'Prediccion basada en un solo punto historico.'
+        return [clean_values[0] for _ in range(steps)], ZERO, 'Prediccion basada en un solo punto historico.'
 
     n = Decimal(len(clean_values))
-    xs = [Decimal(index) for index in range(len(clean_values))]
+    xs = x_values or [Decimal(index) for index in range(len(clean_values))]
+    xs = [_to_decimal(value) for value in xs]
+    if len(xs) != len(clean_values):
+        xs = [Decimal(index) for index in range(len(clean_values))]
     mean_x = sum(xs, ZERO) / n
     mean_y = sum(clean_values, ZERO) / n
     numerator = sum(((x - mean_x) * (y - mean_y) for x, y in zip(xs, clean_values)), ZERO)
     denominator = sum(((x - mean_x) ** 2 for x in xs), ZERO)
     slope = _safe_div(numerator, denominator)
     intercept = mean_y - (slope * mean_x)
-    next_x = Decimal(len(clean_values))
-    prediction = intercept + (slope * next_x)
+    target_xs = future_x_values or [xs[-1] + Decimal(offset) for offset in range(1, steps + 1)]
+    predictions = [intercept + (slope * _to_decimal(x_value)) for x_value in target_xs]
 
     residuals = [abs(y - (intercept + slope * x)) for x, y in zip(xs, clean_values)]
     mean_error = _safe_div(sum(residuals, ZERO), Decimal(len(residuals)))
     baseline = abs(mean_y) if mean_y else ONE
     confidence = max(Decimal('35'), min(Decimal('95'), Decimal('100') - (_safe_div(mean_error, baseline) * Decimal('100'))))
     detail = f"Regresion lineal con {len(clean_values)} periodos historicos."
-    return prediction, confidence, detail
-
+    return predictions, confidence, detail
 
 def _status_for_metric(code: str, value: Decimal) -> str:
     value = _to_decimal(value)
@@ -106,70 +114,212 @@ def _status_for_metric(code: str, value: Decimal) -> str:
     return 'amarillo'
 
 
-def calcular_predicciones_mfg(limit: int = 8) -> dict:
-    reports = list(
-        ReporteKPIProduccion.objects
-        .order_by('-fecha_fin', '-fecha_generacion')[:limit]
-    )
-    reports.reverse()
-    labels = [report.fecha_fin.strftime('%d/%m') for report in reports]
-    next_label = 'Siguiente semana'
+def _evaluate_forecast(values: list[Decimal], horizon_weeks: int, x_values: list[Decimal] | None = None) -> dict:
+    errors = []
+    baseline_errors = []
+    percentage_errors = []
+    for index in range(3, len(values)):
+        predicted, _, _ = _linear_forecast(
+            values[:index],
+            steps=1,
+            x_values=x_values[:index] if x_values else None,
+            future_x_values=[x_values[index]] if x_values else None,
+        )
+        actual = values[index]
+        if not predicted:
+            continue
+        error = abs(actual - predicted[0])
+        errors.append(error)
+        baseline_errors.append(abs(actual - values[index - 1]))
+        if actual:
+            percentage_errors.append(error / abs(actual) * Decimal('100'))
+
+    mae = _safe_div(sum(errors, ZERO), Decimal(len(errors))) if errors else ZERO
+    mape = _safe_div(sum(percentage_errors, ZERO), Decimal(len(percentage_errors))) if percentage_errors else None
+    baseline_mae = _safe_div(sum(baseline_errors, ZERO), Decimal(len(baseline_errors))) if baseline_errors else ZERO
+    skill = None if not errors or baseline_mae == 0 else (ONE - mae / baseline_mae) * Decimal('100')
+    sample_factor = min(ONE, Decimal(len(values)) / Decimal('8'))
+    error_factor = max(ZERO, ONE - _safe_div(mae, max(abs(_weighted_average(values)), ONE))) if errors else Decimal('0.35')
+    horizon_factor = ONE / (ONE + Decimal(max(horizon_weeks - 1, 0)) / Decimal('8'))
+    confidence = Decimal('100') * sample_factor * error_factor * horizon_factor
+    return {
+        'mae': _round(mae),
+        'mape': _round(mape, '0.1') if mape is not None else None,
+        'skill': _round(skill, '0.1') if skill is not None else None,
+        'backtests': len(errors),
+        'confidence': _round(confidence, '0.1'),
+    }
+
+
+def calcular_predicciones_mfg(limit: int = 104, horizon_weeks: int = 1) -> dict:
+    horizon_weeks = max(1, min(int(horizon_weeks or 1), 12))
+    reports_by_week = {}
+    for report in ReporteKPIProduccion.objects.order_by('-fecha_fin', '-fecha_generacion'):
+        week_start = report.fecha_fin - timedelta(days=report.fecha_fin.weekday())
+        if week_start not in reports_by_week:
+            reports_by_week[week_start] = report
+        if len(reports_by_week) >= limit:
+            break
+    weekly_reports = sorted(reports_by_week.items(), key=lambda item: item[0])
+    week_starts = [week for week, _ in weekly_reports]
+    reports = [report for _, report in weekly_reports]
+    report_dates = [report.fecha_fin for report in reports]
+    x_values = [Decimal((report_date - report_dates[0]).days) / Decimal('7') for report_date in report_dates] if report_dates else []
+    labels = [report_date.strftime('%d/%m/%y') for report_date in report_dates]
+    forecast_labels = [
+        (report_dates[-1] + timedelta(weeks=week)).strftime('%d/%m/%y')
+        for week in range(1, horizon_weeks + 1)
+    ] if report_dates else [f'Semana +{week}' for week in range(1, horizon_weeks + 1)]
+    future_x_values = [x_values[-1] + Decimal(week) for week in range(1, horizon_weeks + 1)] if x_values else []
 
     metric_config = [
-        ('oee', 'OEE esperado', '%', 'oee'),
-        ('tasa_rechazo', 'Rechazo esperado', '%', 'tasa_rechazo'),
-        ('cumplimiento_ordenes', 'Cumplimiento esperado', '%', 'cumplimiento_ordenes'),
-        ('utilizacion_recursos', 'Uso recursos esperado', '%', 'utilizacion_recursos'),
+        ('oee', 'Eficiencia global (OEE)', '%', 'oee', True),
+        ('disponibilidad', 'Disponibilidad', '%', 'oee', True),
+        ('rendimiento', 'Rendimiento', '%', 'oee', True),
+        ('calidad', 'Calidad', '%', 'oee', True),
+        ('unidades_totales', 'Produccion total', ' piezas', 'produccion', True),
+        ('tiempo_ciclo_promedio', 'Tiempo de ciclo', ' min/ud', 'tiempo_ciclo', False),
+        ('tasa_rechazo', 'Tasa de rechazo', '%', 'tasa_rechazo', False),
+        ('cumplimiento_ordenes', 'Cumplimiento de órdenes', '%', 'cumplimiento_ordenes', True),
+        ('variacion_costos', 'Variación de costos', ' $', 'variacion_costos_pct', False),
+        ('costo_real', 'Costo real', ' $', 'costo_real', False),
+        ('costo_planificado', 'Costo planificado', ' $', 'costo_planificado', False),
+        ('utilizacion_recursos', 'Uso de recursos', '%', 'utilizacion_recursos', False),
     ]
 
     predictions = []
     trend_charts = []
-    for field_name, label, unit, status_code in metric_config:
-        values = [_to_decimal(getattr(report, field_name)) for report in reports]
-        forecast, confidence, detail = _linear_forecast(values)
+    action_by_metric = {
+        'oee': 'Revisar paros, disponibilidad de maquinas y causas de perdida de rendimiento.',
+        'disponibilidad': 'Revisar paros y mantenimiento de los equipos con mayor tiempo detenido.',
+        'rendimiento': 'Comparar el tiempo real de ciclo con el estandar y revisar cambios de turno.',
+        'calidad': 'Revisar defectos recurrentes y confirmar acciones correctivas con Calidad.',
+        'unidades_totales': 'Comparar el volumen proyectado con pedidos, inventario y capacidad disponible.',
+        'tiempo_ciclo_promedio': 'Validar tiempos de preparacion, esperas y operaciones con mayor duracion.',
+        'tasa_rechazo': 'Identificar las causas de scrap mas frecuentes y revisar las ordenes afectadas.',
+        'cumplimiento_ordenes': 'Priorizar ordenes atrasadas y confirmar materiales y capacidad disponible.',
+        'variacion_costos': 'Comparar materiales y horas de recurso contra el costo presupuestado.',
+        'costo_real': 'Revisar las ordenes y recursos que concentran el mayor costo real.',
+        'costo_planificado': 'Confirmar que los reportes KPI incluyan costos planeados completos.',
+        'utilizacion_recursos': 'Comparar horas registradas contra capacidad y programa de produccion.',
+    }
+
+    def metric_value(report, field_name):
+        if field_name == 'unidades_totales':
+            return _to_decimal((report.detalle or {}).get('unidades_totales'))
+        return _to_decimal(getattr(report, field_name))
+
+    for field_name, label, unit, status_code, higher_is_better in metric_config:
+        values = [metric_value(report, field_name) for report in reports]
+        forecast_values, _, _ = _linear_forecast(values, steps=horizon_weeks, x_values=x_values, future_x_values=future_x_values)
         if len(values) < 3:
-            forecast = _weighted_average(values)
-            confidence = Decimal('45') if values else ZERO
-            detail = 'Promedio ponderado hasta reunir mas historial.'
-        forecast = _bounded_percent(forecast)
+            fallback = _weighted_average(values)
+            forecast_values = [fallback for _ in range(horizon_weeks)] if values else []
+        bounded = field_name in {'oee', 'disponibilidad', 'rendimiento', 'calidad', 'tasa_rechazo', 'cumplimiento_ordenes', 'utilizacion_recursos'}
+        nonnegative = bounded or field_name == 'unidades_totales'
+        if bounded:
+            forecast_values = [_bounded_percent(value) for value in forecast_values]
+        evaluation = _evaluate_forecast(values, horizon_weeks, x_values=x_values)
+        forecast = forecast_values[-1] if forecast_values else None
+        residual_scale = evaluation['mae'] if evaluation['backtests'] else ZERO
+        if not residual_scale and len(values) > 1:
+            residual_scale = _safe_div(sum((abs(values[i] - values[i - 1]) for i in range(1, len(values))), ZERO), Decimal(len(values) - 1))
+        margin = residual_scale * Decimal(str(horizon_weeks ** 0.5))
+        lower = (max(ZERO, forecast - margin) if nonnegative else forecast - margin) if forecast is not None else None
+        upper = forecast + margin if forecast is not None else None
+        if bounded and upper is not None:
+            upper = min(Decimal('100'), upper)
+
+        if forecast is None:
+            status = 'amarillo'
+        elif field_name in {'variacion_costos', 'costo_real', 'costo_planificado', 'unidades_totales'}:
+            status = 'amarillo'
+        elif field_name == 'tiempo_ciclo_promedio':
+            status = 'verde' if len(values) > 1 and forecast <= values[-1] else ('rojo' if forecast > (values[-1] * Decimal('1.10')) else 'amarillo')
+        elif field_name == 'utilizacion_recursos':
+            status = 'verde' if Decimal('70') <= forecast <= Decimal('95') else ('rojo' if forecast > Decimal('98') or forecast < Decimal('60') else 'amarillo')
+        elif higher_is_better:
+            status = _status_for_metric(status_code, forecast)
+        else:
+            status = 'verde' if forecast <= Decimal('5') else ('amarillo' if forecast <= Decimal('10') else 'rojo')
+
+        detail = 'Se necesitan al menos 3 periodos para estimar tendencia.' if len(values) < 3 else 'Tendencia lineal; contrastada con periodos historicos.'
         predictions.append({
             'code': field_name,
             'label': label,
-            'value': _round(forecast),
+            'value': _round(forecast) if forecast is not None else None,
+            'lower': _round(lower) if lower is not None else None,
+            'upper': _round(upper) if upper is not None else None,
             'unit': unit,
-            'confidence': _round(confidence, '0.1'),
-            'status': _status_for_metric(status_code, forecast),
+            'confidence': evaluation['confidence'],
+            'mae': evaluation['mae'],
+            'mape': evaluation['mape'],
+            'skill': evaluation['skill'],
+            'backtests': evaluation['backtests'],
+            'status': status,
             'detail': detail,
+            'action': action_by_metric[field_name],
+            'enough_data': len(values) >= 3,
+            'has_value': forecast is not None,
+            'has_skill': evaluation['skill'] is not None,
+            'has_mape': evaluation['mape'] is not None,
         })
+
         forecast_series = [None for _ in values]
-        if values:
-            forecast_series[-1] = _bounded_percent(values[-1])
-        forecast_series.append(forecast)
+        if values and forecast_values:
+            forecast_series[-1] = _float_or_none(values[-1])
+        forecast_series.extend([_float_or_none(value) for value in forecast_values])
         trend_charts.append({
             'code': field_name,
             'label': label,
             'unit': unit,
-            'labels': labels + [next_label],
-            'history': [_float_or_none(_bounded_percent(value)) for value in values] + [None],
-            'forecast': [_float_or_none(value) for value in forecast_series],
-            'confidence': _float_or_none(confidence),
-            'status': _status_for_metric(status_code, forecast),
+            'labels': labels + forecast_labels[:len(forecast_values)],
+            'history': [_float_or_none(value) for value in values] + [None for _ in forecast_values],
+            'forecast': forecast_series,
+            'lower': [None for _ in values] + [_float_or_none(max(ZERO, value - residual_scale * Decimal(str(week ** 0.5))) if nonnegative else value - residual_scale * Decimal(str(week ** 0.5))) for week, value in enumerate(forecast_values, start=1)],
+            'upper': [None for _ in values] + [_float_or_none(min(Decimal('100'), value + residual_scale * Decimal(str(week ** 0.5))) if bounded else value + residual_scale * Decimal(str(week ** 0.5))) for week, value in enumerate(forecast_values, start=1)],
+            'confidence': float(evaluation['confidence']),
+            'status': status,
+            'bounded': bounded,
         })
 
     alerts = []
+    improving = []
     for item in predictions:
+        if item['value'] is None:
+            continue
         if item['status'] == 'rojo':
-            alerts.append(f"ML anticipa riesgo en {item['label']}: {item['value']}{item['unit']}.")
+            alerts.append(f"Atencion: {item['label']} podria llegar a {item['value']}{item['unit']} en {horizon_weeks} semanas.")
+        elif len(reports) > 1:
+            start_value = metric_value(reports[0], item['code'])
+            end_value = metric_value(reports[-1], item['code'])
+            delta = end_value - start_value
+            if abs(delta) >= max(abs(start_value) * Decimal('0.10'), Decimal('1')):
+                direction = 'subio' if delta > 0 else 'bajo'
+                improving.append(f"{item['label']} {direction} {abs(_round(delta))}{item['unit']} entre el primer y ultimo periodo.")
+
+    if len(reports) < 3:
+        data_quality = 'Historial insuficiente: se necesitan al menos 3 semanas con reportes; 8 o mas mejoran la estabilidad.'
+    elif len(reports) < 8:
+        data_quality = f"Historial limitado: {len(reports)} semanas con reportes. La proyeccion es orientativa."
+    else:
+        data_quality = f"Historial de {len(reports)} semanas con reportes disponible."
+    explanation = alerts[:3] or improving[:3]
+    if not explanation:
+        explanation = ['No se detectan cambios relevantes con los datos disponibles. Revisa la precision y el rango de incertidumbre antes de planear.']
 
     return {
         'enabled': bool(reports),
         'samples': len(reports),
-        'method': 'Regresion lineal simple con respaldo de promedio ponderado',
+        'method': 'Tendencia lineal por fecha de cierre con proyeccion semanal y rango de incertidumbre; hasta 104 semanas',
+        'horizon_weeks': horizon_weeks,
         'predictions': predictions,
         'trend_charts': trend_charts,
         'alerts': alerts,
+        'explanation': explanation,
+        'data_quality': data_quality,
+        'backtest_periods': max(0, len(reports) - 3),
     }
-
 
 def preparar_dataset_ml_produccion(fecha_inicio=None, fecha_fin=None, limit: int = 20) -> dict:
     end_date = fecha_fin or timezone.localdate()
@@ -227,7 +377,6 @@ def preparar_dataset_ml_produccion(fecha_inicio=None, fecha_fin=None, limit: int
     total_input = ZERO
     total_consumed = ZERO
     total_real_cost = ZERO
-    total_planned_resource_cost = ZERO
 
     for order in orders:
         scraps = list(order.scraps_defectos.all())
@@ -248,7 +397,6 @@ def preparar_dataset_ml_produccion(fecha_inicio=None, fecha_fin=None, limit: int
         machine_hours = sum((_to_decimal(usage.horas_reales) for usage in usages if usage.tipo_recurso == RegistroUsoRecursoProduccion.TipoRecurso.MAQUINA), ZERO)
         operator_hours = sum((_to_decimal(usage.horas_reales) for usage in usages if usage.tipo_recurso == RegistroUsoRecursoProduccion.TipoRecurso.OPERADOR), ZERO)
         real_cost = sum((_to_decimal(usage.costo_total) for usage in usages), ZERO)
-        planned_resource_cost = real_cost
         scrap_rate = _safe_div(scrap_total, produced) * Decimal('100') if produced > 0 else ZERO
 
         total_produced += produced
@@ -256,7 +404,6 @@ def preparar_dataset_ml_produccion(fecha_inicio=None, fecha_fin=None, limit: int
         total_input += material_input
         total_consumed += material_consumed
         total_real_cost += real_cost
-        total_planned_resource_cost += planned_resource_cost
 
         rows.append({
             'folio': order.folio,
@@ -271,9 +418,9 @@ def preparar_dataset_ml_produccion(fecha_inicio=None, fecha_fin=None, limit: int
             'horas_maquina': _round(machine_hours),
             'horas_operador': _round(operator_hours),
             'costo_real': _round(real_cost),
-            'costo_planificado': _round(planned_resource_cost),
-            'target_scrap_futuro': _round(scrap_total),
-            'target_costo_futuro': _round(real_cost),
+            'costo_planificado': None,
+            'scrap_observado': _round(scrap_total),
+            'costo_observado': _round(real_cost),
         })
 
     summary = {
@@ -284,8 +431,8 @@ def preparar_dataset_ml_produccion(fecha_inicio=None, fecha_fin=None, limit: int
         'consumo_materiales': _round(total_consumed),
         'diferencia_materiales': _round(total_input - total_consumed),
         'costo_real': _round(total_real_cost),
-        'costo_planificado': _round(total_planned_resource_cost),
-        'variacion_costos': _round(total_real_cost - total_planned_resource_cost),
+        'costo_planificado': None,
+        'variacion_costos': None,
     }
 
     return {
@@ -301,7 +448,7 @@ def preparar_dataset_ml_produccion(fecha_inicio=None, fecha_fin=None, limit: int
             'horas_maquina',
             'horas_operador',
         ],
-        'targets': ['target_scrap_futuro', 'target_costo_futuro'],
+        'observed_outputs': ['scrap_observado', 'costo_observado'],
         'summary': summary,
         'rows': rows,
     }
