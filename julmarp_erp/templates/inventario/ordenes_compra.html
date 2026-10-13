@@ -22,6 +22,49 @@
     </ul>
     {% endif %}
 
+    <section class="entrada-card entrada-card-full" style="margin-bottom: 16px; border-top-color: #2f5598;">
+        <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start; flex-wrap:wrap;">
+            <div>
+                <h3>Recomendaciones de compra</h3>
+                <p style="margin:4px 0 0;">Demanda proyectada, punto de reorden y órdenes en tránsito para priorizar compras.</p>
+            </div>
+            <span class="inventario-stock-pill">{{ ml_compras.summary.por_reordenar }} materiales por reordenar</span>
+        </div>
+        <div class="tabla-wrap" style="margin-top: 12px;">
+            <table class="tabla-material">
+                <thead>
+                    <tr>
+                        <th>SKU</th>
+                        <th>Demanda 30 días</th>
+                        <th>Stock</th>
+                        <th>En tránsito</th>
+                        <th>Compra sugerida</th>
+                        <th>Proveedor recomendado</th>
+                        <th>Entrega</th>
+                        <th>Confianza</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in ml_compras.purchase_recommendations %}
+                    <tr>
+                        <td>{{ item.sku }}</td>
+                        <td>{{ item.demanda_proyectada }} {{ item.um }}</td>
+                        <td>{{ item.stock }}</td>
+                        <td>{{ item.en_orden }}</td>
+                        <td><strong>{{ item.faltante }} {{ item.um }}</strong></td>
+                        <td>{{ item.proveedor_recomendado }}{% if item.precio_recomendado != None %}<br><small>${{ item.precio_recomendado }} / {{ item.um }}</small>{% endif %}</td>
+                        <td>{{ item.lead_time_dias }} días</td>
+                        <td>{{ item.confidence_label }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="8">No hay recomendaciones de compra con el historial disponible.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <small style="display:block; margin-top:10px;">{{ ml_compras.method }} · Historial mínimo confiable: {{ ml_compras.min_samples }} periodos.</small>
+    </section>
+
     <div class="entrada-grid">
         <section class="entrada-card entrada-card-full">
             <h3>Nueva Orden de Compra</h3>

@@ -156,9 +156,12 @@ WSGI_APPLICATION = 'julmarp_erp.wsgi.application'
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
 DATABASE_URL = os.environ.get('DATABASE_URL')
+USE_SUPABASE_DB = os.environ.get('USE_SUPABASE_DB', 'false').strip().lower() in {
+    '1', 'true', 'yes', 'on'
+}
 
 DATABASES = {
-    'default': database_from_url(DATABASE_URL) if DATABASE_URL else {
+    'default': database_from_url(DATABASE_URL) if USE_SUPABASE_DB and DATABASE_URL else {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db.sqlite3',
     }

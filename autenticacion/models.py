@@ -1116,6 +1116,89 @@ class ReporteKPIProduccion(models.Model):
         ordering = ['-fecha_generacion']
 
 
+class CatalogoMetricaPredictiva(models.Model):
+    departamento = models.CharField('Departamento', max_length=40)
+    codigo = models.CharField('Código', max_length=80)
+    nombre = models.CharField('Nombre', max_length=150)
+    unidad = models.CharField('Unidad', max_length=30, blank=True)
+    objetivo = models.DecimalField('Objetivo', max_digits=16, decimal_places=4, null=True, blank=True)
+    umbral_amarillo = models.DecimalField('Umbral amarillo', max_digits=16, decimal_places=4, null=True, blank=True)
+    umbral_rojo = models.DecimalField('Umbral rojo', max_digits=16, decimal_places=4, null=True, blank=True)
+    mayor_es_mejor = models.BooleanField('Mayor es mejor', default=True)
+    modelo_recomendado = models.CharField('Modelo recomendado', max_length=100, default='Tendencia lineal')
+    accion_default = models.TextField('Acción por defecto', blank=True)
+    activo = models.BooleanField('Activo', default=True)
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Métrica predictiva'
+        verbose_name_plural = 'Catálogo de métricas predictivas'
+        ordering = ['departamento', 'nombre']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['departamento', 'codigo'],
+                name='unique_catalogo_metrica_predictiva',
+            )
+        ]
+
+
+class RegistroPrediccion(models.Model):
+    departamento = models.CharField('Departamento', max_length=40)
+    alcance = models.CharField('Alcance', max_length=20, default='GLOBAL')
+    segmento = models.CharField('Segmento', max_length=150, default='GLOBAL')
+    codigo_metrica = models.CharField('Código de métrica', max_length=80)
+    nombre_metrica = models.CharField('Nombre de métrica', max_length=150)
+    periodo_inicio = models.DateField('Periodo inicio')
+    periodo_fin = models.DateField('Periodo fin')
+    fecha_objetivo = models.DateField('Fecha objetivo', null=True, blank=True)
+    horizonte = models.PositiveSmallIntegerField('Horizonte', default=1)
+    modelo = models.CharField('Modelo', max_length=100)
+    version_modelo = models.CharField('Versión del modelo', max_length=40, default='1.0')
+    valor_actual = models.DecimalField('Valor actual', max_digits=16, decimal_places=4, null=True, blank=True)
+    valor_predicho = models.DecimalField('Valor predicho', max_digits=16, decimal_places=4, null=True, blank=True)
+    limite_inferior = models.DecimalField('Límite inferior', max_digits=16, decimal_places=4, null=True, blank=True)
+    limite_superior = models.DecimalField('Límite superior', max_digits=16, decimal_places=4, null=True, blank=True)
+    confianza = models.DecimalField('Confianza', max_digits=6, decimal_places=2, null=True, blank=True)
+    estado = models.CharField('Estado', max_length=20, default='amarillo')
+    accion_recomendada = models.TextField('Acción recomendada', blank=True)
+    resultado_real = models.DecimalField('Resultado real', max_digits=16, decimal_places=4, null=True, blank=True)
+    error_real = models.DecimalField('Error real', max_digits=16, decimal_places=4, null=True, blank=True)
+    fecha_evaluacion = models.DateTimeField('Fecha de evaluación', null=True, blank=True)
+    metadatos = models.JSONField('Metadatos', default=dict, blank=True)
+    creado_por = models.ForeignKey(
+        UsuarioERP,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='predicciones_creadas',
+    )
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Registro de predicción'
+        verbose_name_plural = 'Registros de predicciones'
+        ordering = ['-fecha_creacion']
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    'departamento',
+                    'alcance',
+                    'segmento',
+                    'codigo_metrica',
+                    'periodo_inicio',
+                    'periodo_fin',
+                    'fecha_objetivo',
+                    'horizonte',
+                    'modelo',
+                    'version_modelo',
+                ],
+                name='unique_registro_prediccion_periodo',
+            )
+        ]
+
+
 class CostoHoraMaquina(models.Model):
     linea_produccion = models.CharField('Línea de producción', max_length=120)
     maquina_nombre = models.CharField('Máquina / Equipo', max_length=150)
@@ -1148,6 +1231,59 @@ class CostoHoraMaquina(models.Model):
                 name='unique_linea_maquina_costo',
             )
         ]
+
+
+class RegistroParoMantenimiento(models.Model):
+    class Motivo(models.TextChoices):
+        FALLA = 'FALLA', 'Falla de equipo'
+        PREVENTIVO = 'PREVENTIVO', 'Mantenimiento preventivo'
+        SETUP = 'SETUP', 'Cambio / setup'
+        CALIDAD = 'CALIDAD', 'Incidencia de calidad'
+        MATERIAL = 'MATERIAL', 'Falta de material'
+        OPERATIVO = 'OPERATIVO', 'Paro operativo'
+        OTRO = 'OTRO', 'Otro'
+
+    class Severidad(models.TextChoices):
+        BAJA = 'BAJA', 'Baja'
+        MEDIA = 'MEDIA', 'Media'
+        ALTA = 'ALTA', 'Alta'
+        CRITICA = 'CRITICA', 'Crítica'
+
+    maquina = models.ForeignKey(
+        CostoHoraMaquina,
+        on_delete=models.PROTECT,
+        related_name='paros_mantenimiento',
+        verbose_name='Máquina / equipo',
+    )
+    orden = models.ForeignKey(
+        OrdenFabricacion,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='paros_mantenimiento',
+        verbose_name='Orden de fabricación',
+    )
+    fecha_paro = models.DateField('Fecha del paro')
+    horas_paro = models.DecimalField('Horas de paro', max_digits=8, decimal_places=2)
+    motivo = models.CharField('Motivo', max_length=15, choices=Motivo.choices, default=Motivo.OTRO)
+    severidad = models.CharField('Severidad', max_length=10, choices=Severidad.choices, default=Severidad.MEDIA)
+    causa = models.CharField('Causa', max_length=200)
+    acciones = models.TextField('Acciones realizadas', blank=True)
+    registrado_por = models.ForeignKey(
+        UsuarioERP,
+        on_delete=models.PROTECT,
+        related_name='paros_mantenimiento_registrados',
+    )
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.maquina.maquina_nombre} - {self.fecha_paro} ({self.horas_paro} h)"
+
+    class Meta:
+        verbose_name = 'Paro de mantenimiento'
+        verbose_name_plural = 'Paros de mantenimiento'
+        ordering = ['-fecha_paro', '-fecha_creacion']
 
 
 class CostoHoraOperador(models.Model):

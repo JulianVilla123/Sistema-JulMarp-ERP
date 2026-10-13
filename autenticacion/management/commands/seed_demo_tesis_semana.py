@@ -123,6 +123,18 @@ class Command(BaseCommand):
                 defaults={'nombre': nombre, 'descripcion': f'Almacén demo {nombre}', 'activo': True},
             )
 
+        for codigo, nombre in [
+            ('ALM-001', 'Almacen Materia Prima A'),
+            ('ALM-002', 'Almacen Materia Prima B'),
+            ('ALM-003', 'Almacen Componentes Electronicos'),
+            ('ALM-004', 'Almacen Empaque y Consumibles'),
+            ('ALM-005', 'Almacen Cuarentena y Retenido'),
+        ]:
+            almacenes[codigo], _ = Almacen.objects.get_or_create(
+                codigo=codigo,
+                defaults={'nombre': nombre, 'descripcion': f'Almacen demo {nombre}', 'activo': True},
+            )
+
         materiales = {}
         for sku, nombre, um in [
             ('MAT-0001', 'Lamina galvanizada 1mm', 'PZA'),
@@ -216,11 +228,11 @@ class Command(BaseCommand):
         count = 0
 
         entries = [
-            (dates[0], 'Aceros Industriales del Norte', 'MAT-0001', 'L-260629-A', 'MP', 520),
-            (dates[1], 'Fasteners Plus', 'MAT-0008', 'L-260630-F', 'MP', 7200),
-            (dates[2], 'Arneses Integrados SA', 'MAT-0014', 'L-260701-A', 'QA', 360),
-            (dates[3], 'PCB Solutions México', 'MAT-0036', 'L-260702-PCB', 'QA', 260),
-            (dates[4], 'Polímeros del Bajío', 'MAT-0004', 'L-260703-P', 'MP', 210),
+            (dates[0], 'Aceros Industriales del Norte', 'MAT-0001', 'L-260629-A', 'ALM-001', 520),
+            (dates[1], 'Fasteners Plus', 'MAT-0008', 'L-260630-F', 'ALM-001', 7200),
+            (dates[2], 'Arneses Integrados SA', 'MAT-0014', 'L-260701-A', 'ALM-005', 360),
+            (dates[3], 'PCB Solutions México', 'MAT-0036', 'L-260702-PCB', 'ALM-005', 260),
+            (dates[4], 'Polímeros del Bajío', 'MAT-0004', 'L-260703-P', 'ALM-001', 210),
         ]
         for idx, (fecha, proveedor, sku, lote, almacen, qty) in enumerate(entries, start=1):
             recepcion, created = RecepcionMaterial.objects.get_or_create(
@@ -241,7 +253,7 @@ class Command(BaseCommand):
                     'chk_certificado': True,
                     'chk_estado_fisico': True,
                     'chk_foto': True,
-                    'chk_calidad': almacen != 'QA',
+                    'chk_calidad': almacen != 'ALM-005',
                     'observaciones': self.marker,
                     'accion_recomendada': RecepcionMaterial.AccionRecomendada.ACEPTAR_TODO,
                     'estado': RecepcionMaterial.EstadoRecepcion.ENVIADA,
@@ -284,7 +296,7 @@ class Command(BaseCommand):
             if created:
                 SalidaLineaDetalle.objects.create(
                     salida=salida,
-                    almacen_origen=almacenes['MP'],
+                    almacen_origen=almacenes['ALM-001'],
                     material=materiales[sku],
                     sku=sku,
                     descripcion=materiales[sku].nombre,
@@ -292,7 +304,7 @@ class Command(BaseCommand):
                     cantidad_enviada=Decimal(str(qty)),
                     lote=lote,
                 )
-                self.remove_stock(materiales[sku], almacenes['MP'], lote, qty)
+                self.remove_stock(materiales[sku], almacenes['ALM-001'], lote, qty)
                 count += 1
 
         for idx, (sku, lote, qty) in enumerate([('MAT-0014', 'L-260701-A', 320), ('MAT-0036', 'L-260702-PCB', 230)], start=1):
@@ -301,8 +313,8 @@ class Command(BaseCommand):
                 defaults={
                     'fecha_transferencia': dates[4],
                     'hora_transferencia': time(15, 30),
-                    'almacen_origen': almacenes['QA'],
-                    'almacen_destino': almacenes['MP'],
+                    'almacen_origen': almacenes['ALM-005'],
+                    'almacen_destino': almacenes['ALM-001'],
                     'motivo': self.marker,
                     'creado_por': user,
                 },
@@ -317,8 +329,8 @@ class Command(BaseCommand):
                     cantidad_transferida=Decimal(str(qty)),
                     lote=lote,
                 )
-                self.remove_stock(materiales[sku], almacenes['QA'], lote, qty)
-                self.add_stock(materiales[sku], almacenes['MP'], lote, qty)
+                self.remove_stock(materiales[sku], almacenes['ALM-005'], lote, qty)
+                self.add_stock(materiales[sku], almacenes['ALM-001'], lote, qty)
                 count += 1
 
         self.refresh_material_stock()

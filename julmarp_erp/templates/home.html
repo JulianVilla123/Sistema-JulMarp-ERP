@@ -640,6 +640,47 @@
             </article>
         </section>
 
+        <section class="dashboard-card" style="margin-top:16px;">
+            <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start; flex-wrap:wrap;">
+                <div>
+                    <h3>Analítica predictiva de Calidad</h3>
+                    <p class="chart-subtitle">Riesgo por producto, línea y proveedor; causas recurrentes y posible reclamo.</p>
+                </div>
+                <span class="activity-tag {% if ml_calidad.data_quality == 'alta' %}transferencia{% elif ml_calidad.data_quality == 'media' %}entrada{% else %}salida_linea{% endif %}">{{ ml_calidad.data_quality|title|default:'Sin datos' }}</span>
+            </div>
+            <div class="dashboard-grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin:14px 0;">
+                <div class="dashboard-card" style="padding:12px;"><small>Tasa defecto actual</small><strong style="display:block; font-size:1.35rem;">{% if ml_calidad.summary.tasa_defecto != None %}{{ ml_calidad.summary.tasa_defecto }}%{% else %}N/D{% endif %}</strong></div>
+                <div class="dashboard-card" style="padding:12px;"><small>Tasa prevista</small><strong style="display:block; font-size:1.35rem;">{% if ml_calidad.summary.tasa_defecto_prevista != None %}{{ ml_calidad.summary.tasa_defecto_prevista }}%{% else %}N/D{% endif %}</strong></div>
+                <div class="dashboard-card" style="padding:12px;"><small>Causas recurrentes</small><strong style="display:block; font-size:1.35rem;">{{ ml_calidad.summary.causas_recurrentes }}</strong></div>
+                <div class="dashboard-card" style="padding:12px;"><small>Riesgo reclamo</small><strong style="display:block; font-size:1.35rem;">{% if ml_calidad.claim_risk.probability != None %}{{ ml_calidad.claim_risk.probability }}%{% else %}N/D{% endif %}</strong></div>
+            </div>
+            <div class="dashboard-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:14px;">
+                <div>
+                    <h4>Alertas prioritarias</h4>
+                    <ul class="recent-activity-list">
+                        {% for alert in ml_calidad.alerts|slice:':5' %}
+                        <li><div><p>{{ alert.label }} — {{ alert.value }}</p><small>{{ alert.message }}</small></div><span class="activity-tag {% if alert.status == 'rojo' %}salida_linea{% else %}entrada{% endif %}">{{ alert.status|title }}</span></li>
+                        {% empty %}
+                        <li><div><p>Sin alertas predictivas</p><small>Se requiere más historial para detectar tendencias.</small></div><span class="activity-tag transferencia">OK</span></li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                <div>
+                    <h4>Causas recurrentes</h4>
+                    <div style="overflow:auto;"><table class="tabla-material"><thead><tr><th>Causa</th><th>Defectos</th><th>Recurrencia</th><th>Severidad</th></tr></thead><tbody>
+                    {% for cause in ml_calidad.causes|slice:':5' %}<tr><td>{{ cause.causa }}</td><td>{{ cause.defectos }}</td><td>{{ cause.recurrencia_periodos }} periodos</td><td>{{ cause.severidad }}</td></tr>{% empty %}<tr><td colspan="4">Sin defectos registrados en el periodo.</td></tr>{% endfor %}
+                    </tbody></table></div>
+                </div>
+            </div>
+            <div style="overflow:auto; margin-top:14px;"><table class="tabla-material"><thead><tr><th>Segmento</th><th>Riesgo defecto</th><th>Tendencia</th><th>Causa probable</th><th>Confianza</th><th>Acción</th></tr></thead><tbody>
+            {% for item in ml_calidad.segment_predictions|slice:':8' %}<tr><td>{{ item.dimension|title }} · {{ item.segmento }}</td><td>{{ item.probabilidad_defecto|default:'N/D' }}%</td><td>{{ item.tendencia }}</td><td>{{ item.causa_probable }}</td><td>{{ item.confianza_label }}</td><td>{{ item.accion }}</td></tr>{% empty %}<tr><td colspan="6">Sin segmentos con datos suficientes.</td></tr>{% endfor %}
+            </tbody></table></div>
+            <div style="overflow:auto; margin-top:14px;"><table class="tabla-material"><thead><tr><th>Contribuyente</th><th>Tipo</th><th>Contribución</th><th>Severidad</th><th>Acción sugerida</th></tr></thead><tbody>
+            {% for item in ml_calidad.contributors|slice:':6' %}<tr><td>{{ item.nombre }}</td><td>{{ item.tipo }}</td><td>{{ item.contribucion }}%</td><td>{{ item.severidad }}</td><td>{{ item.accion }}</td></tr>{% empty %}<tr><td colspan="5">Sin contribuyentes identificados.</td></tr>{% endfor %}
+            </tbody></table></div>
+            <small style="display:block; margin-top:10px;">{{ ml_calidad.method }} · Confianza alta solo con al menos 8 periodos.</small>
+        </section>
+
         <section class="dashboard-grid">
             <article class="dashboard-card">
                 <h3>Actividad reciente SQA</h3>

@@ -44,6 +44,14 @@
     }
     .resource-kpi strong { display:block; font-size:1.7rem; color:#1f3e67; }
     .resource-kpi span { font-size:.76rem; text-transform:uppercase; letter-spacing:.05em; color:#7a90ad; }
+    .predictive-summary { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin-bottom:16px; }
+    .predictive-summary div { background:#f8fbff; border:1px solid #dce7f5; border-radius:10px; padding:12px; }
+    .predictive-summary strong { display:block; color:#173f70; font-size:1.25rem; }
+    .predictive-summary span { color:#7186a1; font-size:.76rem; }
+    .risk-rojo { color:#b42318; font-weight:700; }
+    .risk-amarillo { color:#a15c00; font-weight:700; }
+    .risk-verde { color:#087443; font-weight:700; }
+    .table-note { color:#7186a1; font-size:.82rem; margin-top:0; }
     @media (max-width: 960px) { .resource-grid { grid-template-columns: 1fr; } }
 </style>
 {% endblock %}
@@ -68,6 +76,39 @@
             <article class="resource-kpi"><strong>{{ costos_maquina|length }}</strong><span>Máquinas con costo</span></article>
             <article class="resource-kpi"><strong>{{ costos_operador|length }}</strong><span>Operadores con costo</span></article>
             <article class="resource-kpi"><strong>{{ usos_recursos|length }}</strong><span>Usos registrados</span></article>
+            <article class="resource-kpi"><strong>{{ paros_mantenimiento|length }}</strong><span>Paros registrados</span></article>
+        </section>
+
+        <section class="resource-card">
+            <h3>Predicción de mantenimiento</h3>
+            <p class="table-note">Riesgo estimado con bitácora de paros, horas de uso y defectos asociados a la línea. Calidad de datos: <strong>{{ ml_mantenimiento.data_quality|title }}</strong>.</p>
+            <div class="predictive-summary">
+                <div><strong>{{ ml_mantenimiento.summary.riesgo_alto }}</strong><span>Máquinas con atención</span></div>
+                <div><strong>{{ ml_mantenimiento.summary.horas_paro }} h</strong><span>Paro histórico</span></div>
+                <div><strong>{{ ml_mantenimiento.summary.horas_maquina }} h</strong><span>Uso de máquina</span></div>
+                <div><strong>{{ ml_mantenimiento.summary.proxima_revision|date:'d/m/Y'|default:'Sin fecha' }}</strong><span>Próxima revisión</span></div>
+            </div>
+            <div class="tabla-wrap">
+                <table class="tabla-material">
+                    <thead><tr><th>Máquina</th><th>Paros / h</th><th>Uso h</th><th>Defectos</th><th>Paro previsto</th><th>Riesgo</th><th>Confianza</th><th>Acción</th></tr></thead>
+                    <tbody>
+                        {% for item in ml_mantenimiento.risks %}
+                        <tr>
+                            <td>{{ item.linea }} · {{ item.maquina }}</td>
+                            <td>{{ item.paros }} / {{ item.horas_paro }}</td>
+                            <td>{{ item.horas_maquina }}</td>
+                            <td>{{ item.defectos_maquina }}</td>
+                            <td>{{ item.horas_paro_previstas }} h</td>
+                            <td class="risk-{{ item.display_status }}">{{ item.riesgo_score }}% · {{ item.display_status|title }}</td>
+                            <td>{{ item.confianza_label }}</td>
+                            <td>{{ item.accion }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="8">Registra una máquina activa para habilitar el análisis predictivo.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
         </section>
 
         <section class="resource-grid">
@@ -195,6 +236,40 @@
             </form>
         </section>
 
+        <section class="resource-card">
+            <h3>Registrar paro o mantenimiento</h3>
+            <p class="table-note">Captura cada paro para que el modelo pueda detectar recurrencia y anticipar la próxima revisión.</p>
+            <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="resource_action" value="registrar_paro">
+                <div class="resource-form-grid">
+                    <label>
+                        Máquina / Equipo
+                        <select name="costo_maquina_id" required>
+                            <option value="">Selecciona máquina</option>
+                            {% for maquina in costos_maquina %}
+                            {% if maquina.activo %}<option value="{{ maquina.id }}">{{ maquina.linea_produccion }} | {{ maquina.maquina_nombre }}</option>{% endif %}
+                            {% endfor %}
+                        </select>
+                    </label>
+                    <label>
+                        Orden relacionada (opcional)
+                        <select name="orden_id">
+                            <option value="">Sin orden</option>
+                            {% for orden in ordenes_catalogo %}<option value="{{ orden.id }}">{{ orden.folio }} — {{ orden.bom.producto }}</option>{% endfor %}
+                        </select>
+                    </label>
+                    <label>Fecha del paro<input type="date" name="fecha_paro" value="{{ ml_mantenimiento.fecha_fin|date:'Y-m-d' }}" required></label>
+                    <label>Horas de paro<input type="number" name="horas_paro" step="0.01" min="0.01" required></label>
+                    <label>Motivo<select name="motivo_paro" required>{% for value,label in motivos_paro %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></label>
+                    <label>Severidad<select name="severidad_paro" required>{% for value,label in severidades_paro %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></label>
+                    <label class="full">Causa<input type="text" name="causa_paro" maxlength="200" placeholder="Ej. sensor descalibrado, desgaste o ajuste de formato" required></label>
+                    <label class="full">Acciones realizadas<textarea name="acciones_paro" placeholder="Diagnóstico, refacción, ajuste o acción preventiva."></textarea></label>
+                </div>
+                <div class="resource-actions"><button type="submit" class="btn btn-primary">Registrar paro</button></div>
+            </form>
+        </section>
+
         <section class="resource-grid">
             <article class="resource-card">
                 <h3>Catálogo costo máquina</h3>
@@ -255,6 +330,30 @@
                         </tr>
                         {% empty %}
                         <tr><td colspan="6">Sin usos de recursos registrados.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="resource-card">
+            <h3>Bitácora reciente de paros y mantenimiento</h3>
+            <div class="tabla-wrap">
+                <table class="tabla-material">
+                    <thead><tr><th>Fecha</th><th>Máquina</th><th>OF</th><th>Motivo</th><th>Severidad</th><th>Horas</th><th>Causa</th></tr></thead>
+                    <tbody>
+                        {% for paro in paros_mantenimiento %}
+                        <tr>
+                            <td>{{ paro.fecha_paro|date:'d/m/Y' }}</td>
+                            <td>{{ paro.maquina.maquina_nombre }}</td>
+                            <td>{{ paro.orden.folio|default:'—' }}</td>
+                            <td>{{ paro.get_motivo_display }}</td>
+                            <td class="risk-{% if paro.severidad == 'CRITICA' or paro.severidad == 'ALTA' %}rojo{% elif paro.severidad == 'MEDIA' %}amarillo{% else %}verde{% endif %}">{{ paro.get_severidad_display }}</td>
+                            <td>{{ paro.horas_paro }}</td>
+                            <td>{{ paro.causa }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="7">Sin paros registrados. La bitácora se habilita desde el formulario anterior.</td></tr>
                         {% endfor %}
                     </tbody>
                 </table>

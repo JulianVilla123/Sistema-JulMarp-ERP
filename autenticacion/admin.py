@@ -28,6 +28,7 @@ from .models import (
     ReporteKPIProduccion,
     ReporteFinanciero,
     RegistroScrapDefecto,
+    RegistroParoMantenimiento,
     RegistroUsoRecursoProduccion,
     SalidaLinea,
     SalidaLineaDetalle,
@@ -164,6 +165,13 @@ class CostoHoraOperadorAdmin(admin.ModelAdmin):
     list_display = ('operador', 'nomina_hora', 'costo_hora_real', 'activo', 'actualizado_por', 'fecha_actualizacion')
     search_fields = ('operador__username', 'operador__first_name', 'operador__last_name', 'notas')
     list_filter = ('activo', 'operador__departamento')
+
+
+@admin.register(RegistroParoMantenimiento)
+class RegistroParoMantenimientoAdmin(admin.ModelAdmin):
+    list_display = ('fecha_paro', 'maquina', 'horas_paro', 'motivo', 'severidad', 'registrado_por')
+    search_fields = ('maquina__maquina_nombre', 'maquina__linea_produccion', 'causa', 'acciones')
+    list_filter = ('motivo', 'severidad', 'fecha_paro')
 
 
 @admin.register(RegistroUsoRecursoProduccion)

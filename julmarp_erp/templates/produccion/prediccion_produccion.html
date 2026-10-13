@@ -85,6 +85,7 @@
     }
     .status-chip.verde { background: #e7f8ee; color: #187d43; }
     .status-chip.amarillo { background: #fff7e5; color: #996300; }
+    .status-chip.rojo { background: #fde8e8; color: #b42318; }
     .ml-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
@@ -153,6 +154,47 @@
     .ml-table th, .ml-table td { padding: 10px 12px; border-bottom: 1px solid #e8edf4; text-align: left; white-space: nowrap; }
     .ml-table th { color: #52657e; font-size: .76rem; text-transform: uppercase; }
     .ml-table td { color: #26384d; }
+    .forecast-headline { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .forecast-headline h2 { margin-bottom: 0; }
+    .forecast-subtitle { margin-top: 8px !important; }
+    .forecast-confidence { font-size: .78rem; color: #52657e; font-weight: 700; }
+    .forecast-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
+    .forecast-summary-item { border: 1px solid #e2e9f2; border-radius: 12px; padding: 14px; background: #f9fbff; }
+    .forecast-summary-item span { display: block; color: #65768d; font-size: .75rem; font-weight: 800; text-transform: uppercase; }
+    .forecast-summary-item strong { display: block; color: #163a66; font-size: 1.35rem; margin-top: 5px; }
+    .forecast-main { border: 1px solid #e2e9f2; border-radius: 12px; padding: 16px; background: #fff; }
+    .forecast-main-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+    .forecast-main-head label { color: #52657e; font-size: .82rem; font-weight: 800; }
+    .forecast-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+    .forecast-metric-picker { position: relative; display: inline-block; margin-top: 8px; z-index: 5; }
+    .forecast-metric-picker summary { cursor: pointer; list-style: none; border: 1px solid #cbd9e8; border-radius: 8px; padding: 8px 12px; background: #f8fbff; color: #1255a7; font-size: .8rem; font-weight: 800; }
+    .forecast-metric-picker summary::-webkit-details-marker { display: none; }
+    .forecast-metric-picker summary::after { content: '▾'; margin-left: 10px; color: #52657e; }
+    .forecast-metric-picker[open] summary::after { content: '▴'; }
+    .forecast-metric-list { position: absolute; top: calc(100% + 5px); left: 0; display: grid; grid-template-columns: repeat(2, minmax(180px, 1fr)); gap: 5px; min-width: 390px; max-height: 260px; overflow-y: auto; padding: 9px; border: 1px solid #d8e3ef; border-radius: 10px; background: #ffffff; box-shadow: 0 12px 25px rgba(15, 23, 42, .16); }
+    .forecast-metric-option { display: inline-flex; align-items: center; gap: 5px; border: 1px solid #d8e3ef; border-radius: 999px; padding: 6px 9px; background: #f8fbff; color: #52657e; font-size: .76rem; font-weight: 800; cursor: pointer; }
+    .forecast-metric-option:has(input:checked) { border-color: #1255a7; background: #edf5ff; color: #1255a7; }
+    .forecast-metric-option input { accent-color: #1255a7; }
+    .forecast-mode { display: inline-flex; align-items: center; gap: 6px; color: #52657e; font-size: .76rem; font-weight: 700; }
+    .forecast-mode input { accent-color: #1255a7; }
+    .forecast-main-chart { height: 300px; }
+    .forecast-main-chart canvas { width: 100% !important; height: 300px !important; }
+    .forecast-alerts { margin-top: 16px; }
+    .forecast-alerts h3 { margin: 0 0 10px; color: #163a66; font-size: 1rem; }
+    .forecast-alert { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 9px; background: #f9fbff; margin-bottom: 8px; }
+    .forecast-alert.rojo { border-left: 4px solid #c53030; }
+    .forecast-alert.amarillo { border-left: 4px solid #d28a0f; }
+    .forecast-alert.verde { border-left: 4px solid #159947; }
+    .forecast-alert-icon { font-size: 1rem; }
+    .forecast-alert strong { color: #26384d; font-size: .9rem; }
+    .forecast-alert small { display: block; color: #65768d; margin-top: 2px; }
+    .forecast-alert-value { color: #163a66; font-weight: 800; white-space: nowrap; }
+    .forecast-empty { color: #52657e; font-size: .9rem; }
+    .forecast-details { margin-top: 16px; border-top: 1px solid #e8edf4; padding-top: 12px; }
+    .forecast-details summary { cursor: pointer; color: #49607d; font-weight: 800; font-size: .86rem; }
+    .forecast-details p { margin-top: 10px; font-size: .84rem; }
+    .ml-card .ml-meta { min-height: 0; }
+    @media (max-width: 760px) { .forecast-summary { grid-template-columns: 1fr; } .forecast-main-head { align-items: flex-start; flex-direction: column; } .forecast-alert { grid-template-columns: auto 1fr; } .forecast-alert-value { grid-column: 2; } }
     @media (max-width: 760px) {
         .ml-panel-head { flex-direction: column; }
         .ml-panel h2 { font-size: 1.55rem; }
@@ -195,40 +237,115 @@
     <section class="ml-panel">
         <div class="ml-panel-head">
             <div>
-                <h2>Pronostico de produccion</h2>
-                <p>{{ ml_forecast.method }}{% if ml_forecast.samples %} | {{ ml_forecast.samples }} muestras{% endif %} | Horizonte {{ ml_forecast.horizon_weeks }} semana{% if ml_forecast.horizon_weeks != 1 %}s{% endif %}</p>
+                <div class="forecast-headline">
+                    <h2>Pronostico de produccion</h2>
+                    <span class="status-chip {% if ml_forecast.samples >= 8 %}verde{% else %}amarillo{% endif %}">
+                        {% if ml_forecast.samples >= 8 %}Confianza alta{% elif ml_forecast.samples >= 4 %}Confianza media{% else %}Confianza baja{% endif %}
+                    </span>
+                </div>
+                <p class="forecast-subtitle">{{ ml_forecast.samples }} muestras · Próximas {{ ml_forecast.horizon_weeks }} semana{% if ml_forecast.horizon_weeks != 1 %}s{% endif %}</p>
             </div>
             <span class="status-chip {% if ml_forecast.enabled %}verde{% else %}amarillo{% endif %}">
                 {% if ml_forecast.enabled %}Activo{% else %}Sin historial{% endif %}
             </span>
         </div>
-        <div class="ml-explanation">
-            <h3>Resumen del analisis</h3>
-            <p>{{ ml_forecast.data_quality }} Se usa el reporte mas reciente de cada semana y se conserva su fecha de cierre. Si un reporte resume varios dias, sus valores representan ese rango; procura comparar periodos similares. La confianza baja cuando hay poco historial, mucho error o un horizonte largo.</p>
-            <p>Validacion retrospectiva: {{ ml_forecast.backtest_periods }} periodos reservados para comparar pronostico y resultado real.</p>
-            <ul>
-                {% for insight in ml_forecast.explanation %}<li>{{ insight }}</li>{% endfor %}
-            </ul>
+        <div class="forecast-summary">
+            <div class="forecast-summary-item"><span>Producción esperada</span><strong>{% for item in ml_forecast.predictions %}{% if item.code == 'unidades_totales' and item.forecast_reliable %}{{ item.value }}{{ item.unit }}{% endif %}{% endfor %}</strong></div>
+            <div class="forecast-summary-item"><span>Riesgo principal</span><strong>{% if ml_forecast.alerts %}{{ ml_forecast.alerts.0.label }}{% else %}Sin alertas{% endif %}</strong></div>
+            <div class="forecast-summary-item"><span>Calidad del dato</span><strong>{% if ml_forecast.samples >= 8 %}Alta{% elif ml_forecast.samples >= 4 %}Media{% else %}Baja{% endif %}</strong></div>
+        </div>
+        <div class="forecast-main">
+            <div class="forecast-main-head">
+                <div>
+                    <strong>Comparar tendencias</strong>
+                    <details class="forecast-metric-picker">
+                        <summary>Seleccionar métricas <span id="forecast-selected-count">1 seleccionada</span></summary>
+                        <div id="forecast-metric-list" class="forecast-metric-list">
+                            {% for item in ml_forecast.predictions %}
+                            <label class="forecast-metric-option">
+                                <input type="checkbox" value="{{ item.code }}" {% if forloop.first %}checked{% endif %}>
+                                {{ item.label }}
+                            </label>
+                            {% endfor %}
+                        </div>
+                    </details>
+                </div>
+                <div class="forecast-controls">
+                    <label class="forecast-mode"><input type="checkbox" id="normalize-metrics" checked> Base 100</label>
+                    <span class="forecast-confidence">Activa o desactiva métricas</span>
+                </div>
+            </div>
+            <div class="forecast-main-chart"><canvas id="chart-ml-main"></canvas></div>
+        </div>
+        <div class="forecast-alerts">
+            <h3>Alertas principales</h3>
+            {% for alert in ml_forecast.alerts|slice:':3' %}
+            <div class="forecast-alert {{ alert.status }}">
+                <span class="forecast-alert-icon">{% if alert.status == 'rojo' %}🔴{% elif alert.status == 'amarillo' %}🟡{% else %}🟢{% endif %}</span>
+                <div><strong>{{ alert.label }}</strong><small>{{ alert.message }}</small></div>
+                <span class="forecast-alert-value">{{ alert.value }}</span>
+            </div>
+            {% empty %}<p class="forecast-empty">No hay alertas críticas para el horizonte seleccionado.</p>{% endfor %}
+        </div>
+        <details class="forecast-details">
+            <summary>Ver detalles técnicos del modelo</summary>
+            <p>{{ ml_forecast.data_quality }} · {{ ml_forecast.backtest_periods }} validaciones retrospectivas.</p>
+            <p>{{ ml_forecast.method }}</p>
+        </details>
+    </section>
+
+    <section class="ml-panel">
+        <div class="ml-panel-head">
+            <div>
+                <h2>Pronóstico por segmento</h2>
+                <p>Detecta dónde se concentra la variación: línea, producto o turno.</p>
+            </div>
+            <span class="status-chip {% if ml_segmented.data_quality == 'alta' %}verde{% else %}amarillo{% endif %}">
+                {% if ml_segmented.enabled %}{{ ml_segmented.segments|length }} segmentos{% else %}Sin datos{% endif %}
+            </span>
+        </div>
+        {% if ml_segmented.segments %}
+        <div class="ml-table-wrap">
+            <table class="ml-table">
+                <thead><tr><th>Dimensión</th><th>Segmento</th><th>Muestras</th><th>Actual</th><th>Proyección</th><th>Cambio</th><th>Confianza</th><th>Estado</th></tr></thead>
+                <tbody>
+                    {% for item in ml_segmented.segments %}
+                    <tr>
+                        <td>{{ item.dimension }}</td>
+                        <td>{{ item.segmento }}</td>
+                        <td>{{ item.muestras }}</td>
+                        <td>{{ item.valor_actual }} piezas</td>
+                        <td>{% if item.valor_predicho != None %}{{ item.valor_predicho }} piezas{% else %}Sin dato{% endif %}</td>
+                        <td>{% if item.cambio != None %}{{ item.cambio }} piezas{% else %}—{% endif %}</td>
+                        <td>{{ item.confianza_label }}</td>
+                        <td><span class="status-chip {{ item.estado }}">{{ item.estado }}</span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="predict-note">Aún no hay suficientes órdenes completadas para separar el pronóstico por segmento.</p>
+        {% endif %}
+    </section>
+
+    <section class="ml-panel">
+        <div class="ml-panel-head">
+            <div><h2>Indicadores principales</h2><p>Estado actual y señal proyectada de los KPI operativos.</p></div>
         </div>
         <div class="ml-grid">
             {% for item in ml_forecast.predictions %}
-            <article class="ml-card {{ item.status }}">
+            {% if item.code == 'oee' or item.code == 'disponibilidad' or item.code == 'rendimiento' or item.code == 'calidad' %}
+            <article class="ml-card {{ item.display_status }}">
                 <p>{{ item.label }}</p>
-                <div class="ml-value">{% if item.has_value %}{{ item.value }}{{ item.unit }}{% else %}Sin datos{% endif %}</div>
+                <div class="ml-value">{% if item.forecast_reliable %}{{ item.value }}{{ item.unit }}{% else %}Datos insuficientes{% endif %}</div>
                 <div class="ml-meta">
-                    Confianza {{ item.confidence }}% | {{ item.detail }}
-                    {% if item.backtests %}<br>Error medio: {{ item.mae }}{{ item.unit }} en {{ item.backtests }} pruebas historicas.
-                    {% if item.has_mape %}<br>Error porcentual medio: {{ item.mape }}%.{% endif %}
-                    {% if item.has_skill %}<br>{% if item.skill >= 0 %}Mejora{% else %}Rinde por debajo{% endif %} {{ item.skill }}% frente a usar el ultimo dato como pronostico.{% endif %}{% endif %}
+                    Actual: {{ item.latest_value }}{{ item.unit }} · Confianza: {{ item.confidence_label }}
                 </div>
-                {% if item.enough_data %}
-                <div class="ml-range">Rango estimado: {{ item.lower }}{{ item.unit }} a {{ item.upper }}{{ item.unit }}</div>
-                {% endif %}
-                <div class="ml-range"><strong>Siguiente paso:</strong> {{ item.action }}</div>
-                <div class="ml-chart-stage">
-                    <canvas id="chart-ml-{{ item.code }}"></canvas>
-                </div>
+                {% if item.forecast_reliable %}<div class="ml-range">Proyección: {{ item.value }}{{ item.unit }} · Rango: {{ item.lower }}–{{ item.upper }}{{ item.unit }}</div>{% else %}<div class="ml-range">Se requieren al menos 4 periodos para proyectar.</div>{% endif %}
+                <div class="ml-range"><strong>Acción:</strong> {{ item.action }}</div>
             </article>
+            {% endif %}
             {% empty %}
             <article class="ml-card amarillo">
                 <p>Entrenamiento pendiente</p>
@@ -297,57 +414,74 @@ document.addEventListener('DOMContentLoaded', function () {
     const mlTrendNode = document.getElementById('mfg-ml-trend-data');
     const mlTrendData = mlTrendNode ? JSON.parse(mlTrendNode.textContent || '[]') : [];
 
-    mlTrendData.forEach(function (item) {
-        const ctx = document.getElementById('chart-ml-' + item.code);
-        if (!ctx) return;
-        const accent = statusColors[item.status] || '#1255a7';
-        new Chart(ctx, {
+    let mainChart;
+    const palette = ['#1255a7', '#159947', '#c53030', '#7c3aed', '#d97706', '#0891b2', '#be185d', '#475569'];
+    const objectives = { oee: 85, disponibilidad: 90, rendimiento: 85, calidad: 98 };
+    function renderComparison(codes, normalized) {
+        const selectedItems = mlTrendData.filter(function (entry) { return codes.indexOf(entry.code) !== -1; });
+        const ctx = document.getElementById('chart-ml-main');
+        if (!ctx || !selectedItems.length) return;
+        if (mainChart) mainChart.destroy();
+        const labels = selectedItems[0].labels || [];
+        const datasets = [];
+        selectedItems.forEach(function (item, index) {
+            const color = palette[index % palette.length];
+            const historyBase = (item.history || []).find(function (value) { return value !== null && value !== undefined && value !== 0; }) || 1;
+            const convert = function (value) {
+                if (value === null || value === undefined) return null;
+                return normalized ? (value / historyBase) * 100 : value;
+            };
+            const history = (item.history || []).map(convert);
+            const forecast = (item.forecast || []).map(convert);
+            const rawHistory = item.history || [];
+            const rawForecast = item.forecast || [];
+            datasets.push({
+                label: item.label + ' · histórico',
+                data: history,
+                rawValues: rawHistory,
+                borderColor: color,
+                backgroundColor: 'transparent',
+                pointBackgroundColor: color,
+                pointRadius: selectedItems.length > 4 ? 2 : 3,
+                borderWidth: 2,
+                tension: 0.28,
+                fill: false,
+                spanGaps: true,
+            });
+            datasets.push({
+                label: item.label + ' · pronóstico',
+                data: forecast,
+                rawValues: rawForecast,
+                borderColor: color,
+                backgroundColor: 'transparent',
+                pointBackgroundColor: color,
+                pointBorderColor: '#ffffff',
+                pointBorderWidth: 1.5,
+                pointRadius: selectedItems.length > 4 ? 3 : 4,
+                borderWidth: 2,
+                borderDash: [6, 5],
+                tension: 0.28,
+                fill: false,
+                spanGaps: true,
+            });
+            if (selectedItems.length === 1 && objectives[item.code]) {
+                const target = normalized ? (objectives[item.code] / historyBase) * 100 : objectives[item.code];
+                datasets.push({
+                    label: 'Objetivo',
+                    data: labels.map(function () { return target; }),
+                    borderColor: '#64748b',
+                    borderDash: [4, 4],
+                    pointRadius: 0,
+                    borderWidth: 1.5,
+                    fill: false,
+                });
+            }
+        });
+        mainChart = new Chart(ctx, {
             type: 'line',
             data: {
-                labels: item.labels || [],
-                datasets: [
-                    {
-                        label: 'Historico',
-                        data: item.history || [],
-                        borderColor: '#1255a7',
-                        backgroundColor: 'rgba(18, 85, 167, 0.10)',
-                        pointBackgroundColor: '#1255a7',
-                        pointRadius: 3,
-                        tension: 0.32,
-                        fill: true,
-                        spanGaps: true,
-                    },
-                    {
-                        label: 'Limite inferior',
-                        data: item.lower || [],
-                        borderColor: 'transparent',
-                        backgroundColor: 'transparent',
-                        pointRadius: 0,
-                        fill: false,
-                    },
-                    {
-                        label: 'Rango de incertidumbre',
-                        data: item.upper || [],
-                        borderColor: 'transparent',
-                        backgroundColor: 'rgba(40, 122, 105, 0.12)',
-                        pointRadius: 0,
-                        fill: '-1',
-                    },
-                    {
-                        label: 'Prediccion',
-                        data: item.forecast || [],
-                        borderColor: accent,
-                        backgroundColor: 'transparent',
-                        pointBackgroundColor: accent,
-                        pointBorderColor: '#ffffff',
-                        pointBorderWidth: 2,
-                        pointRadius: 4,
-                        borderDash: [6, 5],
-                        tension: 0.32,
-                        fill: false,
-                        spanGaps: true,
-                    },
-                ],
+                labels: labels,
+                datasets: datasets,
             },
             options: {
                 responsive: true,
@@ -366,9 +500,10 @@ document.addEventListener('DOMContentLoaded', function () {
                     tooltip: {
                         callbacks: {
                             label: function (context) {
-                                const value = context.parsed.y;
-                                if (value === null || Number.isNaN(value)) return '';
-                                return context.dataset.label + ': ' + value.toFixed(2) + item.unit;
+                                const rawValue = context.dataset.rawValues ? context.dataset.rawValues[context.dataIndex] : context.parsed.y;
+                                if (rawValue === null || rawValue === undefined || Number.isNaN(rawValue)) return '';
+                                const source = selectedItems.find(function (entry) { return context.dataset.label.indexOf(entry.label + ' ·') === 0; });
+                                return context.dataset.label + ': ' + Number(rawValue).toFixed(2) + (source ? source.unit : '');
                             },
                         },
                     },
@@ -376,13 +511,13 @@ document.addEventListener('DOMContentLoaded', function () {
                 scales: {
                     y: {
                         beginAtZero: true,
-                        suggestedMax: item.bounded ? 100 : undefined,
+                        suggestedMax: normalized ? 120 : undefined,
                         grid: { color: '#e9edf3', drawBorder: false },
                         border: { display: false },
                         ticks: {
                             font: { size: 10 },
                             callback: function (value) {
-                                return item.unit === '%' ? value + '%' : value;
+                                return normalized ? value + ' (base 100)' : value;
                             },
                         },
                     },
@@ -394,6 +529,37 @@ document.addEventListener('DOMContentLoaded', function () {
                 },
             },
         });
+    }
+
+    const metricOptions = Array.from(document.querySelectorAll('#forecast-metric-list input[type="checkbox"]'));
+    const normalizeToggle = document.getElementById('normalize-metrics');
+    const selectedCount = document.getElementById('forecast-selected-count');
+    const metricPicker = document.querySelector('.forecast-metric-picker');
+    function selectedCodes() {
+        return metricOptions.filter(function (input) { return input.checked; }).map(function (input) { return input.value; });
+    }
+    function updateSelectedCount(count) {
+        if (selectedCount) selectedCount.textContent = count + (count === 1 ? ' seleccionada' : ' seleccionadas');
+    }
+    function refreshComparison() {
+        const codes = selectedCodes();
+        updateSelectedCount(codes.length);
+        if (codes.length) renderComparison(codes, normalizeToggle ? normalizeToggle.checked : true);
+    }
+    metricOptions.forEach(function (input) {
+        input.addEventListener('change', function () {
+            if (!selectedCodes().length) this.checked = true;
+            refreshComparison();
+        });
+    });
+    if (normalizeToggle) normalizeToggle.addEventListener('change', refreshComparison);
+    if (metricOptions.length) {
+        refreshComparison();
+    }
+    document.addEventListener('click', function (event) {
+        if (metricPicker && metricPicker.open && !metricPicker.contains(event.target)) {
+            metricPicker.removeAttribute('open');
+        }
     });
 });
 </script>

@@ -47,6 +47,7 @@ from .models import (
     ReclamoCliente,
     RecepcionMaterial,
     RecepcionMaterialDetalle,
+    RegistroParoMantenimiento,
     RegistroScrapDefecto,
     RegistroUsoRecursoProduccion,
     ReporteFinanciero,
@@ -81,14 +82,30 @@ from .finanzas import (
 )
 from .ml_analytics import (
     analizar_riesgo_inventario,
+    calcular_predicciones_calidad,
+    calcular_predicciones_inventario,
     calcular_predicciones_financieras,
     calcular_predicciones_mfg,
+    calcular_predicciones_mfg_segmentadas,
+    evaluar_predicciones,
     preparar_dataset_ml_produccion,
+    registrar_predicciones,
+    registrar_predicciones_calidad,
+    registrar_predicciones_financieras,
+    registrar_predicciones_inventario,
+    calcular_predicciones_mantenimiento,
+    registrar_predicciones_mantenimiento,
 )
 
 # Create your views here.
 
 User = get_user_model()
+
+
+def _normalizar_departamento(nombre):
+    """Compara departamentos sin depender de acentos o diferencias de mayúsculas."""
+    texto = unicodedata.normalize('NFKD', nombre or '')
+    return ''.join(caracter for caracter in texto if not unicodedata.combining(caracter)).strip().casefold()
 
 
 def _mark_dashboard_sync(request, scope='global'):
@@ -162,32 +179,32 @@ def _usuario_puede_ver_kpis_mfg(user):
     if not user.is_authenticated:
         return False
 
-    departamento = user.departamento.nombre if user.departamento else ''
-    return departamento in {'Producción', 'Finanzas', 'Admin', 'IT'}
+    departamento = _normalizar_departamento(user.departamento.nombre if user.departamento else '')
+    return departamento in {'produccion', 'finanzas', 'admin', 'it'}
 
 
 def _usuario_puede_control_recursos_mfg(user):
     if not user.is_authenticated:
         return False
 
-    departamento = user.departamento.nombre if user.departamento else ''
-    return departamento in {'Producción', 'RRHH', 'Admin', 'IT'}
+    departamento = _normalizar_departamento(user.departamento.nombre if user.departamento else '')
+    return departamento in {'produccion', 'rrhh', 'admin', 'it'}
 
 
 def _usuario_puede_validar_defectos(user):
     if not user.is_authenticated:
         return False
 
-    departamento = user.departamento.nombre if user.departamento else ''
-    return departamento in {'QA', 'Calidad', 'Admin', 'IT'}
+    departamento = _normalizar_departamento(user.departamento.nombre if user.departamento else '')
+    return departamento in {'qa', 'calidad', 'admin', 'it'}
 
 
 def _usuario_puede_ver_finanzas(user):
     if not user.is_authenticated:
         return False
 
-    departamento = user.departamento.nombre if user.departamento else ''
-    return departamento in {'Finanzas', 'Admin', 'IT'}
+    departamento = _normalizar_departamento(user.departamento.nombre if user.departamento else '')
+    return departamento in {'finanzas', 'admin', 'it'}
 
 
 def _finance_date_range(request, default_days=29):
@@ -490,13 +507,14 @@ def register_usuario(request):
 def home(request):
     usuario = request.user
     departamento = usuario.departamento.nombre if usuario.departamento else 'Sin asignar'
+    departamento_clave = _normalizar_departamento(departamento)
 
     context = {
         'usuario': usuario,
         'departamento': departamento,
     }
 
-    if departamento == 'Producción':
+    if departamento_clave == 'produccion':
         hoy = date.today()
         fecha_inicio_semana = hoy - timedelta(days=6)
 
@@ -577,7 +595,7 @@ def home(request):
             },
         })
 
-    if departamento in {'QA', 'Calidad'}:
+    if departamento_clave in {'qa', 'calidad'}:
         ahora = timezone.now()
         fecha_inicio_semana = ahora - timedelta(days=7)
 
@@ -640,6 +658,8 @@ def home(request):
             ReclamoCliente.objects
             .order_by('-fecha_actualizacion')[:6]
         )
+        ml_calidad = calcular_predicciones_calidad()
+        registrar_predicciones_calidad(ml_calidad, usuario=request.user)
 
         context.update({
             'qa_sqa_pendientes': qa_sqa_pendientes,
@@ -652,6 +672,7 @@ def home(request):
             'qa_sqa_recientes': qa_sqa_recientes,
             'qa_oqa_recientes': qa_oqa_recientes,
             'qa_reclamos_recientes': qa_reclamos_recientes,
+            'ml_calidad': ml_calidad,
             'qa_chart_data': {
                 'pipeline_labels': ['SQA pendientes', 'OQA pendientes', 'Reclamos abiertos'],
                 'pipeline_values': [qa_sqa_pendientes, qa_oqa_pendientes, qa_reclamos_abiertos],
@@ -666,7 +687,7 @@ def home(request):
             },
         })
 
-    if departamento == 'IT':
+    if departamento_clave == 'it':
         clientes_activos = ClienteCompra.objects.filter(activo=True).count()
         clientes_inactivos = ClienteCompra.objects.filter(activo=False).count()
         clientes_recientes = ClienteCompra.objects.order_by('-fecha_actualizacion')[:6]
@@ -712,7 +733,7 @@ def home(request):
             'it_tickets_recientes': tickets_recientes,
         })
 
-    if departamento == 'Finanzas':
+    if departamento_clave == 'finanzas':
         finance_data = calcular_dashboard_finanzas()
         context.update({
             'fin_kpis': finance_data['kpis'],
@@ -725,7 +746,7 @@ def home(request):
             'fin_produccion': finance_data['produccion'],
         })
 
-    if departamento in {'Inventario', 'Admin'}:
+    if departamento_clave in {'inventario', 'admin'}:
         fecha_fin = date.today()
         fecha_inicio = fecha_fin - timedelta(days=6)
 
@@ -847,7 +868,7 @@ def indicadores_kpis_mfg(request):
 
     reporte = (
         ReporteKPIProduccion.objects
-        .filter(fecha_inicio=periodo_inicio_real, fecha_fin=periodo_fin_real)
+        .filter(fecha_inicio=fecha_inicio, fecha_fin=fecha_fin)
         .order_by('-fecha_generacion')
         .first()
     )
@@ -1082,6 +1103,20 @@ def prediccion_produccion(request):
         )
 
     ml_forecast = calcular_predicciones_mfg(horizon_weeks=horizonte)
+    ml_segmented = calcular_predicciones_mfg_segmentadas(
+        fecha_inicio=periodo_inicio_real - timedelta(days=83),
+        fecha_fin=periodo_fin_real,
+        horizon_weeks=horizonte,
+    )
+    evaluar_predicciones(departamento='MFG', usuario=request.user)
+    registrar_predicciones(
+        departamento='MFG',
+        fecha_inicio=periodo_inicio_real,
+        fecha_fin=periodo_fin_real,
+        horizonte=horizonte,
+        forecast=ml_forecast,
+        usuario=request.user,
+    )
     ml_dataset = preparar_dataset_ml_produccion(fecha_inicio=periodo_inicio_real, fecha_fin=periodo_fin_real)
 
     return render(
@@ -1096,6 +1131,7 @@ def prediccion_produccion(request):
             'horizon_options': horizon_options,
             'reporte': reporte,
             'ml_forecast': ml_forecast,
+            'ml_segmented': ml_segmented,
             'ml_dataset': ml_dataset,
         },
     )
@@ -1143,6 +1179,7 @@ def finanzas_dashboard(request):
 
     dashboard = calcular_dashboard_finanzas(fecha_inicio=fecha_inicio, fecha_fin=fecha_fin)
     ml_finanzas = calcular_predicciones_financieras()
+    registrar_predicciones_financieras(ml_finanzas, usuario=request.user)
     return render(
         request,
         'finanzas/dashboard.html',
@@ -1805,6 +1842,42 @@ def control_recursos_mfg(request):
             messages.success(request, f'Uso de recurso registrado para la orden {orden.folio}.')
             return redirect('control_recursos_mfg')
 
+        if accion == 'registrar_paro':
+            maquina_id = (request.POST.get('costo_maquina_id') or '').strip()
+            orden_id = (request.POST.get('orden_id') or '').strip()
+            fecha_paro = _parse_iso_date((request.POST.get('fecha_paro') or '').strip())
+            horas_paro = _parse_decimal_text((request.POST.get('horas_paro') or '').strip(), Decimal('0'))
+            motivo = (request.POST.get('motivo_paro') or '').strip()
+            severidad = (request.POST.get('severidad_paro') or '').strip()
+            causa = (request.POST.get('causa_paro') or '').strip()
+            acciones = (request.POST.get('acciones_paro') or '').strip()
+            maquina = CostoHoraMaquina.objects.filter(id=maquina_id, activo=True).first() if maquina_id else None
+            orden = OrdenFabricacion.objects.filter(id=orden_id).first() if orden_id else None
+            motivos_validos = {choice[0] for choice in RegistroParoMantenimiento.Motivo.choices}
+            severidades_validas = {choice[0] for choice in RegistroParoMantenimiento.Severidad.choices}
+
+            if not maquina or not fecha_paro or horas_paro <= 0 or not causa:
+                messages.error(request, 'Máquina, fecha, horas de paro y causa son obligatorios.')
+                return redirect('control_recursos_mfg')
+            if motivo not in motivos_validos or severidad not in severidades_validas:
+                messages.error(request, 'El motivo o la severidad del paro no son válidos.')
+                return redirect('control_recursos_mfg')
+
+            RegistroParoMantenimiento.objects.create(
+                maquina=maquina,
+                orden=orden,
+                fecha_paro=fecha_paro,
+                horas_paro=horas_paro,
+                motivo=motivo,
+                severidad=severidad,
+                causa=causa,
+                acciones=acciones,
+                registrado_por=request.user,
+            )
+            _mark_dashboard_sync(request, scope='produccion')
+            messages.success(request, f'Paro de {maquina.maquina_nombre} registrado para alimentar mantenimiento predictivo.')
+            return redirect('control_recursos_mfg')
+
     costos_maquina = list(
         CostoHoraMaquina.objects
         .select_related('registrado_por', 'actualizado_por')
@@ -1820,6 +1893,13 @@ def control_recursos_mfg(request):
         .select_related('orden', 'costo_maquina', 'costo_operador', 'registrado_por')
         .order_by('-fecha_creacion')[:20]
     )
+    paros_mantenimiento = list(
+        RegistroParoMantenimiento.objects
+        .select_related('maquina', 'orden', 'registrado_por')
+        .order_by('-fecha_paro', '-id')[:20]
+    )
+    ml_mantenimiento = calcular_predicciones_mantenimiento()
+    registrar_predicciones_mantenimiento(ml_mantenimiento, usuario=request.user)
 
     return render(
         request,
@@ -1831,6 +1911,10 @@ def control_recursos_mfg(request):
             'costos_maquina': costos_maquina,
             'costos_operador': costos_operador,
             'usos_recursos': usos_recursos,
+            'paros_mantenimiento': paros_mantenimiento,
+            'ml_mantenimiento': ml_mantenimiento,
+            'motivos_paro': RegistroParoMantenimiento.Motivo.choices,
+            'severidades_paro': RegistroParoMantenimiento.Severidad.choices,
             'tipo_recurso_maquina': RegistroUsoRecursoProduccion.TipoRecurso.MAQUINA,
             'tipo_recurso_operador': RegistroUsoRecursoProduccion.TipoRecurso.OPERADOR,
         },
@@ -2916,6 +3000,7 @@ def ordenes_compra(request):
         {
             'proveedores_catalogo': proveedores_catalogo,
             'ordenes_recientes': _build_ordenes_recientes_data(),
+            'ml_compras': calcular_predicciones_inventario(),
             'opciones_condiciones_pago': ORDEN_CONDICIONES_PAGO,
             'form_data': form_data,
             'estado_enviada': OrdenCompra.EstadoOrden.ENVIADA,
@@ -3613,6 +3698,7 @@ def inventario_almacen(request):
         'historico_almacenes': historico_almacenes,
         'ml_inventario': analizar_riesgo_inventario(),
     }
+    registrar_predicciones_inventario(context['ml_inventario'], usuario=request.user)
     return render(request, 'inventario/almacen.html', context)
 
 
