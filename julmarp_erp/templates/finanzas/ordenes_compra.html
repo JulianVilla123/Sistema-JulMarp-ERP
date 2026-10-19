@@ -4,7 +4,7 @@
 {% block extra_css %}<link rel="stylesheet" href="{% static 'css/pages/inventario.css' %}">{% endblock %}
 {% block content %}
 <div class="entrada-container">
-    <div class="entrada-header"><h1>Órdenes de Compra desde MFG</h1><p>Recepción de folios enviados por Producción, asignación de proveedor, costo estimado y tiempo estimado de entrega.</p></div>
+    <div class="entrada-header" style="display:flex; justify-content:space-between; gap:16px; align-items:flex-start; flex-wrap:wrap;"><div><h1>Órdenes de Compra desde MFG</h1><p>Recepción de folios enviados por Producción, asignación de proveedor, costo estimado y tiempo estimado de entrega.</p></div>{% if desde_dashboard_finanzas %}<a class="btn btn-outline-primary" href="{% url 'finanzas_dashboard' %}?fecha_inicio={{ fecha_inicio|date:'Y-m-d' }}&fecha_fin={{ fecha_fin|date:'Y-m-d' }}">Volver al dashboard financiero</a>{% endif %}</div>
     {% if messages %}<ul class="messages" style="margin-bottom:20px;">{% for message in messages %}<li class="{{ message.tags }}">{{ message }}</li>{% endfor %}</ul>{% endif %}
     <div class="entrada-grid">
         <section class="entrada-card entrada-card-full">

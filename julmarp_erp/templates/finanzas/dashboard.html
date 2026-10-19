@@ -14,37 +14,21 @@
     .fin-hero { display:flex; justify-content:space-between; gap:18px; background:linear-gradient(135deg, #113254 0%, #1e537f 55%, #77b9d8 100%); color:#fff; border-radius:18px; padding:28px 30px; margin-bottom:20px; }
     .fin-hero h1 { margin:0 0 8px; }
     .fin-alert { background:#fff4f4; border:1px solid #f0c5c5; color:#8a1c1c; border-radius:12px; padding:12px 14px; font-weight:700; margin-bottom:10px; }
-    .fin-kpi-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap:14px; margin-bottom:18px; }
-    .fin-kpi-card {
-        text-align:center;
-        min-width:0;
-        display:flex;
-        flex-direction:column;
-        justify-content:center;
-        min-height:112px;
-    }
-    .fin-kpi-value {
-        margin:0;
-        font-size:clamp(1.4rem, 1.3rem + 1vw, 2rem);
-        line-height:1.05;
-        font-weight:800;
-        letter-spacing:-0.03em;
-        overflow-wrap:anywhere;
-        word-break:break-word;
-    }
-    .fin-kpi-label {
-        margin:8px 0 0;
-        font-size:.78rem;
-        text-transform:uppercase;
-        letter-spacing:.05em;
-        color:#7a90ad;
-    }
-    .fin-shortcuts {
-        display:flex;
-        gap:10px;
-        flex-wrap:wrap;
-        margin-top:16px;
-    }
+    .fin-current-state { background:#fff; border:1px solid #d8e4f2; border-radius:16px; padding:18px; margin-bottom:18px; box-shadow:0 8px 18px rgba(15, 23, 42, .04); }
+    .fin-current-state-head { display:flex; justify-content:space-between; align-items:baseline; gap:12px; margin-bottom:14px; }
+    .fin-current-state-head h2 { margin:0; color:#163a66; font-size:1.08rem; }
+    .fin-current-state-head p { margin:0; color:#71839b; font-size:.82rem; }
+    .fin-kpi-grid { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:12px; }
+    .fin-kpi-card { min-width:0; display:flex; align-items:flex-start; gap:11px; min-height:105px; padding:15px; border-radius:12px; border:1px solid #e1eaf4; background:#fbfdff; box-shadow:none; }
+    .fin-kpi-icon { width:34px; height:34px; flex:0 0 34px; display:grid; place-items:center; border-radius:10px; background:#eaf4ff; color:#1765aa; font-size:1.1rem; font-weight:800; }
+    .fin-kpi-content { min-width:0; }
+    .fin-kpi-value { margin:2px 0 0; color:#163a66; font-size:1.45rem; line-height:1.1; font-weight:800; letter-spacing:-.02em; white-space:nowrap; }
+    .fin-kpi-label { margin:0; font-size:.74rem; text-transform:uppercase; letter-spacing:.04em; color:#6e83a0; font-weight:800; }
+    .fin-kpi-detail { margin:6px 0 0; color:#71839b; font-size:.76rem; line-height:1.3; }
+    .fin-kpi-card.alert .fin-kpi-icon { background:#fff3d7; color:#b57700; }
+    .fin-kpi-card.danger .fin-kpi-icon { background:#ffe9e9; color:#b02a37; }
+    .fin-costeo-note { display:flex; justify-content:space-between; gap:12px; align-items:center; margin-top:13px; padding-top:13px; border-top:1px solid #e8eef5; color:#65768d; font-size:.82rem; }
+    .fin-costeo-note strong { color:#163a66; }
     .fin-ml-panel {
         background:#fff;
         border:1px solid #d8e4f2;
@@ -75,8 +59,99 @@
     .fin-ml-card p { margin:0 0 6px; color:#65768d; font-weight:700; }
     .fin-ml-value { font-size:1.45rem; font-weight:800; color:#163a66; overflow-wrap:anywhere; }
     .fin-ml-meta { margin-top:6px; color:#7a90ad; font-size:.78rem; }
+    .fin-ml-status { border-radius:999px; padding:7px 12px; font-size:.76rem; font-weight:800; text-transform:uppercase; white-space:nowrap; background:#e3f6eb; color:#08783f; }
+    .fin-ml-status.amarillo { background:#fff3d7; color:#946000; }
+    .fin-ml-summary { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:12px; margin-bottom:14px; }
+    .fin-ml-summary-card { border:1px solid #dce8f5; border-radius:12px; padding:13px 14px; background:#f9fbff; }
+    .fin-ml-summary-card span { display:block; color:#70839c; font-size:.76rem; font-weight:700; }
+    .fin-ml-summary-card strong { display:block; color:#123e70; font-size:1.28rem; margin-top:5px; }
+    .fin-ml-summary-card small { display:block; color:#65768d; font-size:.78rem; margin-top:4px; }
+    .fin-forecast-guide { margin:0 0 12px; padding:11px 13px; border-radius:10px; background:#f2f7fc; color:#536a87; font-size:.84rem; }
+    .fin-forecast-guide strong { color:#163a66; }
+    .fin-forecast-table { border:1px solid #dce8f5; border-radius:12px; overflow:hidden; }
+    .fin-forecast-heading, .fin-forecast-row { display:grid; grid-template-columns:minmax(180px, 1.4fr) minmax(110px, .9fr) minmax(135px, 1fr) minmax(105px, .8fr) minmax(90px, .65fr); gap:12px; align-items:center; padding:12px 14px; }
+    .fin-forecast-heading { background:#f1f6fb; color:#58708e; font-size:.73rem; font-weight:800; text-transform:uppercase; letter-spacing:.03em; }
+    .fin-forecast-row { border-top:1px solid #e8eef5; background:#fff; }
+    .fin-forecast-row.needs-validation { background:#fffdf7; }
+    .fin-forecast-metric small, .fin-forecast-change small { display:block; color:#71839b; font-size:.76rem; margin-top:3px; }
+    .fin-forecast-metric strong, .fin-forecast-value { color:#163a66; font-weight:800; }
+    .fin-forecast-group { display:inline-block; margin-bottom:3px; color:#4d76a3; font-size:.7rem; font-weight:800; text-transform:uppercase; }
+    .fin-forecast-unavailable { color:#946000; font-weight:800; }
+    .fin-forecast-change.positive strong { color:#08783f; }
+    .fin-forecast-change.negative strong { color:#b02a37; }
+    .fin-forecast-change.neutral strong { color:#536a87; }
+    .fin-confidence { display:inline-block; border-radius:999px; padding:5px 8px; background:#e3f6eb; color:#08783f; font-size:.74rem; font-weight:800; text-align:center; }
+    .fin-confidence.amarillo { background:#fff3d7; color:#946000; }
+    .fin-ml-details { margin-top:12px; color:#65768d; font-size:.83rem; }
+    .fin-ml-details summary { cursor:pointer; color:#163a66; font-weight:800; }
+    .fin-ml-details ul { margin:9px 0 0; padding-left:20px; }
+    .fin-forecast-dashboard { background:linear-gradient(145deg, #ffffff 0%, #f4f9fe 100%); border:1px solid #cfe0f2; border-radius:16px; padding:20px; margin-bottom:18px; box-shadow:0 10px 22px rgba(15, 23, 42, .06); }
+    .fin-forecast-dashboard-head { display:flex; justify-content:space-between; gap:14px; align-items:flex-start; margin-bottom:16px; }
+    .fin-forecast-dashboard-head h3 { margin:0 0 5px; color:#163a66; }
+    .fin-forecast-dashboard-head p { margin:0; color:#65768d; }
+    .fin-forecast-kpis { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:12px; margin-bottom:16px; }
+    .fin-forecast-kpi { min-height:112px; border:1px solid #dce8f5; border-radius:12px; padding:13px 14px; background:#fff; }
+    .fin-forecast-kpi span { display:block; color:#70839c; font-size:.76rem; font-weight:800; text-transform:uppercase; }
+    .fin-forecast-kpi strong { display:block; color:#123e70; font-size:1.3rem; margin-top:7px; overflow-wrap:anywhere; }
+    .fin-forecast-kpi small { display:block; color:#65768d; font-size:.77rem; margin-top:6px; }
+    .fin-forecast-kpi.pending { background:#fffdf7; border-color:#efdcad; }
+    .fin-forecast-kpi.pending strong { color:#946000; font-size:1rem; }
+    .fin-forecast-layout { display:grid; grid-template-columns:minmax(0, 1.55fr) minmax(260px, .8fr); gap:14px; }
+    .fin-forecast-chart-card, .fin-forecast-side { border:1px solid #dce8f5; border-radius:12px; background:#fff; padding:15px; }
+    .fin-forecast-chart-card { display:flex; flex-direction:column; }
+    .fin-forecast-chart-card h4, .fin-forecast-side h4 { margin:0 0 4px; color:#163a66; font-size:1rem; }
+    .fin-forecast-chart-card p { margin:0 0 10px; color:#65768d; font-size:.82rem; }
+    .fin-forecast-chart { position:relative; flex:1; min-height:310px; }
+    .fin-forecast-chart canvas { width:100% !important; height:100% !important; }
+    .fin-forecast-gauges { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin:10px 0 15px; }
+    .fin-gauge { display:flex; flex-direction:column; align-items:center; gap:6px; color:#65768d; font-size:.75rem; text-align:center; }
+    .fin-gauge-ring { width:92px; height:92px; display:grid; place-items:center; border-radius:50%; background:conic-gradient(#21a8c4 calc(var(--value) * 1%), #e7eef6 0); }
+    .fin-gauge-ring::before { content:''; grid-area:1 / 1; width:70px; height:70px; border-radius:50%; background:#fff; }
+    .fin-gauge-ring strong { grid-area:1 / 1; z-index:1; color:#163a66; font-size:.92rem; }
+    .fin-risk-list { display:grid; gap:8px; }
+    .fin-risk-item { border-left:4px solid #d28a0f; border-radius:7px; padding:8px 10px; background:#fff9eb; color:#6f571b; font-size:.79rem; }
+    .fin-risk-item strong { display:block; color:#6b4f0c; }
+    .fin-risk-ok { border-left-color:#159947; background:#effaf3; color:#46765a; }
+    .fin-sales-panel {
+        background:linear-gradient(145deg, #ffffff 0%, #f5faff 100%);
+        border:1px solid #cfe0f2;
+        border-radius:16px;
+        padding:20px;
+        margin-bottom:18px;
+        box-shadow:0 10px 22px rgba(15, 23, 42, 0.06);
+    }
+    .fin-sales-head { display:flex; justify-content:space-between; gap:14px; align-items:flex-start; margin-bottom:16px; }
+    .fin-sales-head h3 { margin:0 0 5px; color:#163a66; }
+    .fin-sales-head p { margin:0; color:#65768d; }
+    .fin-sales-status { border-radius:999px; padding:7px 12px; font-size:.76rem; font-weight:800; text-transform:uppercase; white-space:nowrap; }
+    .fin-sales-status.verde { background:#e3f6eb; color:#08783f; }
+    .fin-sales-status.amarillo { background:#fff3d7; color:#946000; }
+    .fin-sales-status.rojo { background:#ffe4e4; color:#a32121; }
+    .fin-sales-summary { display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:12px; margin-bottom:16px; }
+    .fin-sales-stat { border:1px solid #dce8f5; border-radius:12px; padding:13px 14px; background:#fff; }
+    .fin-sales-stat span { display:block; color:#70839c; font-size:.78rem; font-weight:700; }
+    .fin-sales-stat strong { display:block; color:#123e70; font-size:1.32rem; margin-top:6px; }
+    .fin-sales-chart { min-height:260px; position:relative; }
+    .fin-sales-note { margin:12px 0 0; color:#65768d; font-size:.82rem; }
+    .fin-chart-empty { min-height:210px; display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; gap:8px; padding:24px; color:#65768d; background:#f8fbff; border:1px dashed #c8d8e8; border-radius:12px; }
+    .fin-chart-empty strong { color:#163a66; font-size:1.05rem; }
+    .fin-chart-empty p { max-width:460px; margin:0; font-size:.86rem; }
+    .fin-profitability-card { min-height:210px; display:flex; flex-direction:column; justify-content:center; gap:8px; padding:24px; border-radius:12px; background:#f8fbff; border:1px solid #dce8f5; }
+    .fin-profitability-card .fin-profit-value { color:#0a7c42; font-size:1.7rem; font-weight:800; }
+    .fin-profitability-card small { color:#65768d; }
+    .fin-profitability-card p { margin:0; color:#65768d; font-size:.86rem; }
     @media (max-width: 900px) {
         .fin-hero { flex-direction:column; }
+        .fin-current-state-head { flex-direction:column; align-items:flex-start; }
+        .fin-kpi-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); }
+        .fin-sales-head { flex-direction:column; }
+        .fin-ml-summary { grid-template-columns:1fr; }
+        .fin-forecast-dashboard-head { flex-direction:column; }
+        .fin-forecast-kpis { grid-template-columns:repeat(2, minmax(0, 1fr)); }
+        .fin-forecast-layout { grid-template-columns:1fr; }
+        .fin-forecast-heading { display:none; }
+        .fin-forecast-row { grid-template-columns:1fr 1fr; }
+        .fin-forecast-row > div:first-child { grid-column:1 / -1; }
     }
 </style>
 {% endblock %}
@@ -99,68 +174,157 @@
         <form method="get">
             <label>Fecha inicio<input type="date" name="fecha_inicio" value="{{ fecha_inicio|date:'Y-m-d' }}"></label>
             <label>Fecha fin<input type="date" name="fecha_fin" value="{{ fecha_fin|date:'Y-m-d' }}"></label>
+            <label>Horizonte predictivo
+                <select name="horizonte">
+                    {% for opcion in horizon_options %}<option value="{{ opcion }}" {% if horizonte == opcion %}selected{% endif %}>{{ opcion }} semana{% if opcion != 1 %}s{% endif %}</option>{% endfor %}
+                </select>
+            </label>
             <button type="submit" name="recalcular" value="1" class="btn btn-warning">Recalcular</button>
-            <a href="{% url 'finanzas_dashboard' %}?fecha_inicio={{ fecha_inicio|date:'Y-m-d' }}&fecha_fin={{ fecha_fin|date:'Y-m-d' }}&export=excel" class="btn btn-primary">Exportar Excel</a>
-            <a href="{% url 'finanzas_dashboard' %}?fecha_inicio={{ fecha_inicio|date:'Y-m-d' }}&fecha_fin={{ fecha_fin|date:'Y-m-d' }}&export=pdf" class="btn btn-danger">Exportar PDF</a>
+            <a href="{% url 'finanzas_dashboard' %}?fecha_inicio={{ fecha_inicio|date:'Y-m-d' }}&fecha_fin={{ fecha_fin|date:'Y-m-d' }}&horizonte={{ horizonte }}&export=excel" class="btn btn-primary">Exportar Excel</a>
+            <a href="{% url 'finanzas_dashboard' %}?fecha_inicio={{ fecha_inicio|date:'Y-m-d' }}&fecha_fin={{ fecha_fin|date:'Y-m-d' }}&horizonte={{ horizonte }}&export=pdf" class="btn btn-danger">Exportar PDF</a>
         </form>
-        <div class="fin-shortcuts">
-            <a href="{% url 'home' %}" class="btn btn-secondary">Volver a Inicio</a>
-            <a href="{% url 'finanzas_contabilidad' %}" class="btn btn-outline-primary">Contabilidad</a>
-            <a href="{% url 'finanzas_reportes' %}" class="btn btn-outline-danger">Reportes</a>
-        </div>
     </section>
 
     {% for alerta in dashboard.alertas %}
     <div class="fin-alert">{{ alerta }}</div>
     {% endfor %}
 
-    <section class="fin-kpi-grid">
-        <article class="dashboard-card fin-kpi-card"><p class="fin-kpi-value" style="color:{% if dashboard.kpis.flujo_caja >= 0 %}#0a7c42{% else %}#9b2121{% endif %};">${{ dashboard.kpis.flujo_caja|floatformat:2 }}</p><p class="fin-kpi-label">Flujo de caja</p></article>
-        <article class="dashboard-card fin-kpi-card"><p class="fin-kpi-value" style="color:#1255a7;">${{ dashboard.kpis.rentabilidad|floatformat:2 }}</p><p class="fin-kpi-label">Rentabilidad</p></article>
-        <article class="dashboard-card fin-kpi-card"><p class="fin-kpi-value" style="color:#1f3e67;">{{ dashboard.kpis.rentabilidad_pct|floatformat:2 }}%</p><p class="fin-kpi-label">Margen</p></article>
-        <article class="dashboard-card fin-kpi-card"><p class="fin-kpi-value" style="color:{% if dashboard.kpis.gasto_real <= dashboard.kpis.presupuesto_total %}#0a7c42{% else %}#9b2121{% endif %};">${{ dashboard.kpis.gasto_real|floatformat:2 }}</p><p class="fin-kpi-label">Gasto real</p></article>
-        <article class="dashboard-card fin-kpi-card"><p class="fin-kpi-value" style="color:#d28a0f;">{{ dashboard.kpis.oc_pendientes }}</p><p class="fin-kpi-label">OC pendientes</p></article>
-        <article class="dashboard-card fin-kpi-card"><p class="fin-kpi-value" style="color:#159947;">{{ dashboard.kpis.oc_completadas }}</p><p class="fin-kpi-label">OC completadas</p></article>
-        <article class="dashboard-card fin-kpi-card"><p class="fin-kpi-value" style="color:{% if dashboard.kpis.impuestos_pendientes > 0 %}#9b2121{% else %}#159947{% endif %};">{{ dashboard.kpis.impuestos_pendientes }}</p><p class="fin-kpi-label">Impuestos pendientes</p></article>
+    <section class="fin-current-state">
+        <div class="fin-current-state-head">
+            <h2>Estado financiero actual</h2>
+            <p>Resultados registrados del periodo seleccionado; el pronóstico se muestra en el siguiente bloque.</p>
+        </div>
+        <div class="fin-kpi-grid">
+            <article class="fin-kpi-card {% if dashboard.kpis.flujo_caja < 0 %}danger{% endif %}">
+                <span class="fin-kpi-icon">$</span><div class="fin-kpi-content"><p class="fin-kpi-label">Flujo de caja</p><p class="fin-kpi-value" style="color:{% if dashboard.kpis.flujo_caja >= 0 %}#08783f{% else %}#b02a37{% endif %};">${{ dashboard.kpis.flujo_caja|floatformat:2 }}</p><p class="fin-kpi-detail">Cobros menos pagos registrados.</p></div>
+            </article>
+            <article class="fin-kpi-card {% if dashboard.kpis.gasto_real > dashboard.kpis.presupuesto_total %}danger{% endif %}">
+                <span class="fin-kpi-icon">▣</span><div class="fin-kpi-content"><p class="fin-kpi-label">Gasto real</p><p class="fin-kpi-value">${{ dashboard.kpis.gasto_real|floatformat:2 }}</p><p class="fin-kpi-detail">{{ dashboard.kpis.presupuesto_utilizacion|floatformat:0 }}% del presupuesto activo.</p></div>
+            </article>
+            <article class="fin-kpi-card {% if dashboard.kpis.oc_pendientes > 0 %}alert{% endif %}">
+                <span class="fin-kpi-icon">⌁</span><div class="fin-kpi-content"><p class="fin-kpi-label">Órdenes de compra</p><p class="fin-kpi-value">{{ dashboard.kpis.oc_pendientes }}</p><p class="fin-kpi-detail">Pendientes · {{ dashboard.kpis.oc_completadas }} completadas.</p></div>
+            </article>
+            <article class="fin-kpi-card {% if dashboard.kpis.impuestos_pendientes > 0 %}danger{% endif %}">
+                <span class="fin-kpi-icon">✓</span><div class="fin-kpi-content"><p class="fin-kpi-label">Impuestos pendientes</p><p class="fin-kpi-value" style="color:{% if dashboard.kpis.impuestos_pendientes > 0 %}#b02a37{% else %}#08783f{% endif %};">{{ dashboard.kpis.impuestos_pendientes }}</p><p class="fin-kpi-detail">Declaraciones por presentar.</p></div>
+            </article>
+        </div>
+        <div class="fin-costeo-note">
+            {% if dashboard.produccion.rentabilidad_has_data %}
+            <span><strong>Rentabilidad del periodo:</strong> ${{ dashboard.kpis.rentabilidad|floatformat:2 }} · Margen {{ dashboard.kpis.rentabilidad_pct|floatformat:2 }}%</span>
+            {% else %}
+            <span><strong>Rentabilidad y margen:</strong> se mostrarán al consolidar los costeos de producción del periodo.</span>
+            {% endif %}
+            <a href="{% url 'finanzas_costeo_produccion' %}?fecha_inicio={{ fecha_inicio|date:'Y-m-d' }}&fecha_fin={{ fecha_fin|date:'Y-m-d' }}&origen=dashboard_finanzas">Ver costeos</a>
+        </div>
     </section>
 
-    <section class="fin-ml-panel">
-        <div class="fin-ml-head">
+    <section class="fin-forecast-dashboard">
+        <div class="fin-forecast-dashboard-head">
             <div>
-                <h3>Prediccion ML financiera</h3>
-                <p>{{ ml_finanzas.method }}{% if ml_finanzas.samples %} | {{ ml_finanzas.samples }} periodos{% endif %} | Calidad: {{ ml_finanzas.data_quality|title }}</p>
+                <h3>Dashboard de pronóstico financiero</h3>
+                <p>Lectura ejecutiva del próximo cierre: ventas, liquidez, costos, confianza y riesgos.</p>
             </div>
-            <strong>{% if ml_finanzas.enabled %}Modelo activo{% else %}Historial pendiente{% endif %}</strong>
+            <span class="fin-ml-status {% if ml_finanzas.validation_predictions %}amarillo{% endif %}">{% if ml_finanzas.enabled %}Modelo {{ ml_finanzas.data_quality|title }} · {{ ml_finanzas.samples }} cierres{% else %}Historial pendiente{% endif %}</span>
         </div>
-        <div class="fin-ml-grid">
-            {% for item in ml_finanzas.predictions %}
-            <article class="fin-ml-card {{ item.display_status }}">
-                <p>{{ item.label }}</p>
-                <div class="fin-ml-value">{{ item.prefix }}{{ item.value }}{{ item.suffix }}</div>
-                <div class="fin-ml-meta">Confianza {{ item.confidence_label }} ({{ item.confidence }}%) | {{ item.detail }}</div>
-                <div class="fin-ml-meta">{{ item.action }}</div>
-            </article>
-            {% empty %}
-            <article class="fin-ml-card amarillo">
-                <p>Entrenamiento pendiente</p>
-                <div class="fin-ml-value">$0.00</div>
-                <div class="fin-ml-meta">Genera reportes financieros para alimentar el modelo.</div>
+        <div class="fin-forecast-kpis">
+            {% for item in ml_finanzas.headline_cards %}
+            <article class="fin-forecast-kpi {% if not item.prediction_valid %}pending{% endif %}">
+                <span>{{ item.label }}</span>
+                {% if item.prediction_valid %}
+                <strong>{% if item.is_count %}{{ item.value|default:0|floatformat:0 }}{% else %}{{ item.prefix }}{{ item.value|default:0|floatformat:2 }}{{ item.suffix }}{% endif %}</strong>
+                <small>Próximo cierre{% if item.change_pct is not None %} · {% if item.change_pct >= 0 %}+{% endif %}{{ item.change_pct|floatformat:1 }}%{% endif %}</small>
+                {% else %}
+                <strong>Validar historial</strong>
+                <small>{{ item.validation_note }}</small>
+                {% endif %}
             </article>
             {% endfor %}
         </div>
-        {% if ml_finanzas.alerts %}
-        <div style="margin-top:14px; display:grid; gap:8px;">
-            {% for alerta in ml_finanzas.alerts|slice:':4' %}
-            <div class="fin-alert" style="margin:0;"><strong>{{ alerta.label }} · {{ alerta.value }}</strong><br><span style="font-weight:500;">{{ alerta.message }}</span></div>
-            {% endfor %}
+        <div class="fin-forecast-layout">
+            <article class="fin-forecast-chart-card">
+                <h4>Evolución de ventas a clientes</h4>
+                <p>Histórico semanal en azul; pronóstico de las próximas {{ ml_finanzas.sales.horizon_weeks }} semanas en línea punteada verde.</p>
+                {% if ml_finanzas.sales.enabled %}
+                <div class="fin-forecast-chart"><canvas id="fin-sales-chart"></canvas></div>
+                {% else %}
+                <div class="fin-chart-empty"><strong>Datos de ventas pendientes</strong><p>{{ ml_finanzas.sales.detail }}</p></div>
+                {% endif %}
+            </article>
+            <aside class="fin-forecast-side">
+                <h4>Control financiero</h4>
+                <div class="fin-forecast-gauges">
+                    <div class="fin-gauge"><div class="fin-gauge-ring" style="--value:{{ dashboard.kpis.presupuesto_utilizacion|default:0 }}"><strong>{{ dashboard.kpis.presupuesto_utilizacion|floatformat:0 }}%</strong></div><span>Uso del presupuesto</span></div>
+                    <div class="fin-gauge"><div class="fin-gauge-ring" style="--value:{{ ml_finanzas.sales.confidence|default:0 }}"><strong>{{ ml_finanzas.sales.confidence|floatformat:0 }}%</strong></div><span>Confianza de ventas</span></div>
+                </div>
+                <h4>Riesgos y validaciones</h4>
+                <div class="fin-risk-list">
+                    {% if ml_finanzas.validation_predictions %}
+                    {% for item in ml_finanzas.validation_items %}
+                    <div class="fin-risk-item"><strong>{{ item.label }}</strong>{{ item.validation_note }}</div>
+                    {% endfor %}
+                    {% else %}
+                    <div class="fin-risk-item fin-risk-ok"><strong>Sin riesgos pendientes</strong>El modelo cuenta con datos consistentes para las métricas disponibles.</div>
+                    {% endif %}
+                </div>
+            </aside>
         </div>
-        {% endif %}
+        <details class="fin-ml-details"><summary>Ver detalle técnico y validaciones del modelo</summary><p>{{ ml_finanzas.method }}. Se contrastan los resultados históricos con límites de negocio antes de mostrar una cifra como pronóstico.</p></details>
     </section>
 
     <section class="dashboard-grid chart-grid">
-        <article class="dashboard-card chart-card"><h3>Presupuesto vs gasto</h3><div class="chart-stage"><canvas id="fin-budget-chart"></canvas></div></article>
-        <article class="dashboard-card chart-card"><h3>Costos y rentabilidad</h3><div class="chart-stage"><canvas id="fin-cost-chart"></canvas></div></article>
-        <article class="dashboard-card chart-card"><h3>Órdenes de compra</h3><div class="chart-stage"><canvas id="fin-oc-chart"></canvas></div></article>
+        <article class="dashboard-card chart-card">
+            <h3>Presupuesto vs gasto</h3>
+            <p class="chart-subtitle">Comparación del periodo seleccionado</p>
+            {% if dashboard.charts.presupuesto_has_data %}
+            <div class="chart-stage"><canvas id="fin-budget-chart"></canvas></div>
+            {% else %}
+            <div class="fin-chart-empty">
+                <strong>Sin datos presupuestales para este periodo</strong>
+                <p>No hay presupuestos activos que se crucen con {{ fecha_inicio|date:'d/m/Y' }} al {{ fecha_fin|date:'d/m/Y' }}.</p>
+                <a class="btn btn-outline-primary" href="{% url 'finanzas_presupuestos' %}?fecha_inicio={{ fecha_inicio|date:'Y-m-d' }}&fecha_fin={{ fecha_fin|date:'Y-m-d' }}">Registrar presupuesto</a>
+            </div>
+            {% endif %}
+        </article>
+        <article class="dashboard-card chart-card">
+            <h3>Costos de producción</h3>
+            <p class="chart-subtitle">Variación: ${{ dashboard.produccion.variacion_costos|floatformat:2 }} · {{ dashboard.produccion.variacion_costos_pct|floatformat:2 }}%</p>
+            {% if dashboard.charts.costos_has_data %}
+            <div class="chart-stage"><canvas id="fin-cost-chart"></canvas></div>
+            {% else %}
+            <div class="fin-chart-empty">
+                <strong>Sin datos de costos para este periodo</strong>
+                <p>No hay costos planificados o reales registrados entre {{ fecha_inicio|date:'d/m/Y' }} y {{ fecha_fin|date:'d/m/Y' }}.</p>
+            </div>
+            {% endif %}
+        </article>
+        <article class="dashboard-card chart-card">
+            <h3>Rentabilidad</h3>
+            {% if dashboard.produccion.rentabilidad_has_data %}
+            <div class="fin-profitability-card">
+                <div class="fin-profit-value">${{ dashboard.produccion.rentabilidad|floatformat:2 }}</div>
+                <small>Margen estimado: {{ dashboard.produccion.rentabilidad_pct|floatformat:2 }}%</small>
+                <p>Resultado consolidado a partir de los costeos de producción del periodo seleccionado.</p>
+            </div>
+            {% else %}
+            <div class="fin-chart-empty">
+                <strong>Sin costeos financieros registrados</strong>
+                <p>La rentabilidad aparecerá cuando existan costeos de producción dentro del periodo seleccionado.</p>
+                <a class="btn btn-outline-primary" href="{% url 'finanzas_costeo_produccion' %}?fecha_inicio={{ fecha_inicio|date:'Y-m-d' }}&fecha_fin={{ fecha_fin|date:'Y-m-d' }}&origen=dashboard_finanzas">Ver costeos de producción</a>
+            </div>
+            {% endif %}
+        </article>
+        <article class="dashboard-card chart-card">
+            <h3>Órdenes de compra</h3>
+            {% if dashboard.charts.oc_has_data %}
+            <div class="chart-stage"><canvas id="fin-oc-chart"></canvas></div>
+            {% else %}
+            <div class="fin-chart-empty">
+                <strong>No hay órdenes de compra en este periodo</strong>
+                <p>No se encontraron órdenes pendientes o completadas entre {{ fecha_inicio|date:'d/m/Y' }} y {{ fecha_fin|date:'d/m/Y' }}.</p>
+                <a class="btn btn-outline-primary" href="{% url 'finanzas_ordenes_compra' %}?fecha_inicio={{ fecha_inicio|date:'Y-m-d' }}&fecha_fin={{ fecha_fin|date:'Y-m-d' }}&origen=dashboard_finanzas">Ver órdenes de compra</a>
+            </div>
+            {% endif %}
+        </article>
     </section>
 
     <section class="dashboard-grid" style="margin-top:16px;">
@@ -191,6 +355,7 @@
 </div>
 
 {{ chart_data|json_script:"fin-dashboard-data" }}
+{{ ml_finanzas.sales_chart|json_script:"fin-sales-data" }}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
@@ -198,22 +363,40 @@ document.addEventListener('DOMContentLoaded', function () {
     const node = document.getElementById('fin-dashboard-data');
     if (!node || typeof Chart === 'undefined') return;
     const data = JSON.parse(node.textContent || '{}');
+    const salesNode = document.getElementById('fin-sales-data');
+    const salesData = salesNode ? JSON.parse(salesNode.textContent || '{}') : {};
+    const formatCurrencyTick = value => '$' + Number(value || 0).toLocaleString('es-MX', { maximumFractionDigits: 0 });
+
+    const salesCtx = document.getElementById('fin-sales-chart');
+    if (salesCtx && salesData.labels && salesData.labels.length) {
+        new Chart(salesCtx, {
+            type: 'line',
+            data: {
+                labels: salesData.labels,
+                datasets: [
+                    { label: 'Ventas históricas', data: salesData.history || [], borderColor: '#1765aa', backgroundColor: 'rgba(23,101,170,.12)', fill: true, tension: .3, pointRadius: 3 },
+                    { label: 'Pronóstico', data: salesData.forecast || [], borderColor: '#159947', borderDash: [6, 5], backgroundColor: 'rgba(21,153,71,.08)', fill: false, tension: .3, pointRadius: 3 },
+                ],
+            },
+            options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, scales: { y: { beginAtZero: true, ticks: { callback: value => '$' + Number(value).toLocaleString('es-MX') } } }, plugins: { legend: { position: 'bottom' } } },
+        });
+    }
 
     const budgetCtx = document.getElementById('fin-budget-chart');
     if (budgetCtx) {
         new Chart(budgetCtx, {
             type: 'bar',
             data: { labels: data.presupuesto_labels || [], datasets: [{ data: data.presupuesto_values || [], backgroundColor: ['#1f5d8d', '#c53030', '#159947'], borderRadius: 10 }] },
-            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } },
+            options: { responsive: true, maintainAspectRatio: false, layout: { padding: { left: 6, right: 6, top: 4, bottom: 2 } }, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { padding: 8, callback: formatCurrencyTick } } } },
         });
     }
 
     const costCtx = document.getElementById('fin-cost-chart');
     if (costCtx) {
         new Chart(costCtx, {
-            type: 'line',
-            data: { labels: data.costos_labels || [], datasets: [{ data: data.costos_values || [], borderColor: '#163a66', backgroundColor: 'rgba(22,58,102,.12)', fill: true, tension: .3 }] },
-            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } },
+            type: 'bar',
+            data: { labels: data.costos_labels || [], datasets: [{ label: 'Costo ($)', data: data.costos_values || [], backgroundColor: ['#1f5d8d', '#c53030'], borderRadius: 8, maxBarThickness: 64 }] },
+            options: { responsive: true, maintainAspectRatio: false, layout: { padding: { left: 6, right: 6, top: 4, bottom: 2 } }, plugins: { legend: { display: false }, tooltip: { callbacks: { label: context => '$' + Number(context.raw || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) } } }, scales: { y: { beginAtZero: true, ticks: { padding: 8, callback: formatCurrencyTick } } } },
         });
     }
 

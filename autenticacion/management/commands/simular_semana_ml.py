@@ -153,9 +153,10 @@ class Command(BaseCommand):
                 'trend': Decimal('35'),
                 'variation': [0, 12, -8, 15, -5, 10, 6, -10, 18, 8],
                 'material_factor': Decimal('1.06'),
+                'material_cost': Decimal('2.20'),
                 'scrap_rate': Decimal('0.025'),
-                'machine_cost': Decimal('250'),
-                'operator_cost': Decimal('150'),
+                'machine_cost': Decimal('80'),
+                'operator_cost': Decimal('50'),
                 'cycle_minutes': Decimal('2.60'),
             },
             {
@@ -167,9 +168,10 @@ class Command(BaseCommand):
                 'trend': Decimal('-28'),
                 'variation': [0, -10, 8, -12, 5, -8, 10, -6, 4, -10],
                 'material_factor': Decimal('1.08'),
+                'material_cost': Decimal('2.50'),
                 'scrap_rate': Decimal('0.045'),
-                'machine_cost': Decimal('275'),
-                'operator_cost': Decimal('165'),
+                'machine_cost': Decimal('90'),
+                'operator_cost': Decimal('55'),
                 'cycle_minutes': Decimal('3.10'),
             },
             {
@@ -181,9 +183,10 @@ class Command(BaseCommand):
                 'trend': Decimal('0'),
                 'variation': [0, 18, -12, 10, -6, 14, -10, 8, -4, 12],
                 'material_factor': Decimal('1.04'),
+                'material_cost': Decimal('2.10'),
                 'scrap_rate': Decimal('0.032'),
-                'machine_cost': Decimal('230'),
-                'operator_cost': Decimal('140'),
+                'machine_cost': Decimal('75'),
+                'operator_cost': Decimal('48'),
                 'cycle_minutes': Decimal('2.85'),
             },
         ]
@@ -220,7 +223,7 @@ class Command(BaseCommand):
             ProveedorMaterialPrecio.objects.update_or_create(
                 proveedor=proveedor,
                 material=material,
-                defaults={'precio_unitario': Decimal('0.00')},
+                defaults={'precio_unitario': spec['material_cost']},
             )
             bom, _ = BOM.objects.get_or_create(
                 codigo=f"BOM-ML-{spec['code']}",

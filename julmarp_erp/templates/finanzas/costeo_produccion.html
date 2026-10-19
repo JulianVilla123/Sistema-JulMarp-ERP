@@ -4,7 +4,7 @@
 {% block extra_css %}<link rel="stylesheet" href="{% static 'css/pages/inventario.css' %}">{% endblock %}
 {% block content %}
 <div class="entrada-container">
-    <div class="entrada-header"><h1>Costeo de Producción</h1><p>Consolida costos reales vs planificados y calcula rentabilidad por orden o lote.</p></div>
+    <div class="entrada-header" style="display:flex; justify-content:space-between; gap:16px; align-items:flex-start; flex-wrap:wrap;"><div><h1>Costeo de Producción</h1><p>Consolida costos reales vs planificados y calcula rentabilidad por orden o lote.</p></div>{% if desde_dashboard_finanzas %}<a class="btn btn-outline-primary" href="{% url 'finanzas_dashboard' %}?fecha_inicio={{ fecha_inicio|date:'Y-m-d' }}&fecha_fin={{ fecha_fin|date:'Y-m-d' }}">Volver al dashboard financiero</a>{% endif %}</div>
     {% if messages %}<ul class="messages" style="margin-bottom:20px;">{% for message in messages %}<li class="{{ message.tags }}">{{ message }}</li>{% endfor %}</ul>{% endif %}
     <section class="entrada-card entrada-card-full">
         <form method="post" class="entrada-form-grid">{% csrf_token %}<input type="hidden" name="accion" value="recalcular_costeos">

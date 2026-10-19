@@ -10,6 +10,7 @@ from django.utils import timezone
 from .models import (
     CatalogoMetricaPredictiva,
     CostoHoraMaquina,
+    CuentaPorPagarCobrar,
     InformeValidacionDefectoQA,
     InventarioAlmacen,
     Material,
@@ -31,7 +32,7 @@ from .models import (
 
 ZERO = Decimal('0')
 ONE = Decimal('1')
-VERSION_MODELO_ACTUAL = '1.1'
+VERSION_MODELO_ACTUAL = '1.2'
 
 
 def _to_decimal(value) -> Decimal:
@@ -171,6 +172,149 @@ def _evaluate_forecast(values: list[Decimal], horizon_weeks: int, x_values: list
         'skill': _round(skill, '0.1') if skill is not None else None,
         'backtests': len(errors),
         'confidence': _round(confidence, '0.1'),
+    }
+
+
+def _weekly_sales_history(limit: int = 12) -> dict:
+    """Agrupa ventas registradas como cuentas por cobrar en periodos semanales."""
+    accounts = list(
+        CuentaPorPagarCobrar.objects
+        .filter(tipo=CuentaPorPagarCobrar.TipoCuenta.POR_COBRAR)
+        .order_by('fecha_emision', 'id')
+        .values('fecha_emision', 'monto_total')
+    )
+    if not accounts:
+        return {'week_starts': [], 'values': [], 'transactions': 0}
+
+    grouped: dict[date, Decimal] = defaultdict(lambda: ZERO)
+    for account in accounts:
+        fecha = account['fecha_emision']
+        week_start = fecha - timedelta(days=fecha.weekday())
+        grouped[week_start] += _to_decimal(account['monto_total'])
+
+    first_week = min(grouped)
+    last_week = max(grouped)
+    total_weeks = ((last_week - first_week).days // 7) + 1
+    if total_weeks > limit:
+        first_week = last_week - timedelta(weeks=limit - 1)
+
+    week_starts = [
+        first_week + timedelta(weeks=index)
+        for index in range(((last_week - first_week).days // 7) + 1)
+    ]
+    return {
+        'week_starts': week_starts,
+        'values': [grouped.get(week_start, ZERO) for week_start in week_starts],
+        'transactions': len(accounts),
+    }
+
+
+def calcular_prediccion_ventas(limit: int = 12, horizon_weeks: int = 4,
+                               min_samples: int = 4) -> dict:
+    """Pronostica ventas semanales a partir de cuentas por cobrar emitidas.
+
+    Se utiliza ``monto_total`` porque representa la venta emitida al cliente;
+    ``monto_pagado`` se reserva para analizar cobranza y flujo de caja.
+    """
+    horizon_weeks = max(1, min(int(horizon_weeks or 1), 12))
+    history = _weekly_sales_history(limit=limit)
+    week_starts = history['week_starts']
+    values = history['values']
+    if not values:
+        return {
+            'enabled': False,
+            'samples': 0,
+            'transactions': 0,
+            'min_samples': min_samples,
+            'horizon_weeks': horizon_weeks,
+            'method': 'Regresión lineal semanal sobre cuentas por cobrar',
+            'source': 'Cuentas por cobrar (ventas emitidas a clientes)',
+            'data_quality': 'baja',
+            'detail': 'Registra cuentas por cobrar para alimentar el pronóstico de ventas.',
+            'current_value': None,
+            'next_week': None,
+            'projected_total': None,
+            'change_pct': None,
+            'confidence': ZERO,
+            'confidence_label': 'Baja',
+            'confidence_status': 'amarillo',
+            'status': 'amarillo',
+            'display_status': 'amarillo',
+            'forecast_reliable': False,
+            'forecast_values': [],
+            'labels': [],
+            'chart': {'labels': [], 'history': [], 'forecast': []},
+            'periodo_inicio': timezone.localdate(),
+            'periodo_fin': timezone.localdate(),
+            'backtests': 0,
+            'mape': None,
+        }
+
+    if len(values) < 3:
+        forecast_values = [_weighted_average(values) for _ in range(horizon_weeks)]
+        confidence = Decimal('45')
+        detail = 'Historial corto; se utiliza promedio ponderado como señal preventiva.'
+    else:
+        forecast_values, confidence, detail = _linear_forecast(values, steps=horizon_weeks)
+    forecast_values = [max(ZERO, _round(value)) for value in forecast_values]
+    evaluation = _evaluate_forecast(values, horizon_weeks)
+    current_value = _round(values[-1])
+    next_week = forecast_values[0] if forecast_values else None
+    projected_total = _round(sum(forecast_values, ZERO)) if forecast_values else None
+    change_pct = None
+    if next_week is not None and current_value > ZERO:
+        change_pct = _round((next_week - current_value) / current_value * Decimal('100'), '0.1')
+
+    if next_week is None:
+        status = 'amarillo'
+    elif next_week < current_value * Decimal('0.90'):
+        status = 'rojo'
+    elif next_week < current_value * Decimal('0.97'):
+        status = 'amarillo'
+    else:
+        status = 'verde'
+    forecast_reliable = len(values) >= min_samples
+    display_status = status if forecast_reliable else 'amarillo'
+    confidence_label, confidence_status = _confidence_label(len(values), confidence)
+    labels = [week_start.strftime('%d/%m/%y') for week_start in week_starts]
+    future_starts = [week_starts[-1] + timedelta(weeks=index) for index in range(1, horizon_weeks + 1)]
+    labels.extend(week_start.strftime('%d/%m/%y') for week_start in future_starts)
+    chart_forecast = [None for _ in values]
+    if values:
+        chart_forecast[-1] = float(current_value)
+    chart_forecast.extend(float(value) for value in forecast_values)
+
+    return {
+        'enabled': True,
+        'samples': len(values),
+        'transactions': history['transactions'],
+        'min_samples': min_samples,
+        'horizon_weeks': horizon_weeks,
+        'method': 'Regresión lineal semanal sobre cuentas por cobrar',
+        'source': 'Cuentas por cobrar (ventas emitidas a clientes)',
+        'data_quality': 'alta' if len(values) >= 8 else ('media' if len(values) >= 4 else 'baja'),
+        'detail': detail,
+        'current_value': current_value,
+        'next_week': next_week,
+        'projected_total': projected_total,
+        'change_pct': change_pct,
+        'confidence': _round(confidence, '0.1'),
+        'confidence_label': confidence_label,
+        'confidence_status': confidence_status,
+        'status': status,
+        'display_status': display_status,
+        'forecast_reliable': forecast_reliable,
+        'forecast_values': forecast_values,
+        'labels': labels,
+        'chart': {
+            'labels': labels,
+            'history': [float(value) for value in values] + [None for _ in forecast_values],
+            'forecast': chart_forecast,
+        },
+        'periodo_inicio': week_starts[0],
+        'periodo_fin': week_starts[-1],
+        'backtests': evaluation['backtests'],
+        'mape': evaluation['mape'],
     }
 
 
@@ -868,16 +1012,21 @@ def calcular_predicciones_financieras(limit: int = 12, horizon_weeks: int = 4,
     for report in reports_raw:
         reports_by_period[(report.fecha_inicio, report.fecha_fin)] = report
     reports = sorted(reports_by_period.values(), key=lambda report: (report.fecha_fin, report.fecha_creacion))[-limit:]
+    sales_forecast = calcular_prediccion_ventas(
+        limit=limit,
+        horizon_weeks=horizon_weeks,
+        min_samples=min_samples,
+    )
 
     metric_defs = [
-        ('flujo_caja', 'Flujo de caja previsto', 'kpis', '$', '', 'negative'),
-        ('rentabilidad', 'Rentabilidad prevista', 'kpis', '$', '', 'negative'),
-        ('rentabilidad_pct', 'Margen previsto', 'kpis', '', '%', 'margin'),
-        ('costo_real', 'Costo real previsto', 'produccion', '$', '', 'cost'),
-        ('costo_planificado', 'Costo planificado previsto', 'produccion', '$', '', 'neutral'),
-        ('variacion_costos', 'Variación de costos prevista', 'produccion', '$', '', 'cost_variation'),
-        ('oc_pendientes', 'Órdenes de compra pendientes', 'kpis', '', '', 'count'),
-        ('impuestos_pendientes', 'Impuestos pendientes', 'kpis', '', '', 'count'),
+        ('flujo_caja', 'Flujo de caja', 'kpis', '$', '', 'negative', 'Liquidez'),
+        ('rentabilidad', 'Rentabilidad', 'kpis', '$', '', 'negative', 'Resultados'),
+        ('rentabilidad_pct', 'Margen', 'kpis', '', '%', 'margin', 'Resultados'),
+        ('costo_real', 'Costo real', 'produccion', '$', '', 'cost', 'Costos'),
+        ('costo_planificado', 'Costo planificado', 'produccion', '$', '', 'neutral', 'Costos'),
+        ('variacion_costos', 'Variación de costos', 'produccion', '$', '', 'cost_variation', 'Costos'),
+        ('oc_pendientes', 'Órdenes de compra pendientes', 'kpis', '', '', 'count', 'Compromisos'),
+        ('impuestos_pendientes', 'Impuestos pendientes', 'kpis', '', '', 'count', 'Compromisos'),
     ]
 
     def series(key: str, section: str) -> list[Decimal]:
@@ -896,8 +1045,26 @@ def calcular_predicciones_financieras(limit: int = 12, horizon_weeks: int = 4,
             return 'rojo' if value >= 5 else ('amarillo' if value > 0 else 'verde')
         return 'verde'
 
+    def forecast_validation(key: str, kind: str, forecast: Decimal | None, values: list[Decimal]) -> tuple[bool, str]:
+        """Evita presentar extrapolaciones que no son válidas para el negocio."""
+        if forecast is None:
+            return False, 'No hay información suficiente para estimar este indicador.'
+        if kind == 'count' and forecast < ZERO:
+            return False, 'El cálculo produjo una cantidad negativa, que no es válida para este indicador.'
+        if key in {'costo_real', 'costo_planificado'} and forecast < ZERO:
+            return False, 'El cálculo produjo un costo negativo, que no es válido para la operación.'
+        if kind == 'margin' and not Decimal('-100') <= forecast <= Decimal('100'):
+            return False, 'El margen estimado queda fuera del rango financiero válido (-100% a 100%).'
+
+        max_history = max((abs(value) for value in values), default=ZERO)
+        if max_history == ZERO and forecast != ZERO:
+            return False, 'No existe variación histórica suficiente para respaldar esta estimación.'
+        if max_history > ZERO and abs(forecast) > max_history * Decimal('3'):
+            return False, 'La estimación se aleja demasiado del comportamiento histórico y requiere más datos.'
+        return True, ''
+
     items = []
-    for key, label, section, prefix, suffix, kind in metric_defs:
+    for key, label, section, prefix, suffix, kind, group in metric_defs:
         values = series(key, section)
         if not values:
             forecast_values = []
@@ -915,18 +1082,35 @@ def calcular_predicciones_financieras(limit: int = 12, horizon_weeks: int = 4,
         forecast = forecast_values[-1] if forecast_values else None
         latest = values[-1] if values else None
         confidence_label, confidence_status = _confidence_label(len(values), confidence)
-        status = status_for(kind, forecast)
+        prediction_valid, validation_note = forecast_validation(key, kind, forecast, values)
+        status = status_for(kind, forecast) if prediction_valid else 'amarillo'
         display_status = status if len(values) >= min_samples else 'amarillo'
+        if not prediction_valid:
+            display_status = 'amarillo'
         action = {
             'rojo': 'Revisar flujo, costos y compromisos antes del siguiente cierre financiero.',
             'amarillo': 'Reunir más periodos y validar la proyección con Finanzas.',
             'verde': 'Mantener seguimiento mensual y comparar contra el resultado real.',
         }[display_status]
+        if not prediction_valid:
+            action = 'No usar esta cifra como decisión; registrar más cierres comparables y volver a calcular.'
+        change = _round(forecast - latest) if prediction_valid and forecast is not None and latest is not None else None
+        change_pct = (
+            _round((change / abs(latest)) * Decimal('100'))
+            if change is not None and latest not in (None, ZERO)
+            else None
+        )
         items.append({
             'key': key,
             'label': label,
+            'group': group,
+            'is_count': kind == 'count',
             'value': forecast,
             'latest_value': _round(latest) if latest is not None else None,
+            'change': change,
+            'change_pct': change_pct,
+            'prediction_valid': prediction_valid,
+            'validation_note': validation_note,
             'forecast_values': forecast_values,
             'prefix': prefix,
             'suffix': suffix,
@@ -943,6 +1127,58 @@ def calcular_predicciones_financieras(limit: int = 12, horizon_weeks: int = 4,
             'detail': detail,
         })
 
+    # La rentabilidad y el margen representan el mismo resultado financiero.
+    # Si el margen no supera las reglas de validez, la rentabilidad tampoco debe
+    # presentarse de manera aislada como una recomendación accionable.
+    items_by_key = {item['key']: item for item in items}
+    margin_item = items_by_key.get('rentabilidad_pct')
+    profitability_item = items_by_key.get('rentabilidad')
+    if margin_item and profitability_item and not margin_item['prediction_valid']:
+        profitability_item.update({
+            'prediction_valid': False,
+            'validation_note': 'No se muestra porque el margen asociado no cumple los límites financieros válidos.',
+            'display_status': 'amarillo',
+            'action': 'No usar esta cifra como decisión; registrar más cierres comparables y volver a calcular.',
+            'change': None,
+            'change_pct': None,
+        })
+
+    sales_display_status = sales_forecast['display_status']
+    sales_action = {
+        'rojo': 'Revisar cartera comercial, pedidos próximos y capacidad de entrega antes del siguiente periodo.',
+        'amarillo': 'Reunir más semanas de ventas y validar la proyección con Finanzas y Comercial.',
+        'verde': 'Mantener el seguimiento semanal y comparar la venta proyectada contra la venta emitida real.',
+    }[sales_display_status]
+    sales_item = {
+        'key': 'ventas_clientes',
+        'label': 'Ventas a clientes (próxima semana)',
+        'value': sales_forecast['next_week'],
+        'latest_value': sales_forecast['current_value'],
+        'forecast_values': sales_forecast['forecast_values'],
+        'prefix': '$',
+        'suffix': '',
+        'confidence': sales_forecast['confidence'],
+        'confidence_label': sales_forecast['confidence_label'],
+        'confidence_status': sales_forecast['confidence_status'],
+        'status': sales_forecast['status'],
+        'display_status': sales_display_status,
+        'forecast_reliable': sales_forecast['forecast_reliable'],
+        'samples': sales_forecast['samples'],
+        'backtests': sales_forecast['backtests'],
+        'mape': sales_forecast['mape'],
+        'action': sales_action,
+        'detail': sales_forecast['detail'],
+        'enabled': sales_forecast['enabled'],
+        'source': sales_forecast['source'],
+        'projected_total': sales_forecast['projected_total'],
+        'change_pct': sales_forecast['change_pct'],
+        'transactions': sales_forecast['transactions'],
+        'periodo_inicio': sales_forecast['periodo_inicio'],
+        'periodo_fin': sales_forecast['periodo_fin'],
+        'modelo': sales_forecast['method'],
+    }
+    items.insert(0, sales_item)
+
     item_by_key = {item['key']: item for item in items}
     alerts = [
         {
@@ -951,22 +1187,50 @@ def calcular_predicciones_financieras(limit: int = 12, horizon_weeks: int = 4,
             'value': f"{item['prefix']}{item['value'] or 0}{item['suffix']}",
             'message': item['action'],
         }
-        for item in items if item['display_status'] in {'rojo', 'amarillo'}
+        for item in items
+        if item['display_status'] in {'rojo', 'amarillo'}
+        and (item['key'] != 'ventas_clientes' or item.get('enabled'))
     ]
     alerts.sort(key=lambda item: {'rojo': 0, 'amarillo': 1}.get(item['status'], 2))
-    start_date = reports[0].fecha_inicio if reports else timezone.localdate()
-    end_date = reports[-1].fecha_fin if reports else timezone.localdate()
+    financial_items = [item for item in items if item['key'] != 'ventas_clientes']
+    usable_predictions = sum(1 for item in financial_items if item['prediction_valid'])
+    validation_predictions = len(financial_items) - usable_predictions
+    validation_items = [item for item in financial_items if not item['prediction_valid']][:3]
+    headline_keys = ('ventas_clientes', 'flujo_caja', 'costo_real', 'rentabilidad_pct')
+    headline_cards = []
+    for key in headline_keys:
+        item = item_by_key.get(key, {})
+        is_sales = key == 'ventas_clientes'
+        headline_cards.append({
+            **item,
+            'prediction_valid': item.get('prediction_valid', sales_forecast['enabled'] if is_sales else False),
+            'validation_note': item.get('validation_note') or (
+                'Aún no hay suficientes ventas semanales para construir esta proyección.' if is_sales else ''
+            ),
+        })
+    period_starts = [report.fecha_inicio for report in reports]
+    period_ends = [report.fecha_fin for report in reports]
+    if sales_forecast['enabled']:
+        period_starts.append(sales_forecast['periodo_inicio'])
+        period_ends.append(sales_forecast['periodo_fin'])
+    start_date = min(period_starts) if period_starts else timezone.localdate()
+    end_date = max(period_ends) if period_ends else timezone.localdate()
+    report_quality = 'alta' if len(reports) >= 8 else ('media' if len(reports) >= 4 else 'baja')
     return {
-        'enabled': bool(reports),
+        'enabled': bool(reports) or sales_forecast['enabled'],
         'samples': len(reports),
         'min_samples': min_samples,
         'horizon_weeks': horizon_weeks,
         'fecha_inicio': start_date,
         'fecha_fin': end_date,
-        'method': 'Tendencia financiera sobre reportes KPI por periodo',
-        'data_quality': 'alta' if len(reports) >= 8 else ('media' if len(reports) >= 4 else 'baja'),
+        'method': 'Tendencia financiera sobre reportes KPI y ventas semanales registradas',
+        'data_quality': report_quality if reports else sales_forecast['data_quality'],
         'predictions': items,
         'alerts': alerts[:6],
+        'usable_predictions': usable_predictions,
+        'validation_predictions': validation_predictions,
+        'validation_items': validation_items,
+        'headline_cards': headline_cards,
         'summary': {
             'flujo_caja': item_by_key.get('flujo_caja', {}).get('value'),
             'rentabilidad': item_by_key.get('rentabilidad', {}).get('value'),
@@ -975,12 +1239,15 @@ def calcular_predicciones_financieras(limit: int = 12, horizon_weeks: int = 4,
             'variacion_costos': item_by_key.get('variacion_costos', {}).get('value'),
             'oc_pendientes': item_by_key.get('oc_pendientes', {}).get('value'),
             'impuestos_pendientes': item_by_key.get('impuestos_pendientes', {}).get('value'),
+            'ventas_clientes': sales_forecast['next_week'],
         },
         'trend': [
             {'label': report.fecha_fin.strftime('%d/%m'), 'value': _to_decimal((report.indicadores or {}).get('kpis', {}).get('flujo_caja'))}
             for report in reports
         ],
         'trend_forecast': item_by_key.get('flujo_caja', {}).get('forecast_values', []),
+        'sales': sales_forecast,
+        'sales_chart': sales_forecast['chart'],
     }
 
 
@@ -990,6 +1257,7 @@ def registrar_predicciones_financieras(forecast: dict, usuario=None) -> int:
         return 0
     model = 'Tendencia financiera sobre reportes KPI'
     catalog = {
+        'ventas_clientes': ('Ventas a clientes previstas', '$', True),
         'flujo_caja': ('Flujo de caja previsto', '$', True),
         'rentabilidad': ('Rentabilidad prevista', '$', True),
         'rentabilidad_pct': ('Margen previsto', '%', True),
@@ -999,32 +1267,35 @@ def registrar_predicciones_financieras(forecast: dict, usuario=None) -> int:
         'oc_pendientes': ('Órdenes de compra pendientes', 'órdenes', False),
         'impuestos_pendientes': ('Impuestos pendientes', 'declaraciones', False),
     }
-    target_date = forecast['fecha_fin'] + timedelta(weeks=forecast['horizon_weeks'])
     registered = 0
     for item in forecast.get('predictions', []):
         code = item['key']
         name, unit, higher_is_better = catalog[code]
         action = item['action']
+        item_model = item.get('modelo') or model
+        period_start = item.get('periodo_inicio') or forecast['fecha_inicio']
+        period_end = item.get('periodo_fin') or forecast['fecha_fin']
+        target_date = period_end + timedelta(weeks=forecast['horizon_weeks'])
         CatalogoMetricaPredictiva.objects.update_or_create(
             departamento='Finanzas', codigo=code,
             defaults={
                 'nombre': name,
                 'unidad': unit,
                 'mayor_es_mejor': higher_is_better,
-                'modelo_recomendado': model,
+                'modelo_recomendado': item_model,
                 'accion_default': action,
                 'activo': True,
             },
         )
         RegistroPrediccion.objects.update_or_create(
             departamento='Finanzas', alcance='GLOBAL', segmento='GLOBAL', codigo_metrica=code,
-            periodo_inicio=forecast['fecha_inicio'], periodo_fin=forecast['fecha_fin'],
-            fecha_objetivo=target_date, horizonte=forecast['horizon_weeks'], modelo=model,
+            periodo_inicio=period_start, periodo_fin=period_end,
+            fecha_objetivo=target_date, horizonte=forecast['horizon_weeks'], modelo=item_model,
             version_modelo=VERSION_MODELO_ACTUAL,
             defaults={
                 'nombre_metrica': name,
                 'valor_actual': item['latest_value'],
-                'valor_predicho': item['value'],
+                'valor_predicho': item['value'] if item.get('prediction_valid', True) else None,
                 'limite_inferior': None,
                 'limite_superior': None,
                 'confianza': item['confidence'],
@@ -1036,7 +1307,13 @@ def registrar_predicciones_financieras(forecast: dict, usuario=None) -> int:
                     'backtests': item['backtests'],
                     'mape': _float_or_none(item['mape']),
                     'pronostico_confiable': item['forecast_reliable'],
+                    'pronostico_valido': item.get('prediction_valid', True),
+                    'nota_validacion': item.get('validation_note', ''),
                     'calidad_dataset': forecast['data_quality'],
+                    'fuente': item.get('source'),
+                    'transacciones': item.get('transactions'),
+                    'proyeccion_total_horizonte': _float_or_none(item.get('projected_total')),
+                    'variacion_vs_ultimo_periodo_pct': _float_or_none(item.get('change_pct')),
                 },
             },
         )

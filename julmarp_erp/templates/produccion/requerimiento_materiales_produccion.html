@@ -305,7 +305,7 @@
                                     class="qty-input"
                                     min="0"
                                     step="{% if det.material.um == 'KG' %}0.1{% else %}1{% endif %}"
-                                    value="{% if det.material.um == 'KG' %}{{ det.cantidad_sugerida_compra|floatformat:1 }}{% else %}{{ det.cantidad_sugerida_compra|floatformat:0 }}{% endif %}"
+                                    value="{% if det.material.um == 'KG' %}{{ det.cantidad_sugerida_compra|floatformat:'1u' }}{% else %}{{ det.cantidad_sugerida_compra|floatformat:'0u' }}{% endif %}"
                                     {% if det.cantidad_sugerida_compra == 0 %}style="background:#e8f8ef;"{% endif %}>
                             </td>
                             <td>

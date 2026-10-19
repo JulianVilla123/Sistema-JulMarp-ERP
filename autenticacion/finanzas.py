@@ -207,7 +207,14 @@ def calcular_dashboard_finanzas(fecha_inicio: date | None = None, fecha_fin: dat
     cuentas = list(
         CuentaPorPagarCobrar.objects.filter(fecha_emision__range=(start_date, end_date)).select_related('orden_compra', 'proveedor', 'cliente_compra')
     )
-    presupuestos = list(PresupuestoFinanciero.objects.filter(fecha_inicio__lte=end_date, fecha_fin__gte=start_date, activo=True))
+    # Solo se consideran presupuestos activos cuyo periodo se cruza con el
+    # filtro seleccionado; un presupuesto fuera de rango no debe pintar la
+    # gráfica del dashboard actual.
+    presupuestos = list(
+        PresupuestoFinanciero.objects
+        .filter(fecha_inicio__lte=end_date, fecha_fin__gte=start_date, activo=True)
+        .order_by('-fecha_fin', 'nombre')
+    )
     ordenes_compra = list(OrdenCompra.objects.filter(fecha_orden__range=(start_date, end_date)).select_related('proveedor'))
     kpis_mfg = calcular_kpis_produccion(fecha_inicio=start_date, fecha_fin=end_date)
     costeos = list(CosteoProduccion.objects.filter(fecha_actualizacion__date__range=(start_date, end_date), lote_produccion__isnull=True).select_related('orden_fabricacion', 'orden_fabricacion__bom'))
@@ -223,6 +230,7 @@ def calcular_dashboard_finanzas(fecha_inicio: date | None = None, fecha_fin: dat
     rentabilidad_total = sum((_to_decimal(c.rentabilidad) for c in costeos), ZERO)
     ingreso_estimado_total = sum((_to_decimal(c.ingreso_estimado) for c in costeos), ZERO)
     rentabilidad_pct = _safe_div(rentabilidad_total, ingreso_estimado_total) * HUNDRED if ingreso_estimado_total > 0 else ZERO
+    presupuesto_utilizacion = _safe_div(gasto_real, presupuesto_total) * HUNDRED if presupuesto_total > ZERO else ZERO
 
     oc_pendientes = sum(1 for oc in ordenes_compra if oc.estado in {OrdenCompra.EstadoOrden.BORRADOR, OrdenCompra.EstadoOrden.APROBADA, OrdenCompra.EstadoOrden.ENVIADA, OrdenCompra.EstadoOrden.PARCIAL})
     oc_completadas = sum(1 for oc in ordenes_compra if oc.estado == OrdenCompra.EstadoOrden.RECIBIDA)
@@ -238,6 +246,17 @@ def calcular_dashboard_finanzas(fecha_inicio: date | None = None, fecha_fin: dat
     if impuestos_pendientes > 0:
         alerts.append(f'Existen {impuestos_pendientes} declaraciones fiscales pendientes.')
 
+    presupuesto_has_data = any(
+        _to_decimal(p.monto_presupuestado) > ZERO or _to_decimal(p.monto_real) > ZERO
+        for p in presupuestos
+    )
+    costo_planificado = _to_decimal(kpis_mfg['cost']['costo_planificado'])
+    costo_real = _to_decimal(kpis_mfg['cost']['costo_real'])
+    variacion_costos = _to_decimal(kpis_mfg['cost']['variacion_costos'])
+    variacion_costos_pct = _safe_div(variacion_costos, costo_planificado) * HUNDRED if costo_planificado > ZERO else ZERO
+    costos_has_data = costo_planificado > ZERO or costo_real > ZERO
+    oc_has_data = oc_pendientes > 0 or oc_completadas > 0
+
     return {
         'fecha_inicio': start_date,
         'fecha_fin': end_date,
@@ -248,25 +267,40 @@ def calcular_dashboard_finanzas(fecha_inicio: date | None = None, fecha_fin: dat
             'presupuesto_total': _round(presupuesto_total),
             'gasto_real': _round(gasto_real),
             'ingreso_presupuestado': _round(ingreso_presupuestado),
+            'presupuesto_utilizacion': _round(presupuesto_utilizacion),
             'oc_pendientes': oc_pendientes,
             'oc_completadas': oc_completadas,
             'costeos_generados': len(costeos),
             'impuestos_pendientes': impuestos_pendientes,
         },
         'produccion': {
-            'costo_planificado': kpis_mfg['cost']['costo_planificado'],
-            'costo_real': kpis_mfg['cost']['costo_real'],
-            'variacion_costos': kpis_mfg['cost']['variacion_costos'],
+            'costo_planificado': _round(costo_planificado),
+            'costo_real': _round(costo_real),
+            'variacion_costos': _round(variacion_costos),
+            'variacion_costos_pct': _round(variacion_costos_pct),
+            'rentabilidad': _round(rentabilidad_total),
+            'rentabilidad_pct': _round(rentabilidad_pct),
+            'costos_has_data': costos_has_data,
+            'rentabilidad_has_data': bool(costeos),
             'oee': kpis_mfg['oee']['oee'],
             'tasa_rechazo': kpis_mfg['reject']['tasa_rechazo'],
         },
         'charts': {
             'presupuesto_labels': ['Presupuesto', 'Gasto real', 'Ingreso presupuestado'],
             'presupuesto_values': [float(_round(presupuesto_total)), float(_round(gasto_real)), float(_round(ingreso_presupuestado))],
-            'costos_labels': ['Plan producción', 'Real producción', 'Rentabilidad'],
-            'costos_values': [float(kpis_mfg['cost']['costo_planificado']), float(kpis_mfg['cost']['costo_real']), float(_round(rentabilidad_total))],
+            'presupuesto_has_data': presupuesto_has_data,
+            'presupuesto_count': len(presupuestos),
+            'presupuesto_period': {
+                'fecha_inicio': start_date.isoformat(),
+                'fecha_fin': end_date.isoformat(),
+            },
+            'costos_labels': ['Costo planificado', 'Costo real'],
+            'costos_values': [float(_round(costo_planificado)), float(_round(costo_real))],
+            'costos_has_data': costos_has_data,
             'oc_labels': ['Pendientes', 'Completadas'],
             'oc_values': [oc_pendientes, oc_completadas],
+            'oc_has_data': oc_has_data,
+            'oc_count': oc_pendientes + oc_completadas,
         },
         'ordenes_compra_recientes': ordenes_compra[:8],
         'costeos_recientes': costeos[:8],

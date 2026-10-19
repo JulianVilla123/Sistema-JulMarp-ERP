@@ -749,6 +749,10 @@ function previewMateriales() {
     const tbody = document.getElementById('of-preview-tbody');
     const badge = document.getElementById('of-preview-badge');
     tbody.innerHTML = '';
+    const formatPreviewQuantity = (value) => Number(value || 0).toLocaleString('es-MX', {
+        minimumFractionDigits: 3,
+        maximumFractionDigits: 3,
+    });
 
     bom.componentes.forEach(comp => {
         const requerida = (comp.cantidad * factor);
@@ -758,7 +762,7 @@ function previewMateriales() {
             estadoHtml = '✓ Disponible';
             estadoClass = 'st-ok';
         } else if (stock > 0) {
-            estadoHtml = `⚠ Parcial (${stock.toFixed(3)} disp.)`;
+            estadoHtml = `⚠ Parcial (${formatPreviewQuantity(stock)} disp.)`;
             estadoClass = 'st-par';
         } else {
             estadoHtml = '✗ Sin stock';
@@ -769,8 +773,8 @@ function previewMateriales() {
             <td>${comp.sku}</td>
             <td>${comp.nombre}</td>
             <td>${comp.um}</td>
-            <td style="text-align:right;">${requerida.toFixed(3)}</td>
-            <td style="text-align:right;">${stock.toFixed(3)}</td>
+            <td style="text-align:right;">${formatPreviewQuantity(requerida)}</td>
+            <td style="text-align:right;">${formatPreviewQuantity(stock)}</td>
             <td class="${estadoClass}">${estadoHtml}</td>
         `;
         tbody.appendChild(tr);
@@ -835,7 +839,7 @@ function abrirModalCompletar(ofId, folio, cantPlanificada) {
             <td>${d.sku}<input type="hidden" name="consumo_material_id[]" value="${d.sku}"></td>
             <td>${d.nombre}</td>
             <td>${d.um}</td>
-            <td style="text-align:right;">${d.requerida.toFixed(3)}</td>
+            <td style="text-align:right;">${Number(d.requerida || 0).toLocaleString('es-MX', { minimumFractionDigits: 3, maximumFractionDigits: 3 })}</td>
             <td>
                 <input type="number" name="consumo_cantidad[]" value="${d.requerida.toFixed(3)}"
                     step="0.001" min="0"

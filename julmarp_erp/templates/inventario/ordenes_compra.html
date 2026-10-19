@@ -348,7 +348,7 @@
                 fillRowInfo(row);
                 total += calcRowSubtotal(row);
             });
-            totalNode.textContent = total.toFixed(2);
+            totalNode.textContent = total.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         }
 
         function bindRowEvents(row) {

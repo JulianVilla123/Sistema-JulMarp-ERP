@@ -503,7 +503,7 @@ document.addEventListener('DOMContentLoaded', function () {
                                 const rawValue = context.dataset.rawValues ? context.dataset.rawValues[context.dataIndex] : context.parsed.y;
                                 if (rawValue === null || rawValue === undefined || Number.isNaN(rawValue)) return '';
                                 const source = selectedItems.find(function (entry) { return context.dataset.label.indexOf(entry.label + ' ·') === 0; });
-                                return context.dataset.label + ': ' + Number(rawValue).toFixed(2) + (source ? source.unit : '');
+                                return context.dataset.label + ': ' + Number(rawValue).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + (source ? source.unit : '');
                             },
                         },
                     },

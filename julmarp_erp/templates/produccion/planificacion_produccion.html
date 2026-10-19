@@ -807,7 +807,7 @@ function previewMateriales() {
         const scrapPct = Math.round(scrapFactor * 100);
         const isKg = (um || '').toUpperCase() === 'KG';
 
-        function fmt(n) { return isKg ? n.toFixed(1) : Math.round(n).toString(); }
+        function fmt(n) { return Number(n || 0).toLocaleString('es-MX', { minimumFractionDigits: isKg ? 1 : 0, maximumFractionDigits: isKg ? 1 : 0 }); }
 
         if (stockNum >= requeridoConScrap) {
             return '<span class="preview-status ok">✓ Suficiente (scrap cubierto)</span>';
@@ -822,8 +822,8 @@ function previewMateriales() {
 
     // Format number based on unit of measure: KG → 1 decimal, everything else → integer
     function fmtQty(num, um) {
-        if ((um || '').toUpperCase() === 'KG') return num.toFixed(1);
-        return Math.round(num).toString();
+        const isKg = (um || '').toUpperCase() === 'KG';
+        return Number(num || 0).toLocaleString('es-MX', { minimumFractionDigits: isKg ? 1 : 0, maximumFractionDigits: isKg ? 1 : 0 });
     }
 
     bom.componentes.forEach(function (comp) {

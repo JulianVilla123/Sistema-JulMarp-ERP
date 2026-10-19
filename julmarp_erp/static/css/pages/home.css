@@ -146,10 +146,11 @@
 
 .chart-grid {
     margin-bottom: 16px;
+    align-items: start;
 }
 
 .chart-card {
-    min-height: 340px;
+    min-height: 0;
     background: linear-gradient(180deg, #ffffff 0%, #fbfaf7 100%);
 }
 
@@ -169,7 +170,9 @@
     border: 1px solid var(--jm-line);
     border-radius: 8px;
     background: linear-gradient(180deg, #ffffff 0%, #f7f4ef 100%);
-    padding: 10px 12px;
+    /* Reservar espacio para que Chart.js no recorte los textos del eje Y. */
+    padding: 10px 18px 10px 30px;
+    overflow: visible;
 }
 
 .dashboard-card {

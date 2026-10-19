@@ -1147,6 +1147,14 @@ def finanzas_dashboard(request):
     fecha_inicio, fecha_fin = _finance_date_range(request)
     export = (request.GET.get('export') or '').strip().lower()
     recalcular = (request.GET.get('recalcular') or '').strip() == '1'
+    horizonte_raw = (request.GET.get('horizonte') or '4').strip()
+    horizon_options = [1, 4, 8, 12]
+    try:
+        horizonte = int(horizonte_raw)
+    except (TypeError, ValueError):
+        horizonte = 4
+    if horizonte not in horizon_options:
+        horizonte = 4
 
     if recalcular:
         consolidar_costeos_produccion(usuario=request.user, fecha_inicio=fecha_inicio, fecha_fin=fecha_fin)
@@ -1178,7 +1186,7 @@ def finanzas_dashboard(request):
         return response
 
     dashboard = calcular_dashboard_finanzas(fecha_inicio=fecha_inicio, fecha_fin=fecha_fin)
-    ml_finanzas = calcular_predicciones_financieras()
+    ml_finanzas = calcular_predicciones_financieras(horizon_weeks=horizonte)
     registrar_predicciones_financieras(ml_finanzas, usuario=request.user)
     return render(
         request,
@@ -1189,6 +1197,8 @@ def finanzas_dashboard(request):
             'chart_data': dashboard['charts'],
             'fecha_inicio': fecha_inicio,
             'fecha_fin': fecha_fin,
+            'horizonte': horizonte,
+            'horizon_options': horizon_options,
             'ml_finanzas': ml_finanzas,
         },
     )
@@ -1375,7 +1385,16 @@ def finanzas_presupuestos(request):
             messages.success(request, f'Se actualizó el monto real del presupuesto {presupuesto.nombre}.')
             return redirect('finanzas_presupuestos')
 
-    presupuestos = list(PresupuestoFinanciero.objects.order_by('-fecha_fin', 'nombre'))
+    fecha_inicio, fecha_fin = _finance_date_range(request)
+    filtrar_periodo = bool(request.GET.get('fecha_inicio') or request.GET.get('fecha_fin'))
+    presupuestos_qs = PresupuestoFinanciero.objects.order_by('-fecha_fin', 'nombre')
+    if filtrar_periodo:
+        presupuestos_qs = presupuestos_qs.filter(
+            fecha_inicio__lte=fecha_fin,
+            fecha_fin__gte=fecha_inicio,
+            activo=True,
+        )
+    presupuestos = list(presupuestos_qs)
     for presupuesto in presupuestos:
         presupuesto.desviacion = (presupuesto.monto_real or Decimal('0')) - (presupuesto.monto_presupuestado or Decimal('0'))
 
@@ -1383,6 +1402,9 @@ def finanzas_presupuestos(request):
         'presupuestos': presupuestos,
         'categorias': PresupuestoFinanciero.Categoria.choices,
         'periodicidades': PresupuestoFinanciero.Periodicidad.choices,
+        'fecha_inicio': fecha_inicio,
+        'fecha_fin': fecha_fin,
+        'filtrar_periodo': filtrar_periodo,
     })
 
 
@@ -1480,6 +1502,7 @@ def finanzas_costeo_produccion(request):
         'costeos': costeos,
         'fecha_inicio': fecha_inicio,
         'fecha_fin': fecha_fin,
+        'desde_dashboard_finanzas': request.GET.get('origen') == 'dashboard_finanzas',
     })
 
 
@@ -1590,6 +1613,8 @@ def finanzas_ordenes_compra(request):
         messages.error(request, 'No tienes permisos para acceder a Órdenes de Compra de Finanzas.')
         return redirect('home')
 
+    fecha_inicio, fecha_fin = _finance_date_range(request)
+
     requerimientos_pendientes_qs = (
         RequerimientoMaterialProduccion.objects
         .filter(estado=RequerimientoMaterialProduccion.EstadoRequerimiento.ENVIADO_FINANZAS)
@@ -1699,6 +1724,9 @@ def finanzas_ordenes_compra(request):
         .order_by('-fecha_creacion')[:20]
     )
     return render(request, 'finanzas/ordenes_compra.html', {
+        'fecha_inicio': fecha_inicio,
+        'fecha_fin': fecha_fin,
+        'desde_dashboard_finanzas': request.GET.get('origen') == 'dashboard_finanzas',
         'requerimientos_pendientes': requerimientos_pendientes,
         'ordenes': ordenes,
         'proveedores_catalogo': Proveedor.objects.filter(activo=True).order_by('nombre'),

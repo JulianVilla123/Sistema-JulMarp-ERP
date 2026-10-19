@@ -8,6 +8,15 @@
     {% if messages %}<ul class="messages" style="margin-bottom:20px;">{% for message in messages %}<li class="{{ message.tags }}">{{ message }}</li>{% endfor %}</ul>{% endif %}
     <div class="entrada-grid">
         <section class="entrada-card entrada-card-full">
+            <h3>Consultar presupuestos por periodo</h3>
+            <p>El filtro usa el mismo cruce de fechas que el dashboard: se muestran presupuestos activos que coincidan con cualquier parte del periodo seleccionado.</p>
+            <form method="get" class="entrada-form-grid">
+                <label>Fecha inicio<input type="date" name="fecha_inicio" value="{{ fecha_inicio|date:'Y-m-d' }}" required></label>
+                <label>Fecha fin<input type="date" name="fecha_fin" value="{{ fecha_fin|date:'Y-m-d' }}" required></label>
+                <div class="entrada-actions" style="align-self:end;"><button class="btn btn-primary" type="submit">Consultar periodo</button>{% if filtrar_periodo %}<a class="btn btn-secondary" href="{% url 'finanzas_presupuestos' %}">Mostrar todos</a>{% endif %}</div>
+            </form>
+        </section>
+        <section class="entrada-card entrada-card-full">
             <h3>Nuevo presupuesto</h3>
             <form method="post">{% csrf_token %}<input type="hidden" name="accion" value="guardar_presupuesto">
                 <div class="entrada-form-grid">
