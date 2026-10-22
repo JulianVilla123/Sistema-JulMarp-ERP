@@ -1,10 +1,10 @@
 {% extends 'base.html' %}
 {% load static %}
-{% block title %}Finanzas - Órdenes de Compra MFG{% endblock %}
+{% block title %}Finanzas - Órdenes de Compra{% endblock %}
 {% block extra_css %}<link rel="stylesheet" href="{% static 'css/pages/inventario.css' %}">{% endblock %}
 {% block content %}
 <div class="entrada-container">
-    <div class="entrada-header" style="display:flex; justify-content:space-between; gap:16px; align-items:flex-start; flex-wrap:wrap;"><div><h1>Órdenes de Compra desde MFG</h1><p>Recepción de folios enviados por Producción, asignación de proveedor, costo estimado y tiempo estimado de entrega.</p></div>{% if desde_dashboard_finanzas %}<a class="btn btn-outline-primary" href="{% url 'finanzas_dashboard' %}?fecha_inicio={{ fecha_inicio|date:'Y-m-d' }}&fecha_fin={{ fecha_fin|date:'Y-m-d' }}">Volver al dashboard financiero</a>{% endif %}</div>
+    <div class="entrada-header" style="display:flex; justify-content:space-between; gap:16px; align-items:flex-start; flex-wrap:wrap;"><div><h1>Órdenes de compra</h1><p>Finanzas aprueba las compras de Inventario y genera las órdenes provenientes de Producción.</p></div>{% if desde_dashboard_finanzas %}<a class="btn btn-outline-primary" href="{% url 'finanzas_dashboard' %}?fecha_inicio={{ fecha_inicio|date:'Y-m-d' }}&fecha_fin={{ fecha_fin|date:'Y-m-d' }}">Volver al dashboard financiero</a>{% endif %}</div>
     {% if messages %}<ul class="messages" style="margin-bottom:20px;">{% for message in messages %}<li class="{{ message.tags }}">{{ message }}</li>{% endfor %}</ul>{% endif %}
     <div class="entrada-grid">
         <section class="entrada-card entrada-card-full">
@@ -25,6 +25,16 @@
         <section class="entrada-card entrada-card-full">
             <h3>Requerimientos pendientes</h3>
             <ul class="recent-activity-list">{% for req in requerimientos_pendientes %}<li><div><p>{{ req.folio }} — {{ req.bom.producto }}</p><small>{{ req.fecha_envio_finanzas|date:'d/m/Y H:i' }} | {{ req.detalles.count }} materiales</small></div><strong>{{ req.cantidad_planificada|floatformat:0 }}</strong></li>{% empty %}<li><div><p>Sin requerimientos pendientes</p><small>MFG aún no envía faltantes o ya fueron convertidos en OC</small></div><strong>-</strong></li>{% endfor %}</ul>
+        </section>
+        <section class="entrada-card entrada-card-full">
+            <h3>Órdenes de Inventario pendientes de aprobación</h3>
+            <p>Revisa proveedor, materiales, cantidades y total antes de autorizar la compra.</p>
+            <div class="tabla-wrap"><table class="tabla-material"><thead><tr><th>Folio</th><th>Proveedor</th><th>Fecha</th><th>Solicitó</th><th>Partidas</th><th>Total</th><th>Acción</th></tr></thead><tbody>
+                {% for orden in ordenes_inventario_pendientes %}
+                <tr><td>{{ orden.folio }}</td><td>{{ orden.proveedor.nombre }}</td><td>{{ orden.fecha_orden|date:'d/m/Y' }}</td><td>{{ orden.creado_por.username }}</td><td>{{ orden.detalles.count }}</td><td>${{ orden.total_estimado|floatformat:2 }}</td><td><form method="post">{% csrf_token %}<input type="hidden" name="orden_id" value="{{ orden.id }}"><button class="btn btn-primary" type="submit" name="accion_estado" value="APROBADA">Aprobar</button></form></td></tr>
+                {% empty %}<tr><td colspan="7">No hay órdenes de Inventario pendientes de aprobación.</td></tr>
+                {% endfor %}
+            </tbody></table></div>
         </section>
         <section class="entrada-card entrada-card-full">
             <h3>Órdenes generadas</h3>

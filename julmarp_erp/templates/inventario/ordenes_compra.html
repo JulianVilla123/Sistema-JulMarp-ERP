@@ -160,8 +160,7 @@
                         <strong>Total estimado: <span id="oc-total-estimado">0.00</span></strong>
                         <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                             <button class="btn btn-info" type="submit" name="accion" value="borrador">Guardar borrador</button>
-                            <button class="btn btn-primary" type="submit" name="accion" value="aprobar">Aprobar</button>
-                            <button class="btn btn-success" type="submit" name="accion" value="enviar">Enviar</button>
+                            <small style="align-self:center; color:#5f6f86;">Finanzas debe aprobarla antes de enviarla.</small>
                         </div>
                     </div>
                 </section>
@@ -208,11 +207,15 @@
                             <td>
                                 <div style="display: flex; gap: 6px; flex-wrap: wrap; justify-content: center;">
                                     {% if orden.estado == estado_borrador %}
+                                    {% if puede_aprobar_oc %}
                                     <form method="post">
                                         {% csrf_token %}
                                         <input type="hidden" name="orden_id" value="{{ orden.id }}">
                                         <button class="btn btn-primary" type="submit" name="accion_estado" value="APROBADA">Aprobar</button>
                                     </form>
+                                    {% else %}
+                                    <span style="color:#8a6d1d; font-size:.85rem;">Pendiente de Finanzas</span>
+                                    {% endif %}
                                     {% endif %}
 
                                     {% if orden.estado == estado_aprobada %}

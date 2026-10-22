@@ -225,6 +225,19 @@ def _usuario_puede_ver_finanzas(user):
     return departamento in {'finanzas', 'admin', 'it'}
 
 
+def _usuario_puede_aprobar_orden_compra(user):
+    """La aprobación financiera queda separada de la captura operativa."""
+    return _usuario_puede_ver_finanzas(user)
+
+
+def _usuario_puede_operar_orden_compra(user):
+    """Inventario envía y recibe las órdenes después de su aprobación."""
+    if not user.is_authenticated:
+        return False
+    departamento = _normalizar_departamento(user.departamento.nombre if user.departamento else '')
+    return departamento in {'inventario', 'admin', 'it'}
+
+
 def _finance_date_range(request, default_days=29):
     fecha_fin = timezone.localdate()
     fecha_inicio = fecha_fin - timedelta(days=default_days)
@@ -1844,6 +1857,9 @@ def finanzas_ordenes_compra(request):
         if not orden:
             messages.error(request, 'La orden seleccionada no existe.')
             return redirect('finanzas_ordenes_compra')
+        if not orden.creada_desde_mfg and accion_estado != OrdenCompra.EstadoOrden.APROBADA:
+            messages.error(request, 'Finanzas solo aprueba las órdenes de Inventario; el envío y la recepción corresponden a Inventario.')
+            return redirect('finanzas_ordenes_compra')
         transiciones = _ordenes_transiciones_permitidas(orden.estado)
         if accion_estado not in transiciones:
             messages.error(request, f'No es posible cambiar la orden a {accion_estado}.')
@@ -1928,6 +1944,13 @@ def finanzas_ordenes_compra(request):
             return redirect('finanzas_ordenes_compra')
 
     requerimientos_pendientes = list(requerimientos_pendientes_qs[:20])
+    ordenes_inventario_pendientes = list(
+        OrdenCompra.objects
+        .filter(creada_desde_mfg=False, estado=OrdenCompra.EstadoOrden.BORRADOR)
+        .select_related('proveedor', 'creado_por')
+        .prefetch_related('detalles')
+        .order_by('-fecha_creacion')[:30]
+    )
     ordenes = list(
         OrdenCompra.objects
         .filter(creada_desde_mfg=True)
@@ -1940,6 +1963,7 @@ def finanzas_ordenes_compra(request):
         'fecha_fin': fecha_fin,
         'desde_dashboard_finanzas': request.GET.get('origen') == 'dashboard_finanzas',
         'requerimientos_pendientes': requerimientos_pendientes,
+        'ordenes_inventario_pendientes': ordenes_inventario_pendientes,
         'ordenes': ordenes,
         'proveedores_catalogo': Proveedor.objects.filter(activo=True).order_by('nombre'),
         'opciones_condiciones_pago': ORDEN_CONDICIONES_PAGO,
@@ -3076,6 +3100,17 @@ def ordenes_compra(request):
             messages.error(request, 'La orden seleccionada no existe.')
             return redirect('ordenes_compra')
 
+        if accion_estado == OrdenCompra.EstadoOrden.APROBADA and not _usuario_puede_aprobar_orden_compra(request.user):
+            messages.error(request, 'La aprobación de una orden de compra corresponde a Finanzas.')
+            return redirect('ordenes_compra')
+        if accion_estado in {
+            OrdenCompra.EstadoOrden.ENVIADA,
+            OrdenCompra.EstadoOrden.PARCIAL,
+            OrdenCompra.EstadoOrden.RECIBIDA,
+        } and not _usuario_puede_operar_orden_compra(request.user):
+            messages.error(request, 'El envío y la recepción de materiales corresponden a Inventario.')
+            return redirect('ordenes_compra')
+
         transiciones = _ordenes_transiciones_permitidas(orden.estado)
         if accion_estado not in transiciones:
             messages.error(request, f'No es posible cambiar de {orden.get_estado_display()} a {accion_estado}.')
@@ -3093,6 +3128,10 @@ def ordenes_compra(request):
         condiciones_pago = (request.POST.get('condiciones_pago') or '').strip()
         observaciones = (request.POST.get('observaciones') or '').strip()
         accion = (request.POST.get('accion') or 'borrador').strip().lower()
+
+        if accion != 'borrador':
+            messages.error(request, 'La orden se crea como borrador y debe ser aprobada por Finanzas antes de enviarse.')
+            return redirect('ordenes_compra')
 
         skus = request.POST.getlist('sku[]')
         cantidades = request.POST.getlist('cantidad_pedida[]')
@@ -3186,11 +3225,7 @@ def ordenes_compra(request):
                 form_data['lineas'] = [{'sku': '', 'cantidad_pedida': '', 'precio_unitario': ''}]
 
             if lineas:
-                estado_destino = {
-                    'borrador': OrdenCompra.EstadoOrden.BORRADOR,
-                    'aprobar': OrdenCompra.EstadoOrden.APROBADA,
-                    'enviar': OrdenCompra.EstadoOrden.ENVIADA,
-                }.get(accion, OrdenCompra.EstadoOrden.BORRADOR)
+                estado_destino = OrdenCompra.EstadoOrden.BORRADOR
 
                 total_estimado = sum((linea['subtotal'] for linea in lineas), Decimal('0'))
 
@@ -3247,6 +3282,7 @@ def ordenes_compra(request):
             'estado_parcial': OrdenCompra.EstadoOrden.PARCIAL,
             'estado_borrador': OrdenCompra.EstadoOrden.BORRADOR,
             'estado_aprobada': OrdenCompra.EstadoOrden.APROBADA,
+            'puede_aprobar_oc': _usuario_puede_aprobar_orden_compra(request.user),
         },
     )
 
