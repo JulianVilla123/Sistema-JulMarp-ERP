@@ -328,11 +328,7 @@ html.embedded-frame #workspace-main {
     color: white;
 }
 
-.nav-item.dropdown:hover .dropdown-menu {
-    display: block;
-}
-
-.nav-item.dropdown:focus-within .dropdown-menu {
+.nav-item.dropdown.is-open > .dropdown-menu {
     display: block;
 }
 
@@ -816,5 +812,35 @@ html.embedded-frame #workspace-main {
     .alert {
         border-radius: 8px;
         padding: 12px 14px;
+    }
+}
+
+/* Click-controlled navigation works with touch, keyboard and mouse. */
+.main-nav button.nav-link {
+    border: 0;
+    background: transparent;
+    font-family: inherit;
+    cursor: pointer;
+}
+.main-nav button.nav-link:hover,
+.main-nav button.nav-link[aria-expanded="true"] {
+    color: white;
+    background: rgba(255, 255, 255, 0.09);
+}
+/* Escape the horizontal scroll container at phone and foldable widths. */
+@media (max-width: 1180px), (hover: none), (pointer: coarse) {
+    .main-nav .dropdown-menu {
+        position: fixed;
+        inset: auto 10px 10px;
+        min-width: 0;
+        max-height: min(70dvh, 420px);
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        border-radius: 8px;
+        padding: 8px;
+        z-index: 1500;
+    }
+    .main-nav .dropdown-menu li a {
+        padding: 11px 12px;
     }
 }
