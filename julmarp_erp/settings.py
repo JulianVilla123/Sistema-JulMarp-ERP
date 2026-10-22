@@ -142,9 +142,10 @@ if importlib.util.find_spec('whitenoise'):
 
 ROOT_URLCONF = 'julmarp_erp.urls'
 
-# El entorno local conserva el iframe entre pestañas; producción queda en DENY
-# salvo que el despliegue defina explícitamente otra política.
-X_FRAME_OPTIONS = os.environ.get('X_FRAME_OPTIONS', 'SAMEORIGIN' if DEBUG else 'DENY')
+# El ERP utiliza pestañas internas con iframes del mismo dominio. Permitir
+# únicamente ese origen evita el bloqueo del navegador sin habilitar
+# incrustación desde sitios externos.
+X_FRAME_OPTIONS = os.environ.get('X_FRAME_OPTIONS', 'SAMEORIGIN')
 
 TEMPLATES = [
     {
