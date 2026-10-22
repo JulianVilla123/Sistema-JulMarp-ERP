@@ -12,7 +12,7 @@
             {% with departamento=user.departamento.nombre|default:'' %}
                 {% if departamento == 'Admin' %}
                     <li class="nav-item dropdown">
-                        <a href="#" class="nav-link dropdown-toggle">Inventario</a>
+                        <button type="button" class="nav-link dropdown-toggle" aria-expanded="false">Inventario</button>
                         <ul class="dropdown-menu">
                             <li><a href="{% url 'entrada_planta' %}">Importacion</a></li>
                             <li><a href="{% url 'entrada_linea' %}">Distribucion</a></li>
@@ -29,7 +29,7 @@
                     </li>
 
                     <li class="nav-item dropdown">
-                        <a href="#" class="nav-link dropdown-toggle">Produccion</a>
+                        <button type="button" class="nav-link dropdown-toggle" aria-expanded="false">Produccion</button>
                         <ul class="dropdown-menu">
                             <li><a href="{% url 'plan_produccion_diario' %}">Plan diario</a></li>
                             <li><a href="{% url 'bom_mfg' %}">BOM MFG</a></li>
@@ -41,7 +41,7 @@
                     </li>
 
                     <li class="nav-item dropdown">
-                        <a href="#" class="nav-link dropdown-toggle">Indicadores</a>
+                        <button type="button" class="nav-link dropdown-toggle" aria-expanded="false">Indicadores</button>
                         <ul class="dropdown-menu">
                             <li><a href="{% url 'indicadores_kpis_mfg' %}">Indicadores de MFG</a></li>
                             <li><a href="{% url 'prediccion_produccion' %}">Prediccion de produccion</a></li>
@@ -49,7 +49,7 @@
                     </li>
 
                     <li class="nav-item dropdown">
-                        <a href="#" class="nav-link dropdown-toggle">Finanzas</a>
+                        <button type="button" class="nav-link dropdown-toggle" aria-expanded="false">Finanzas</button>
                         <ul class="dropdown-menu">
                             <li><a href="{% url 'finanzas_dashboard' %}">Dashboard Finanzas</a></li>
                             <li><a href="{% url 'finanzas_contabilidad' %}">Contabilidad</a></li>
@@ -63,7 +63,7 @@
                     </li>
 
                     <li class="nav-item dropdown">
-                        <a href="#" class="nav-link dropdown-toggle">IT</a>
+                        <button type="button" class="nav-link dropdown-toggle" aria-expanded="false">IT</button>
                         <ul class="dropdown-menu">
                             <li><a href="{% url 'register' %}">Crear usuario</a></li>
                             <li><a href="{% url 'it_usuarios' %}">Usuarios</a></li>
@@ -74,7 +74,7 @@
                     </li>
 
                     <li class="nav-item dropdown">
-                        <a href="#" class="nav-link dropdown-toggle">QA</a>
+                        <button type="button" class="nav-link dropdown-toggle" aria-expanded="false">QA</button>
                         <ul class="dropdown-menu">
                             <li><a href="{% url 'qa_sqa' %}">SQA</a></li>
                             <li><a href="{% url 'qa_oqa' %}">OQA</a></li>
@@ -84,7 +84,7 @@
                     </li>
 
                     <li class="nav-item dropdown">
-                        <a href="#" class="nav-link dropdown-toggle">RRHH</a>
+                        <button type="button" class="nav-link dropdown-toggle" aria-expanded="false">RRHH</button>
                         <ul class="dropdown-menu">
                             <li><a href="#">Gestion de empleados</a></li>
                             <li><a href="#">Control de overtime</a></li>
@@ -99,7 +99,7 @@
                             <a href="{% url 'entrada_linea' %}" class="nav-link">Distribucion</a>
                         </li>
                         <li class="nav-item dropdown">
-                            <a href="#" class="nav-link dropdown-toggle">Inventario</a>
+                            <button type="button" class="nav-link dropdown-toggle" aria-expanded="false">Inventario</button>
                             <ul class="dropdown-menu">
                                 <li><a href="{% url 'inventario_dashboard' %}">Dashboard de inventarios</a></li>
                                 <li><a href="{% url 'inventario_prediccion' %}">Prediccion de inventario</a></li>
@@ -132,7 +132,7 @@
                             <a href="{% url 'control_recursos_mfg' %}" class="nav-link">Control recursos</a>
                         </li>
                         <li class="nav-item dropdown">
-                            <a href="#" class="nav-link dropdown-toggle">Indicadores</a>
+                            <button type="button" class="nav-link dropdown-toggle" aria-expanded="false">Indicadores</button>
                             <ul class="dropdown-menu">
                                 <li><a href="{% url 'indicadores_kpis_mfg' %}">Indicadores de MFG</a></li>
                                 <li><a href="{% url 'prediccion_produccion' %}">Prediccion de produccion</a></li>
@@ -151,7 +151,7 @@
                             <a href="{% url 'finanzas_dashboard' %}" class="nav-link">Dashboard Finanzas</a>
                         </li>
                         <li class="nav-item dropdown">
-                            <a href="#" class="nav-link dropdown-toggle">Operacion</a>
+                            <button type="button" class="nav-link dropdown-toggle" aria-expanded="false">Operacion</button>
                             <ul class="dropdown-menu">
                                 <li><a href="{% url 'finanzas_contabilidad' %}">Contabilidad</a></li>
                                 <li><a href="{% url 'finanzas_presupuestos' %}">Presupuestos</a></li>
@@ -160,7 +160,7 @@
                             </ul>
                         </li>
                         <li class="nav-item dropdown">
-                            <a href="#" class="nav-link dropdown-toggle">Produccion</a>
+                            <button type="button" class="nav-link dropdown-toggle" aria-expanded="false">Produccion</button>
                             <ul class="dropdown-menu">
                                 <li><a href="{% url 'finanzas_costeo_produccion' %}">Costeo produccion</a></li>
                                 <li><a href="{% url 'finanzas_ordenes_compra' %}">Órdenes de compra</a></li>
@@ -168,7 +168,7 @@
                             </ul>
                         </li>
                         <li class="nav-item dropdown">
-                            <a href="#" class="nav-link dropdown-toggle">Reportes</a>
+                            <button type="button" class="nav-link dropdown-toggle" aria-expanded="false">Reportes</button>
                             <ul class="dropdown-menu">
                                 <li><a href="{% url 'finanzas_reportes' %}">Reportes financieros</a></li>
                             </ul>
@@ -177,7 +177,7 @@
 
                     {% if departamento == 'RRHH' %}
                         <li class="nav-item dropdown">
-                            <a href="#" class="nav-link dropdown-toggle">RRHH</a>
+                            <button type="button" class="nav-link dropdown-toggle" aria-expanded="false">RRHH</button>
                             <ul class="dropdown-menu">
                                 <li><a href="#">Gestion de empleados</a></li>
                                 <li><a href="#">Control de overtime</a></li>
