@@ -14,6 +14,8 @@ import importlib.util
 from pathlib import Path
 from urllib.parse import parse_qsl, unquote, urlparse
 
+from django.core.exceptions import ImproperlyConfigured
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -169,7 +171,16 @@ DATABASE_URL = os.environ.get('DATABASE_URL')
 USE_SUPABASE_DB = os.environ.get('USE_SUPABASE_DB', 'false').strip().lower() in {
     '1', 'true', 'yes', 'on'
 }
-USE_POSTGRES_DB = bool_from_env('USE_POSTGRES_DB', USE_SUPABASE_DB)
+IS_VERCEL = bool(os.environ.get('VERCEL'))
+
+# Las funciones de Vercel no tienen un filesystem persistente para SQLite.
+# En producción se debe utilizar PostgreSQL mediante DATABASE_URL.
+if IS_VERCEL and not DATABASE_URL:
+    raise ImproperlyConfigured(
+        'En Vercel debes configurar DATABASE_URL con la cadena PostgreSQL de Supabase.'
+    )
+
+USE_POSTGRES_DB = True if IS_VERCEL else bool_from_env('USE_POSTGRES_DB', USE_SUPABASE_DB)
 
 DATABASES = {
     'default': database_from_url(DATABASE_URL) if USE_POSTGRES_DB and DATABASE_URL else {
