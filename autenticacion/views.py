@@ -1835,6 +1835,13 @@ def finanzas_impuestos(request):
 @never_cache
 def finanzas_ordenes_compra(request):
     if not _usuario_puede_ver_finanzas(request.user):
+        departamento = _normalizar_departamento(request.user.departamento.nombre if request.user.departamento else '')
+        if departamento == 'inventario':
+            messages.info(
+                request,
+                'Puedes crear y consultar órdenes desde el módulo de Inventario. Finanzas se encarga de aprobarlas.',
+            )
+            return redirect('ordenes_compra')
         messages.error(request, 'No tienes permisos para acceder a Órdenes de Compra de Finanzas.')
         return redirect('home')
 
