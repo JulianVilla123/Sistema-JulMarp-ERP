@@ -32,6 +32,7 @@ from .models import (
     DeclaracionImpuesto,
     Departamento,
     EstadoFinanciero,
+    FactorExternoPredictivo,
     HistorialCambioUsuario,
     InventarioAlmacen,
     InformeValidacionDefectoQA,
@@ -58,6 +59,7 @@ from .models import (
     RequerimientoMaterialProduccion,
     RequerimientoMaterialProduccionDetalle,
     ReporteKPIProduccion,
+    RegistroPrediccion,
     SalidaLinea,
     SalidaLineaDetalle,
     TransferenciaAlmacen,
@@ -96,10 +98,26 @@ from .ml_analytics import (
     calcular_predicciones_mantenimiento,
     registrar_predicciones_mantenimiento,
 )
+from .predictive_contract import HORIZONTES_SEMANAS, horizonte_a_dias, normalizar_horizonte_semanas
+from .predictive_factors import INVENTORY_FACTOR_TYPE_CODES
 
 # Create your views here.
 
 User = get_user_model()
+
+FINANCE_FACTOR_METRICS = (
+    ('GLOBAL', 'Todas las métricas financieras'),
+    ('ventas_clientes', 'Ventas a clientes'),
+    ('flujo_caja', 'Flujo de caja'),
+    ('rentabilidad', 'Rentabilidad'),
+    ('rentabilidad_pct', 'Margen'),
+    ('costo_real', 'Costo real'),
+    ('costo_planificado', 'Costo planificado'),
+    ('variacion_costos', 'Variación de costos'),
+    ('oc_pendientes', 'Órdenes de compra pendientes'),
+    ('impuestos_pendientes', 'Impuestos pendientes'),
+)
+FINANCE_FACTOR_METRIC_CODES = {code for code, _ in FINANCE_FACTOR_METRICS}
 
 
 def _normalizar_departamento(nombre):
@@ -220,6 +238,119 @@ def _finance_date_range(request, default_days=29):
         parsed_inicio, parsed_fin = parsed_fin, parsed_inicio
 
     return parsed_inicio or fecha_inicio, parsed_fin or fecha_fin
+
+
+def _comparacion_financiera_vs_real():
+    """Prepara la última predicción de cada métrica para compararla con el cierre real."""
+    labels = dict(FINANCE_FACTOR_METRICS)
+    units = {
+        'ventas_clientes': '$',
+        'flujo_caja': '$',
+        'rentabilidad': '$',
+        'rentabilidad_pct': '%',
+        'costo_real': '$',
+        'costo_planificado': '$',
+        'variacion_costos': '$',
+        'oc_pendientes': '',
+        'impuestos_pendientes': '',
+    }
+    rows = RegistroPrediccion.objects.filter(
+        departamento='Finanzas',
+        alcance='GLOBAL',
+        segmento='GLOBAL',
+        codigo_metrica__in=set(units),
+    ).order_by('codigo_metrica', '-fecha_objetivo', '-fecha_actualizacion')
+    latest = {}
+    for row in rows:
+        if row.codigo_metrica in latest:
+            continue
+        latest[row.codigo_metrica] = row
+    # Para medir el modelo, se prioriza el último periodo que ya tiene cierre.
+    # Si todavía no existe, se muestra el pronóstico pendiente más reciente.
+    for code in units:
+        evaluated = next(
+            (row for row in rows if row.codigo_metrica == code and row.resultado_real is not None),
+            None,
+        )
+        if evaluated is not None:
+            latest[code] = evaluated
+
+    comparison = []
+    for code, label in FINANCE_FACTOR_METRICS:
+        if code == 'GLOBAL' or code not in latest:
+            continue
+        row = latest[code]
+        predicted = row.valor_predicho
+        actual = row.resultado_real
+        is_simulated = bool((row.metadatos or {}).get('resultado_simulado'))
+        has_result = predicted is not None and actual is not None
+        difference = (actual - predicted) if has_result else None
+        error_pct = (
+            abs(row.error_real or (actual - predicted)) / max(abs(predicted), Decimal('1')) * Decimal('100')
+            if has_result else None
+        )
+        if not has_result:
+            status = 'amarillo'
+            status_label = 'Pendiente de cierre'
+        elif error_pct <= Decimal('10'):
+            status = 'verde'
+            status_label = 'En rango'
+        elif error_pct <= Decimal('25'):
+            status = 'amarillo'
+            status_label = 'Revisar'
+        else:
+            status = 'rojo'
+            status_label = 'Desviación alta'
+        comparison.append({
+            'code': code,
+            'label': labels.get(code, row.nombre_metrica),
+            'unit': units[code],
+            'predicted': predicted,
+            'actual': actual,
+            'difference': difference,
+            'error_pct': error_pct,
+            'has_result': has_result,
+            'is_simulated': is_simulated,
+            'status': status,
+            'status_label': status_label,
+            'target_date': row.fecha_objetivo,
+        })
+    return comparison
+
+
+def _grafica_financiera_vs_real(comparison):
+    """Genera datos de gráfica únicamente con pronóstico y resultado evaluado."""
+    metrics = []
+    for item in comparison:
+        predicted = item['predicted']
+        metrics.append({
+            'code': item['code'],
+            'label': item['label'],
+            'unit': item['unit'],
+            'fecha': item['target_date'].strftime('%d/%m/%Y') if item['target_date'] else '',
+            'pronostico': float(predicted) if predicted is not None else None,
+            'real': float(item['actual']) if item['actual'] is not None else None,
+        })
+    return {
+        'metrics': metrics,
+        'result_label': 'El resultado real aparece cuando se cierra el periodo objetivo. Los datos de demostración están marcados como simulados.',
+    }
+
+
+def _ventas_chart_con_resultado_real(sales_chart, comparison):
+    """Añade el cierre evaluado a la semana objetivo de la línea de ventas."""
+    chart = {**(sales_chart or {})}
+    labels = list(chart.get('labels') or [])
+    real_values = list(chart.get('history') or [])
+    sales_item = next((item for item in comparison if item['code'] == 'ventas_clientes'), None)
+    if sales_item and sales_item['actual'] is not None and sales_item['target_date']:
+        target_label = sales_item['target_date'].strftime('%d/%m/%y')
+        if target_label in labels:
+            real_index = labels.index(target_label)
+            if real_index < len(real_values):
+                real_values[real_index] = float(sales_item['actual'])
+    chart['history'] = real_values
+    return chart
 
 
 def _next_generic_folio(model_class, prefix):
@@ -818,6 +949,9 @@ def home(request):
 
         movimientos_recientes.sort(key=lambda x: (x['fecha'], x['referencia']), reverse=True)
 
+        inv_ml = calcular_predicciones_inventario()
+        registrar_predicciones_inventario(inv_ml, usuario=request.user)
+
         context.update({
             'inv_total_stock': resumen_stock.get('total_stock') or Decimal('0'),
             'inv_materiales_activos': materiales_activos,
@@ -827,6 +961,7 @@ def home(request):
             'inv_transferencias_semana': transferencias_semana.get('total') or Decimal('0'),
             'inv_top_materiales': top_materiales,
             'inv_movimientos_recientes': movimientos_recientes[:6],
+            'inv_ml': inv_ml,
             'inv_chart_data': {
                 'top_labels': chart_top_labels,
                 'top_values': chart_top_values,
@@ -1061,14 +1196,8 @@ def prediccion_produccion(request):
 
     fecha_inicio_raw = (request.GET.get('fecha_inicio') or '').strip()
     fecha_fin_raw = (request.GET.get('fecha_fin') or '').strip()
-    horizonte_raw = (request.GET.get('horizonte') or '4').strip()
-    horizon_options = [1, 4, 8, 12]
-    try:
-        horizonte = int(horizonte_raw)
-    except ValueError:
-        horizonte = 4
-    if horizonte not in horizon_options:
-        horizonte = 4
+    horizonte = normalizar_horizonte_semanas(request.GET.get('horizonte'))
+    horizon_options = HORIZONTES_SEMANAS
 
     try:
         if fecha_inicio_raw:
@@ -1147,14 +1276,69 @@ def finanzas_dashboard(request):
     fecha_inicio, fecha_fin = _finance_date_range(request)
     export = (request.GET.get('export') or '').strip().lower()
     recalcular = (request.GET.get('recalcular') or '').strip() == '1'
-    horizonte_raw = (request.GET.get('horizonte') or '4').strip()
-    horizon_options = [1, 4, 8, 12]
-    try:
-        horizonte = int(horizonte_raw)
-    except (TypeError, ValueError):
-        horizonte = 4
-    if horizonte not in horizon_options:
-        horizonte = 4
+    horizonte = normalizar_horizonte_semanas(request.GET.get('horizonte'))
+    horizon_options = HORIZONTES_SEMANAS
+
+    if request.method == 'POST':
+        accion = (request.POST.get('accion') or '').strip()
+        redirect_params = urlencode({
+            'fecha_inicio': fecha_inicio.isoformat(),
+            'fecha_fin': fecha_fin.isoformat(),
+            'horizonte': horizonte,
+        })
+        redirect_url = f'{reverse("finanzas_dashboard")}?{redirect_params}#factores-financieros'
+        if accion in {'guardar_factor_financiero', 'desactivar_factor_financiero'}:
+            factor_id = request.POST.get('factor_id') or None
+            factor = FactorExternoPredictivo.objects.filter(
+                id=factor_id,
+                departamento='Finanzas',
+            ).first() if factor_id else None
+
+            if accion == 'desactivar_factor_financiero':
+                if factor:
+                    factor.activo = False
+                    factor.save(update_fields=['activo', 'fecha_actualizacion'])
+                    messages.success(request, f'Factor financiero "{factor.nombre}" desactivado.')
+                else:
+                    messages.error(request, 'El factor financiero seleccionado ya no está disponible.')
+                return redirect(redirect_url)
+
+            tipo = (request.POST.get('tipo') or '').strip()
+            metrica = (request.POST.get('metrica') or '').strip()
+            nombre = (request.POST.get('nombre') or '').strip()
+            impacto_raw = (request.POST.get('impacto_pct') or '0').strip().replace(',', '.')
+            fecha_factor_inicio = _parse_iso_date(request.POST.get('fecha_inicio')) or timezone.localdate()
+            fecha_factor_fin = _parse_iso_date(request.POST.get('fecha_fin')) or (
+                fecha_factor_inicio + timedelta(days=horizonte_a_dias(horizonte) - 1)
+            )
+            tipos_validos = {value for value, _ in FactorExternoPredictivo.TipoFactor.choices}
+            try:
+                impacto_pct = Decimal(impacto_raw)
+            except (InvalidOperation, TypeError):
+                impacto_pct = None
+
+            if tipo not in tipos_validos or metrica not in FINANCE_FACTOR_METRIC_CODES or not nombre:
+                messages.error(request, 'Selecciona un tipo, una métrica y proporciona un nombre para el factor.')
+            elif impacto_pct is None or impacto_pct < Decimal('-100') or impacto_pct > Decimal('100'):
+                messages.error(request, 'El impacto debe ser un porcentaje entre -100 y 100.')
+            elif fecha_factor_inicio > fecha_factor_fin:
+                messages.error(request, 'La fecha inicial no puede ser posterior a la fecha final.')
+            else:
+                if factor is None:
+                    factor = FactorExternoPredictivo(creado_por=request.user)
+                factor.tipo = tipo
+                factor.nombre = nombre
+                factor.departamento = 'Finanzas'
+                factor.metrica = metrica
+                factor.fecha_inicio = fecha_factor_inicio
+                factor.fecha_fin = fecha_factor_fin
+                factor.impacto_pct = impacto_pct
+                factor.fuente = 'USUARIO_FINANZAS'
+                factor.notas = 'Factor editable desde el módulo de pronóstico financiero.'
+                factor.activo = True
+                factor.save()
+                messages.success(request, f'Factor financiero "{nombre}" guardado. Recalcula para aplicar el cambio.')
+            return redirect(redirect_url)
 
     if recalcular:
         consolidar_costeos_produccion(usuario=request.user, fecha_inicio=fecha_inicio, fecha_fin=fecha_fin)
@@ -1188,6 +1372,26 @@ def finanzas_dashboard(request):
     dashboard = calcular_dashboard_finanzas(fecha_inicio=fecha_inicio, fecha_fin=fecha_fin)
     ml_finanzas = calcular_predicciones_financieras(horizon_weeks=horizonte)
     registrar_predicciones_financieras(ml_finanzas, usuario=request.user)
+    evaluar_predicciones(departamento='Finanzas', usuario=request.user)
+    finanzas_real_comparison = _comparacion_financiera_vs_real()
+    ml_finanzas['sales_chart'] = _ventas_chart_con_resultado_real(
+        ml_finanzas.get('sales_chart'),
+        finanzas_real_comparison,
+    )
+    factores_inicio = timezone.localdate()
+    factores_fin = factores_inicio + timedelta(days=horizonte_a_dias(horizonte) - 1)
+    factores_financieros = list(
+        FactorExternoPredictivo.objects.filter(
+            departamento='Finanzas',
+            activo=True,
+            fecha_inicio__lte=factores_fin,
+            fecha_fin__gte=factores_inicio,
+        ).order_by('fecha_inicio', 'tipo', 'nombre')
+    )
+    impacto_financiero_total = sum(
+        (factor.impacto_pct for factor in factores_financieros),
+        Decimal('0'),
+    )
     return render(
         request,
         'finanzas/dashboard.html',
@@ -1200,6 +1404,14 @@ def finanzas_dashboard(request):
             'horizonte': horizonte,
             'horizon_options': horizon_options,
             'ml_finanzas': ml_finanzas,
+            'finanzas_real_comparison': finanzas_real_comparison,
+            'factores_financieros': factores_financieros,
+            'factor_financiero_choices': FactorExternoPredictivo.TipoFactor.choices,
+            'factor_financiero_metric_choices': FINANCE_FACTOR_METRICS,
+            'factor_financiero_metric_count': len(FINANCE_FACTOR_METRICS) - 1,
+            'impacto_financiero_total': impacto_financiero_total,
+            'factores_inicio': factores_inicio,
+            'factores_fin': factores_fin,
         },
     )
 
@@ -3354,9 +3566,179 @@ def proveedores_alta(request):
     )
 
 
+def _inventario_horizonte(request):
+    try:
+        horizonte = int((request.GET.get('horizonte') or '4').strip())
+    except (TypeError, ValueError):
+        horizonte = 4
+    return normalizar_horizonte_semanas(request.GET.get('horizonte'))
+
+
+def _inventario_horizonte_dias(horizonte_semanas):
+    return horizonte_a_dias(horizonte_semanas)
+
+
+@login_required(login_url='login')
+def inventario_dashboard(request):
+    horizonte = _inventario_horizonte(request)
+    fecha_fin = timezone.localdate()
+    fecha_inicio = fecha_fin - timedelta(days=6)
+    inv_ml = calcular_predicciones_inventario(days=90, horizon_days=_inventario_horizonte_dias(horizonte), limit=12)
+    registrar_predicciones_inventario(inv_ml, usuario=request.user)
+
+    stock_summary = InventarioAlmacen.objects.filter(stock_actual__gt=0).aggregate(
+        total_stock=Sum('stock_actual'),
+    )
+    materiales_activos = Material.objects.filter(activo=True).count()
+    almacenes_activos = Almacen.objects.filter(activo=True).count()
+    entradas = RecepcionMaterialDetalle.objects.filter(
+        recepcion__fecha_recepcion__range=(fecha_inicio, fecha_fin),
+    ).aggregate(total=Sum('cantidad_recibida')).get('total') or Decimal('0')
+    salidas = SalidaLineaDetalle.objects.filter(
+        salida__fecha_salida__range=(fecha_inicio, fecha_fin),
+    ).aggregate(total=Sum('cantidad_enviada')).get('total') or Decimal('0')
+    transferencias = TransferenciaAlmacenDetalle.objects.filter(
+        transferencia__fecha_transferencia__range=(fecha_inicio, fecha_fin),
+    ).aggregate(total=Sum('cantidad_transferida')).get('total') or Decimal('0')
+    pending_states = [
+        OrdenCompra.EstadoOrden.APROBADA,
+        OrdenCompra.EstadoOrden.ENVIADA,
+        OrdenCompra.EstadoOrden.PARCIAL,
+    ]
+    ordenes_pendientes = OrdenCompra.objects.filter(estado__in=pending_states).count()
+    top_stock = list(
+        InventarioAlmacen.objects.filter(stock_actual__gt=0)
+        .values('material__sku', 'material__nombre')
+        .annotate(stock_total=Sum('stock_actual'))
+        .order_by('-stock_total')[:8]
+    )
+    chart_data = {
+        'stock_labels': [item['material__sku'] for item in top_stock],
+        'stock_values': [float(item['stock_total'] or 0) for item in top_stock],
+        'flow_labels': ['Entradas', 'Salidas a línea', 'Transferencias'],
+        'flow_values': [float(entradas), float(salidas), float(transferencias)],
+        'risk_labels': [item['sku'] for item in inv_ml.get('risks', [])[:8]],
+        'risk_values': [float(item['demanda_proyectada'] or 0) for item in inv_ml.get('risks', [])[:8]],
+    }
+    context = {
+        'horizonte': horizonte,
+        'horizon_options': HORIZONTES_SEMANAS,
+        'inv_ml': inv_ml,
+        'inv_total_stock': stock_summary.get('total_stock') or Decimal('0'),
+        'inv_materiales_activos': materiales_activos,
+        'inv_almacenes_activos': almacenes_activos,
+        'inv_ordenes_pendientes': ordenes_pendientes,
+        'inv_top_stock': top_stock,
+        'chart_data': chart_data,
+    }
+    return render(request, 'inventario/dashboard.html', context)
+
+
+@login_required(login_url='login')
+def inventario_prediccion(request):
+    horizonte = _inventario_horizonte(request)
+    if request.method == 'POST':
+        action = (request.POST.get('accion') or '').strip()
+        if action == 'guardar_factor_demanda':
+            factor_id = request.POST.get('factor_id') or None
+            tipo = (request.POST.get('tipo') or '').strip()
+            nombre = (request.POST.get('nombre') or '').strip()
+            impacto_raw = (request.POST.get('impacto_pct') or '0').strip().replace(',', '.')
+            fecha_inicio = _parse_iso_date(request.POST.get('fecha_inicio')) or timezone.localdate()
+            fecha_fin = _parse_iso_date(request.POST.get('fecha_fin')) or (
+                fecha_inicio + timedelta(days=_inventario_horizonte_dias(horizonte) - 1)
+            )
+            tipos_validos = INVENTORY_FACTOR_TYPE_CODES
+            try:
+                impacto_pct = Decimal(impacto_raw)
+            except (InvalidOperation, TypeError):
+                impacto_pct = None
+
+            if tipo not in tipos_validos or not nombre:
+                messages.error(request, 'Selecciona un tipo y proporciona un nombre para el factor.')
+            elif impacto_pct is None or impacto_pct < Decimal('-100') or impacto_pct > Decimal('100'):
+                messages.error(request, 'El impacto debe ser un porcentaje entre -100 y 100.')
+            elif fecha_inicio > fecha_fin:
+                messages.error(request, 'La fecha inicial no puede ser posterior a la fecha final.')
+            else:
+                factor = FactorExternoPredictivo.objects.filter(
+                    id=factor_id,
+                    departamento='Inventario',
+                    metrica='demanda_material',
+                ).first() if factor_id else FactorExternoPredictivo()
+                if factor is None:
+                    messages.error(request, 'El factor seleccionado ya no está disponible.')
+                else:
+                    factor.tipo = tipo
+                    factor.nombre = nombre
+                    factor.departamento = 'Inventario'
+                    factor.metrica = 'demanda_material'
+                    factor.fecha_inicio = fecha_inicio
+                    factor.fecha_fin = fecha_fin
+                    factor.impacto_pct = impacto_pct
+                    factor.fuente = 'USUARIO_INVENTARIO'
+                    factor.notas = 'Factor editable desde el módulo de predicción de inventario.'
+                    factor.activo = True
+                    factor.creado_por = request.user
+                    factor.save()
+                    messages.success(request, f'Factor de demanda "{nombre}" guardado. Recalcula para aplicar el cambio.')
+            return redirect(f'{reverse("inventario_prediccion")}?horizonte={horizonte}')
+
+        if action == 'desactivar_factor_demanda':
+            factor = FactorExternoPredictivo.objects.filter(
+                id=request.POST.get('factor_id'),
+                departamento='Inventario',
+                metrica='demanda_material',
+            ).first()
+            if factor:
+                factor.activo = False
+                factor.save(update_fields=['activo', 'fecha_actualizacion'])
+                messages.success(request, f'Factor "{factor.nombre}" desactivado.')
+            return redirect(f'{reverse("inventario_prediccion")}?horizonte={horizonte}')
+
+    inv_ml = calcular_predicciones_inventario(days=90, horizon_days=_inventario_horizonte_dias(horizonte), limit=50)
+    registrar_predicciones_inventario(inv_ml, usuario=request.user)
+    risks = inv_ml.get('risks', [])
+    fecha_horizonte_fin = timezone.localdate() + timedelta(days=_inventario_horizonte_dias(horizonte) - 1)
+    factores_demanda = list(
+        FactorExternoPredictivo.objects.filter(
+            departamento='Inventario',
+            metrica='demanda_material',
+            activo=True,
+            fecha_inicio__lte=fecha_horizonte_fin,
+            fecha_fin__gte=timezone.localdate(),
+        ).order_by('fecha_inicio', 'tipo', 'nombre')
+    )
+    demanda_base_total = sum((item.get('demanda_proyectada_base') or Decimal('0') for item in risks), Decimal('0'))
+    demanda_ajustada_total = sum((item.get('demanda_proyectada') or Decimal('0') for item in risks), Decimal('0'))
+    impacto_factores_total = sum((factor.impacto_pct for factor in factores_demanda), Decimal('0'))
+    chart_data = {
+        'labels': [item['sku'] for item in risks],
+        'stock': [float(item['stock'] or 0) for item in risks],
+        'demand': [float(item['demanda_proyectada'] or 0) for item in risks],
+        'reorder': [float(item['punto_reorden'] or 0) for item in risks],
+    }
+    context = {
+        'horizonte': horizonte,
+        'horizon_options': HORIZONTES_SEMANAS,
+        'inv_ml': inv_ml,
+        'chart_data': chart_data,
+        'factores_demanda': factores_demanda,
+        'factor_choices': tuple(
+            choice for choice in FactorExternoPredictivo.TipoFactor.choices
+            if choice[0] in INVENTORY_FACTOR_TYPE_CODES
+        ),
+        'demanda_base_total': demanda_base_total,
+        'demanda_ajustada_total': demanda_ajustada_total,
+        'impacto_factores_total': impacto_factores_total,
+    }
+    return render(request, 'inventario/prediccion.html', context)
+
+
 @login_required(login_url='login')
 def inventario_almacen(request):
     _ensure_almacenes_base()
+    horizonte = _inventario_horizonte(request)
 
     decimal_output = DecimalField(max_digits=14, decimal_places=2)
     fecha_inicio_raw = (request.GET.get('fecha_inicio') or '').strip()
@@ -3724,7 +4106,9 @@ def inventario_almacen(request):
         'fecha_historial_value': fecha_historial_raw,
         'fecha_historial': fecha_historial,
         'historico_almacenes': historico_almacenes,
-        'ml_inventario': analizar_riesgo_inventario(),
+        'ml_inventario': analizar_riesgo_inventario(horizon_days=_inventario_horizonte_dias(horizonte)),
+        'horizonte': horizonte,
+        'horizon_options': HORIZONTES_SEMANAS,
     }
     registrar_predicciones_inventario(context['ml_inventario'], usuario=request.user)
     return render(request, 'inventario/almacen.html', context)

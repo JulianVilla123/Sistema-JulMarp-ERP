@@ -1,0 +1,110 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Dashboard de Inventarios{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/pages/inventario.css' %}?v=3">
+{% endblock %}
+
+{% block content %}
+<div class="entrada-container inventario-analytics-page">
+    <header class="inventario-analytics-hero">
+        <div>
+            <p class="inventario-eyebrow">Panel operativo</p>
+            <h1>Dashboard de Inventarios</h1>
+            <p>Existencias, movimientos y decisiones de abastecimiento en un solo lugar.</p>
+        </div>
+        <div class="inventario-analytics-actions">
+            <a href="{% url 'inventario_prediccion' %}?horizonte={{ horizonte }}" class="btn btn-primary">Configurar factores predictivos</a>
+            <a href="{% url 'inventario_almacen' %}" class="btn btn-info">Ver almacenes</a>
+        </div>
+    </header>
+
+    <section class="inventario-filter-card">
+        <form method="get" class="inventario-filter-form">
+            <label>
+                Horizonte predictivo
+                <select name="horizonte">
+                    {% for option in horizon_options %}
+                    <option value="{{ option }}"{% if option == horizonte %} selected{% endif %}>{{ option }} semana{% if option != 1 %}s{% endif %}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <button type="submit" class="btn btn-primary">Actualizar análisis</button>
+        </form>
+    </section>
+
+    <section class="inventario-analytics-kpis">
+        <article><span>Stock disponible</span><strong>{{ inv_total_stock|floatformat:2 }}</strong><small>Unidades en almacenes activos</small></article>
+        <article><span>Materiales activos</span><strong>{{ inv_materiales_activos }}</strong><small>Materiales registrados</small></article>
+        <article><span>Órdenes de compra</span><strong>{{ inv_ordenes_pendientes }}</strong><small>Pendientes de recepción</small></article>
+        <article><span>Riesgo alto</span><strong class="is-danger">{{ inv_ml.summary.criticos }}</strong><small>Materiales que requieren atención</small></article>
+    </section>
+
+    <section class="inventario-analytics-grid">
+        <article class="inventario-analytics-card">
+            <div class="inventario-section-head">
+                <div><h2>Stock por material</h2><p>Materiales con mayor existencia disponible.</p></div>
+            </div>
+            <div class="inventario-chart-box"><canvas id="inventario-stock-chart"></canvas></div>
+        </article>
+        <article class="inventario-analytics-card">
+            <div class="inventario-section-head">
+                <div><h2>Flujo de la última semana</h2><p>Entradas, salidas a línea y transferencias.</p></div>
+            </div>
+            <div class="inventario-chart-box"><canvas id="inventario-flow-chart"></canvas></div>
+        </article>
+    </section>
+
+    <section class="inventario-analytics-card inventario-prediction-summary-card">
+        <div class="inventario-section-head">
+            <div>
+                <p class="inventario-eyebrow">Análisis predictivo</p>
+                <h2>Materiales que requieren decisión</h2>
+                <p>{{ inv_ml.method }} · Horizonte {{ horizonte }} semana{% if horizonte != 1 %}s{% endif %} · Calidad {{ inv_ml.data_quality|title }}</p>
+            </div>
+            <a href="{% url 'inventario_prediccion' %}?horizonte={{ horizonte }}" class="btn btn-info">Abrir predicción completa</a>
+        </div>
+        <div class="inventario-prediction-kpis">
+            <div><span>Materiales analizados</span><strong>{{ inv_ml.summary.materiales }}</strong></div>
+            <div><span>Por reordenar</span><strong class="is-warning">{{ inv_ml.summary.por_reordenar }}</strong></div>
+            <div><span>Compra sugerida</span><strong>{{ inv_ml.summary.cantidad_sugerida_compra|floatformat:2 }}</strong></div>
+        </div>
+        <div class="inventario-risk-table-wrap">
+            <table class="tabla-material inventario-risk-table">
+                <thead><tr><th>SKU</th><th>Material</th><th>Demanda proyectada</th><th>Stock</th><th>Agotamiento</th><th>Riesgo</th></tr></thead>
+                <tbody>
+                    {% for item in inv_ml.risks|slice:':6' %}
+                    <tr>
+                        <td><strong>{{ item.sku }}</strong></td>
+                        <td>{{ item.descripcion }}</td>
+                        <td>{{ item.demanda_proyectada|floatformat:2 }}</td>
+                        <td>{{ item.stock|floatformat:2 }}</td>
+                        <td>{% if item.dias_agotamiento != None %}{{ item.dias_agotamiento|floatformat:0 }} días{% else %}No estimado{% endif %}</td>
+                        <td><span class="inventario-risk-pill inventario-risk-pill--{{ item.display_status }}">{% if item.display_status == 'rojo' %}Alto{% elif item.display_status == 'amarillo' %}Medio{% else %}Bajo{% endif %}</span></td>
+                    </tr>
+                    {% empty %}<tr><td colspan="6">Sin salidas a línea suficientes para construir el pronóstico.</td></tr>{% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+</div>
+
+{{ chart_data|json_script:"inventario-dashboard-chart-data" }}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    const inventoryDashboardData = JSON.parse(document.getElementById('inventario-dashboard-chart-data').textContent);
+    const chartDefaults = {responsive: true, maintainAspectRatio: false, plugins: {legend: {display: false}}};
+    new Chart(document.getElementById('inventario-stock-chart'), {
+        type: 'bar',
+        data: {labels: inventoryDashboardData.stock_labels, datasets: [{data: inventoryDashboardData.stock_values, backgroundColor: '#2d719c', borderRadius: 6}]},
+        options: {...chartDefaults, scales: {y: {beginAtZero: true}}}
+    });
+    new Chart(document.getElementById('inventario-flow-chart'), {
+        type: 'bar',
+        data: {labels: inventoryDashboardData.flow_labels, datasets: [{data: inventoryDashboardData.flow_values, backgroundColor: ['#159570', '#c0392b', '#c48a24'], borderRadius: 6}]},
+        options: {...chartDefaults, scales: {y: {beginAtZero: true}}}
+    });
+</script>
+{% endblock %}

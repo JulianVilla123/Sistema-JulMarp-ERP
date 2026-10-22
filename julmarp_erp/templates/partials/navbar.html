@@ -16,6 +16,8 @@
                         <ul class="dropdown-menu">
                             <li><a href="{% url 'entrada_planta' %}">Importacion</a></li>
                             <li><a href="{% url 'entrada_linea' %}">Distribucion</a></li>
+                            <li><a href="{% url 'inventario_dashboard' %}">Dashboard de inventarios</a></li>
+                            <li><a href="{% url 'inventario_prediccion' %}">Prediccion de inventario</a></li>
                             <li><a href="{% url 'inventario_almacen' %}">Almacen</a></li>
                             <li><a href="{% url 'historial_almacen' %}">Historial de almacen</a></li>
                             <li><a href="{% url 'historial_recepciones' %}">Historial de recepciones</a></li>
@@ -98,6 +100,8 @@
                         <li class="nav-item dropdown">
                             <a href="#" class="nav-link dropdown-toggle">Inventario</a>
                             <ul class="dropdown-menu">
+                                <li><a href="{% url 'inventario_dashboard' %}">Dashboard de inventarios</a></li>
+                                <li><a href="{% url 'inventario_prediccion' %}">Prediccion de inventario</a></li>
                                 <li><a href="{% url 'inventario_almacen' %}">Almacen</a></li>
                                 <li><a href="{% url 'historial_almacen' %}">Historial de almacen</a></li>
                                 <li><a href="{% url 'historial_recepciones' %}">Historial de recepciones</a></li>

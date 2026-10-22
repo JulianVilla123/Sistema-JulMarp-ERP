@@ -25,6 +25,14 @@
                     Fecha histórica
                     <input type="date" name="fecha_historial" value="{{ fecha_historial_value }}">
                 </label>
+                <label>
+                    Horizonte predictivo
+                    <select name="horizonte">
+                        {% for option in horizon_options %}
+                        <option value="{{ option }}"{% if option == horizonte %} selected{% endif %}>{{ option }} semana{% if option != 1 %}s{% endif %}</option>
+                        {% endfor %}
+                    </select>
+                </label>
                 <div class="inventario-filter-actions">
                     <button type="submit" class="btn btn-primary">Buscar</button>
                     <a href="{% url 'inventario_almacen' %}" class="btn btn-info">Limpiar</a>
@@ -40,7 +48,7 @@
         <article class="dashboard-summary-card inventario-arribos-card" style="margin-bottom:16px;">
             <header>
                 <h4>Prediccion ML de inventario</h4>
-                <small>{{ ml_inventario.method }} | horizonte {{ ml_inventario.horizon_days }} dias | calidad {{ ml_inventario.data_quality|title }}</small>
+                <small>{{ ml_inventario.method }} | horizonte {{ horizonte }} semana{% if horizonte != 1 %}s{% endif %} | calidad {{ ml_inventario.data_quality|title }}</small>
             </header>
             <div class="inventario-arribos-grid inventario-arribos-grid--summary" style="margin-bottom: 14px;">
                 <div class="inventario-arribo-stat"><span>Materiales analizados</span><strong>{{ ml_inventario.summary.materiales }}</strong><small>{{ ml_inventario.samples }} muestras max.</small></div>
@@ -54,7 +62,7 @@
                             <th>SKU</th>
                             <th>Material</th>
                             <th>Stock</th>
-                            <th>Demanda 30 días</th>
+                            <th>Demanda {{ horizonte }} semana{% if horizonte != 1 %}s{% endif %}</th>
                             <th>Punto reorden</th>
                             <th>Cobertura</th>
                             <th>Agotamiento</th>

@@ -27,6 +27,7 @@ from autenticacion.models import (
     RecepcionMaterial,
     RecepcionMaterialDetalle,
     RegistroScrapDefecto,
+    RegistroParoMantenimiento,
     RegistroUsoRecursoProduccion,
     ReporteKPIProduccion,
     SalidaLinea,
@@ -264,6 +265,7 @@ class Command(BaseCommand):
         ReporteKPIProduccion.objects.filter(generado_por__username='produccion_ml').delete()
         for marker in (self.marker, self.legacy_marker):
             RegistroScrapDefecto.objects.filter(descripcion__icontains=marker).delete()
+            RegistroParoMantenimiento.objects.filter(causa__icontains=marker).delete()
             RegistroUsoRecursoProduccion.objects.filter(notas__icontains=marker).delete()
             LoteProduccion.objects.filter(observaciones__icontains=marker).delete()
             OrdenFabricacion.objects.filter(observaciones__icontains=marker).delete()
@@ -416,6 +418,29 @@ class Command(BaseCommand):
                 'registrado_por': users['produccion'],
                 'actualizado_por': users['produccion'],
             },
+        )
+        downtime_hours = (
+            Decimal('2.50') + Decimal(str((period_index + ord(code)) % 3))
+            + (Decimal('1.50') if code == 'B' else Decimal('0'))
+        ).quantize(Decimal('0.01'))
+        RegistroParoMantenimiento.objects.create(
+            maquina=machine_cost,
+            orden=orden,
+            fecha_paro=week_end,
+            horas_paro=downtime_hours,
+            motivo=(
+                RegistroParoMantenimiento.Motivo.FALLA
+                if period_index % 4 == 0
+                else RegistroParoMantenimiento.Motivo.PREVENTIVO
+            ),
+            severidad=(
+                RegistroParoMantenimiento.Severidad.ALTA
+                if downtime_hours >= Decimal('5')
+                else RegistroParoMantenimiento.Severidad.MEDIA
+            ),
+            causa=f'{self.marker} | segmento={code} paro simulado',
+            acciones='Revisión de máquina y liberación de línea.',
+            registrado_por=users['produccion'],
         )
         operator_cost, _ = CostoHoraOperador.objects.update_or_create(
             operador=users['operador'],

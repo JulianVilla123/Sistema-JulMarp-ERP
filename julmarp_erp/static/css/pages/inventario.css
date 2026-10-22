@@ -1423,3 +1423,436 @@
         min-height: 160px;
     }
 }
+
+/* Dashboards analíticos de Inventarios */
+.inventario-analytics-page {
+    max-width: 1240px;
+}
+
+.inventario-analytics-hero {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 28px 30px;
+    margin-bottom: 18px;
+    border-radius: 18px;
+    color: #ffffff;
+    background: linear-gradient(110deg, #153c61, #4c9bc1);
+    box-shadow: 0 12px 28px rgba(21, 60, 97, 0.18);
+}
+
+.inventario-analytics-hero h1 {
+    margin: 0 0 6px;
+    font-size: 2rem;
+}
+
+.inventario-analytics-hero p:last-child {
+    margin: 0;
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.inventario-eyebrow {
+    margin: 0 0 7px;
+    color: #d9f3ff;
+    font-size: 0.75rem;
+    font-weight: 800;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+}
+
+.inventario-analytics-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.inventario-filter-card,
+.inventario-analytics-card {
+    padding: 20px;
+    margin-bottom: 16px;
+    border: 1px solid #dce5ef;
+    border-radius: 12px;
+    background: #ffffff;
+    box-shadow: 0 4px 18px rgba(21, 60, 97, 0.06);
+}
+
+.inventario-filter-form {
+    display: flex;
+    align-items: flex-end;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.inventario-filter-form label {
+    display: grid;
+    gap: 5px;
+    min-width: 220px;
+    color: #52657c;
+    font-size: 0.82rem;
+    font-weight: 700;
+}
+
+.inventario-filter-form select {
+    min-height: 40px;
+    padding: 8px 10px;
+    border: 1px solid #cfdbe8;
+    border-radius: 7px;
+    background: #fbfdff;
+    color: #243c59;
+}
+
+.inventario-filter-caption {
+    margin: 12px 0 0;
+    color: #6e7f93;
+    font-size: 0.84rem;
+}
+
+.inventario-analytics-kpis,
+.inventario-prediction-kpis {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.inventario-analytics-kpis article,
+.inventario-prediction-kpis article,
+.inventario-prediction-kpis > div {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+    padding: 16px;
+    border: 1px solid #dce5ef;
+    border-radius: 10px;
+    background: #ffffff;
+    box-shadow: 0 4px 18px rgba(21, 60, 97, 0.05);
+}
+
+.inventario-analytics-kpis span,
+.inventario-prediction-kpis span {
+    color: #61758e;
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.inventario-analytics-kpis strong,
+.inventario-prediction-kpis strong {
+    color: #143d67;
+    font-size: 1.55rem;
+    font-weight: 800;
+    overflow-wrap: anywhere;
+}
+
+.inventario-analytics-kpis strong.is-danger,
+.inventario-prediction-kpis strong.is-danger {
+    color: #b42318;
+}
+
+.inventario-analytics-kpis strong.is-warning,
+.inventario-prediction-kpis strong.is-warning {
+    color: #a15c00;
+}
+
+.inventario-analytics-kpis small,
+.inventario-prediction-kpis small {
+    color: #718399;
+    font-size: 0.78rem;
+}
+
+.inventario-analytics-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+}
+
+.inventario-section-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 14px;
+}
+
+.inventario-section-head h2 {
+    margin: 0 0 5px;
+    color: #263f5e;
+    font-size: 1.15rem;
+}
+
+.inventario-section-head p {
+    margin: 0;
+    color: #708198;
+    font-size: 0.86rem;
+}
+
+.inventario-chart-box {
+    position: relative;
+    height: 255px;
+}
+
+.inventario-chart-box--large {
+    height: 360px;
+}
+
+.inventario-prediction-summary-card {
+    margin-top: 16px;
+}
+
+.inventario-prediction-kpis {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    margin-bottom: 16px;
+}
+
+.inventario-prediction-kpis--large {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.inventario-quality-badge {
+    flex: 0 0 auto;
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: #e6f3ed;
+    color: #176345;
+    font-size: 0.76rem;
+    font-weight: 800;
+}
+
+.inventario-risk-table-wrap {
+    overflow-x: auto;
+}
+
+.inventario-risk-table {
+    min-width: 760px;
+}
+
+.inventario-risk-table--full {
+    min-width: 1120px;
+}
+
+.inventario-risk-pill {
+    display: inline-flex;
+    min-width: 52px;
+    justify-content: center;
+    padding: 4px 8px;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 800;
+}
+
+.inventario-risk-pill--rojo {
+    background: #fde7e5;
+    color: #a5231b;
+}
+
+.inventario-risk-pill--amarillo {
+    background: #fff3d6;
+    color: #8c5b11;
+}
+
+.inventario-risk-pill--verde {
+    background: #e6f3ed;
+    color: #175c48;
+}
+
+.inventario-predictive-empty {
+    display: grid;
+    gap: 6px;
+    padding: 22px;
+    border: 1px dashed #b8cde2;
+    border-radius: 10px;
+    background: #f7fbff;
+    color: #56708f;
+    text-align: center;
+}
+
+.inventario-factors-card {
+    border-left: 4px solid #2d719c;
+    scroll-margin-top: 18px;
+}
+
+.inventario-factors-card.is-collapsed {
+    display: none;
+}
+
+.inventario-factor-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.inventario-factor-close {
+    padding: 7px 12px;
+    font-size: .82rem;
+}
+
+.inventario-factor-summary {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    margin: 14px 0;
+}
+
+.inventario-factor-summary article {
+    padding: 12px;
+    border: 1px solid #d9e5f0;
+    border-radius: 8px;
+    background: #f7fbff;
+}
+
+.inventario-factor-summary span,
+.inventario-factor-summary small {
+    display: block;
+    color: #607995;
+    font-size: .78rem;
+}
+
+.inventario-factor-summary strong {
+    display: block;
+    margin: 4px 0;
+    color: #123f69;
+    font-size: 1.25rem;
+}
+
+.inventario-factor-formula {
+    margin: 10px 0 14px;
+    color: #486580;
+    font-size: .88rem;
+}
+
+.inventario-factor-form,
+.inventario-factor-row {
+    display: grid;
+    grid-template-columns: 1fr 1.5fr .8fr 1fr 1fr auto;
+    gap: 8px;
+    align-items: end;
+}
+
+.inventario-factor-form {
+    padding: 12px;
+    border: 1px dashed #a8c5df;
+    border-radius: 8px;
+    background: #fbfdff;
+}
+
+.inventario-factor-form label {
+    display: grid;
+    gap: 4px;
+    color: #486580;
+    font-size: .78rem;
+    font-weight: 700;
+}
+
+.inventario-factor-form input,
+.inventario-factor-form select,
+.inventario-factor-row input,
+.inventario-factor-row select {
+    width: 100%;
+    min-height: 34px;
+    padding: 6px 8px;
+    border: 1px solid #c9d9e8;
+    border-radius: 6px;
+    color: #173f66;
+    background: #fff;
+    box-sizing: border-box;
+}
+
+.inventario-factor-list {
+    margin-top: 18px;
+}
+
+.inventario-factor-list h3 {
+    margin: 0 0 8px;
+    color: #234c72;
+    font-size: 1rem;
+}
+
+.inventario-factor-row {
+    grid-template-columns: 1fr 1.5fr .8fr 1fr 1fr auto auto;
+    margin-top: 8px;
+}
+
+.btn-danger-outline {
+    border: 1px solid #c94b45;
+    color: #a52e29;
+    background: #fff;
+}
+
+.inventario-factor-empty {
+    margin: 12px 0 0;
+    color: #607995;
+    font-size: .88rem;
+}
+
+.inventario-factor-cell {
+    min-width: 170px;
+    color: #486580;
+    font-size: .76rem;
+    line-height: 1.35;
+}
+
+.inventario-factor-cell span {
+    display: inline-block;
+    max-width: 230px;
+}
+
+@media (max-width: 900px) {
+    .inventario-analytics-hero,
+    .inventario-section-head {
+        flex-direction: column;
+    }
+
+    .inventario-analytics-actions {
+        justify-content: flex-start;
+    }
+
+    .inventario-analytics-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .inventario-analytics-kpis,
+    .inventario-prediction-kpis--large {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .inventario-factor-summary {
+        grid-template-columns: 1fr;
+    }
+
+    .inventario-factor-form,
+    .inventario-factor-row {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+@media (max-width: 520px) {
+    .inventario-analytics-page {
+        padding: 18px 10px;
+    }
+
+    .inventario-analytics-hero {
+        padding: 22px 18px;
+    }
+
+    .inventario-analytics-hero h1 {
+        font-size: 1.55rem;
+    }
+
+    .inventario-filter-card,
+    .inventario-analytics-card {
+        padding: 14px;
+    }
+
+    .inventario-analytics-kpis,
+    .inventario-prediction-kpis,
+    .inventario-prediction-kpis--large {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .inventario-chart-box {
+        height: 230px;
+    }
+}

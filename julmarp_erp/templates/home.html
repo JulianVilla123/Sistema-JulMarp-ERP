@@ -4,7 +4,7 @@
 {% block title %}Home - JulMarp ERP{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'css/pages/home.css' %}?v=20260413a">
+<link rel="stylesheet" href="{% static 'css/pages/home.css' %}?v=20261019a">
 {% endblock %}
 
 {% block content %}
@@ -42,7 +42,68 @@
                     <p>Da de alta proveedores y asigna materiales autorizados.</p>
                     <a href="{% url 'proveedores_alta' %}" class="btn btn-primary">Abrir módulo</a>
                 </div>
+                <div class="module-card">
+                    <h4>Dashboard de Inventarios</h4>
+                    <p>Consulta existencias, movimientos y órdenes de compra pendientes.</p>
+                    <a href="{% url 'inventario_dashboard' %}" class="btn btn-primary">Abrir dashboard</a>
+                </div>
+                <div class="module-card">
+                    <h4>Predicción de Inventario</h4>
+                    <p>Anticipa consumo, agotamiento y compras sugeridas por material.</p>
+                    <a href="{% url 'inventario_prediccion' %}" class="btn btn-primary">Ver predicción</a>
+                </div>
             </div>
+        </section>
+
+        <section class="dashboard-card inventory-predictive-panel">
+            <div class="inventory-predictive-head">
+                <div>
+                    <h3>Pronóstico predictivo de inventario</h3>
+                    <p class="chart-subtitle">Demanda futura, riesgo de agotamiento y sugerencia de compra por material.</p>
+                </div>
+                <a href="{% url 'inventario_almacen' %}" class="btn btn-info">Ver análisis completo</a>
+            </div>
+            {% if inv_ml.enabled %}
+            <div class="inventory-predictive-meta">
+                <span>{{ inv_ml.method }}</span>
+                <span>Horizonte: {{ inv_ml.horizon_days }} días</span>
+                <span>Calidad: {{ inv_ml.data_quality|title }}</span>
+            </div>
+            <div class="inventory-predictive-summary">
+                <div><span>Materiales analizados</span><strong>{{ inv_ml.summary.materiales }}</strong></div>
+                <div><span>Riesgo alto</span><strong class="is-danger">{{ inv_ml.summary.criticos }}</strong></div>
+                <div><span>Por reordenar</span><strong class="is-warning">{{ inv_ml.summary.por_reordenar }}</strong></div>
+                <div><span>Compra sugerida</span><strong>{{ inv_ml.summary.cantidad_sugerida_compra|floatformat:2 }}</strong></div>
+            </div>
+            <div class="table-scroll inventory-predictive-table-wrap">
+                <table class="inventory-predictive-table">
+                    <thead>
+                        <tr>
+                            <th>Material</th>
+                            <th>Demanda 30 días</th>
+                            <th>Stock</th>
+                            <th>Agotamiento</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in inv_ml.risks|slice:':5' %}
+                        <tr>
+                            <td><strong>{{ item.sku }}</strong><small>{{ item.descripcion }}</small></td>
+                            <td>{{ item.demanda_proyectada|floatformat:2 }}</td>
+                            <td>{{ item.stock|floatformat:2 }}</td>
+                            <td>{% if item.dias_agotamiento != None %}{{ item.dias_agotamiento|floatformat:0 }} días{% else %}No estimado{% endif %}</td>
+                            <td><span class="inventory-risk-pill inventory-risk-pill--{{ item.display_status }}">{% if item.display_status == 'rojo' %}Alto{% elif item.display_status == 'amarillo' %}Medio{% else %}Bajo{% endif %}</span></td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="5">Sin salidas a línea suficientes para construir el pronóstico.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="inventory-predictive-empty">Registra salidas de materiales hacia producción para activar el pronóstico.</div>
+            {% endif %}
         </section>
 
         <section class="dashboard-grid chart-grid">
@@ -275,27 +336,27 @@
 
         <section class="dashboard-grid" style="grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap:14px; margin-bottom: 16px;">
             <article class="dashboard-card" style="text-align:center; padding:18px 12px;">
-                <p style="font-size:2rem; font-weight:800; color:{% if fin_kpis.flujo_caja >= 0 %}#0a7c42{% else %}#9b2121{% endif %}; margin:0; line-height:1.1;">${{ fin_kpis.flujo_caja|floatformat:2 }}</p>
+                <p class="home-finance-kpi-value" style="color:{% if fin_kpis.flujo_caja >= 0 %}#0a7c42{% else %}#9b2121{% endif %};">${{ fin_kpis.flujo_caja|floatformat:2 }}</p>
                 <p style="font-size:0.72rem; text-transform:uppercase; letter-spacing:.05em; color:#7a90ad; margin:4px 0 0;">Flujo de caja</p>
             </article>
             <article class="dashboard-card" style="text-align:center; padding:18px 12px;">
-                <p style="font-size:2rem; font-weight:800; color:{% if fin_kpis.rentabilidad >= 0 %}#1255a7{% else %}#9b2121{% endif %}; margin:0; line-height:1.1;">${{ fin_kpis.rentabilidad|floatformat:2 }}</p>
+                <p class="home-finance-kpi-value" style="color:{% if fin_kpis.rentabilidad >= 0 %}#1255a7{% else %}#9b2121{% endif %};">${{ fin_kpis.rentabilidad|floatformat:2 }}</p>
                 <p style="font-size:0.72rem; text-transform:uppercase; letter-spacing:.05em; color:#7a90ad; margin:4px 0 0;">Rentabilidad</p>
             </article>
             <article class="dashboard-card" style="text-align:center; padding:18px 12px;">
-                <p style="font-size:2rem; font-weight:800; color:{% if fin_kpis.gasto_real <= fin_kpis.presupuesto_total %}#0a7c42{% else %}#9b2121{% endif %}; margin:0; line-height:1.1;">${{ fin_kpis.gasto_real|floatformat:2 }}</p>
+                <p class="home-finance-kpi-value" style="color:{% if fin_kpis.gasto_real <= fin_kpis.presupuesto_total %}#0a7c42{% else %}#9b2121{% endif %};">${{ fin_kpis.gasto_real|floatformat:2 }}</p>
                 <p style="font-size:0.72rem; text-transform:uppercase; letter-spacing:.05em; color:#7a90ad; margin:4px 0 0;">Gasto real</p>
             </article>
             <article class="dashboard-card" style="text-align:center; padding:18px 12px;">
-                <p style="font-size:2rem; font-weight:800; color:#1f3e67; margin:0; line-height:1.1;">{{ fin_kpis.oc_pendientes }}</p>
+                <p class="home-finance-kpi-value" style="color:#1f3e67;">{{ fin_kpis.oc_pendientes }}</p>
                 <p style="font-size:0.72rem; text-transform:uppercase; letter-spacing:.05em; color:#7a90ad; margin:4px 0 0;">OC pendientes</p>
             </article>
             <article class="dashboard-card" style="text-align:center; padding:18px 12px;">
-                <p style="font-size:2rem; font-weight:800; color:#0a7c42; margin:0; line-height:1.1;">{{ fin_kpis.oc_completadas }}</p>
+                <p class="home-finance-kpi-value" style="color:#0a7c42;">{{ fin_kpis.oc_completadas }}</p>
                 <p style="font-size:0.72rem; text-transform:uppercase; letter-spacing:.05em; color:#7a90ad; margin:4px 0 0;">OC completadas</p>
             </article>
             <article class="dashboard-card" style="text-align:center; padding:18px 12px;">
-                <p style="font-size:2rem; font-weight:800; color:{% if fin_kpis.impuestos_pendientes > 0 %}#9b2121{% else %}#0a7c42{% endif %}; margin:0; line-height:1.1;">{{ fin_kpis.impuestos_pendientes }}</p>
+                <p class="home-finance-kpi-value" style="color:{% if fin_kpis.impuestos_pendientes > 0 %}#9b2121{% else %}#0a7c42{% endif %};">{{ fin_kpis.impuestos_pendientes }}</p>
                 <p style="font-size:0.72rem; text-transform:uppercase; letter-spacing:.05em; color:#7a90ad; margin:4px 0 0;">Impuestos pendientes</p>
             </article>
         </section>

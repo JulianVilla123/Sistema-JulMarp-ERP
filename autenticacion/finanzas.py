@@ -13,6 +13,7 @@ from .models import (
     CuentaPorPagarCobrar,
     DeclaracionImpuesto,
     EstadoFinanciero,
+    InventarioAlmacen,
     LoteProduccion,
     OrdenCompra,
     OrdenFabricacion,
@@ -24,6 +25,7 @@ from .models import (
 )
 
 ZERO = Decimal('0')
+ONE = Decimal('1')
 HUNDRED = Decimal('100')
 
 
@@ -222,6 +224,7 @@ def calcular_dashboard_finanzas(fecha_inicio: date | None = None, fecha_fin: dat
 
     ingresos = sum((_to_decimal(c.monto_pagado) for c in cuentas if c.tipo == CuentaPorPagarCobrar.TipoCuenta.POR_COBRAR), ZERO)
     egresos = sum((_to_decimal(c.monto_pagado) for c in cuentas if c.tipo == CuentaPorPagarCobrar.TipoCuenta.POR_PAGAR), ZERO)
+    ventas_total = sum((_to_decimal(c.monto_total) for c in cuentas if c.tipo == CuentaPorPagarCobrar.TipoCuenta.POR_COBRAR), ZERO)
     flujo_caja = ingresos - egresos
 
     presupuesto_total = sum((_to_decimal(p.monto_presupuestado) for p in presupuestos), ZERO)
@@ -253,15 +256,73 @@ def calcular_dashboard_finanzas(fecha_inicio: date | None = None, fecha_fin: dat
     costo_planificado = _to_decimal(kpis_mfg['cost']['costo_planificado'])
     costo_real = _to_decimal(kpis_mfg['cost']['costo_real'])
     variacion_costos = _to_decimal(kpis_mfg['cost']['variacion_costos'])
+    # El costo total de producción también puede incluir unidades fabricadas
+    # que todavía no se han vendido. Para medir rentabilidad de ventas no se
+    # debe cargar todo ese importe contra las ventas del periodo. Mientras el
+    # ERP no tenga líneas de venta vinculadas a lote/producto, se estima el
+    # costo de ventas con la proporción ventas / ingreso estimado producido.
+    proporcion_vendida = (
+        min(ONE, _safe_div(ventas_total, ingreso_estimado_total))
+        if ingreso_estimado_total > ZERO
+        else ZERO
+    )
+    costo_ventas_estimado = costo_real * proporcion_vendida if costo_real > ZERO else ZERO
+    costo_produccion_no_vendido = max(ZERO, costo_real - costo_ventas_estimado)
+    utilidad_ventas_costos = ventas_total - costo_ventas_estimado
+    margen_ventas_costos = _safe_div(utilidad_ventas_costos, ventas_total) * HUNDRED if ventas_total > ZERO else ZERO
     variacion_costos_pct = _safe_div(variacion_costos, costo_planificado) * HUNDRED if costo_planificado > ZERO else ZERO
     costos_has_data = costo_planificado > ZERO or costo_real > ZERO
+    ventas_costos_has_data = ventas_total > ZERO or costo_real > ZERO
     oc_has_data = oc_pendientes > 0 or oc_completadas > 0
+
+    # Valuación del inventario disponible: existencias por almacén por el
+    # último costo unitario vigente registrado para cada material. Agrupar por
+    # material evita duplicar el stock cuando existe en varios almacenes o
+    # lotes.
+    stock_rows = list(
+        InventarioAlmacen.objects
+        .filter(stock_actual__gt=ZERO)
+        .values('material_id', 'material__sku', 'material__nombre', 'material__um')
+        .annotate(stock_total=Sum('stock_actual'))
+        .order_by('-stock_total')
+    )
+    stock_price_map = _latest_material_costs({row['material_id'] for row in stock_rows})
+    inventario_unidades = ZERO
+    inventario_valor = ZERO
+    inventario_materiales_valorados = 0
+    inventario_materiales_sin_costo = 0
+    inventario_detalle = []
+    for row in stock_rows:
+        stock_total = _to_decimal(row['stock_total'])
+        costo_unitario = _to_decimal(stock_price_map.get(row['material_id']))
+        valor_stock = stock_total * costo_unitario
+        inventario_unidades += stock_total
+        inventario_valor += valor_stock
+        if costo_unitario > ZERO:
+            inventario_materiales_valorados += 1
+        else:
+            inventario_materiales_sin_costo += 1
+        inventario_detalle.append({
+            'sku': row['material__sku'],
+            'nombre': row['material__nombre'],
+            'um': row['material__um'],
+            'stock': _round(stock_total),
+            'costo_unitario': _round(costo_unitario),
+            'valor': _round(valor_stock),
+        })
+    inventario_detalle.sort(key=lambda item: item['valor'], reverse=True)
+    inventario_has_data = bool(stock_rows)
 
     return {
         'fecha_inicio': start_date,
         'fecha_fin': end_date,
         'kpis': {
             'flujo_caja': _round(flujo_caja),
+            'ventas_total': _round(ventas_total),
+            'costo_ventas_estimado': _round(costo_ventas_estimado),
+            'costo_produccion_no_vendido': _round(costo_produccion_no_vendido),
+            'utilidad_ventas_costos': _round(utilidad_ventas_costos),
+            'margen_ventas_costos': _round(margen_ventas_costos),
             'rentabilidad': _round(rentabilidad_total),
             'rentabilidad_pct': _round(rentabilidad_pct),
             'presupuesto_total': _round(presupuesto_total),
@@ -297,6 +358,13 @@ def calcular_dashboard_finanzas(fecha_inicio: date | None = None, fecha_fin: dat
             'costos_labels': ['Costo planificado', 'Costo real'],
             'costos_values': [float(_round(costo_planificado)), float(_round(costo_real))],
             'costos_has_data': costos_has_data,
+            'ventas_costos_labels': ['Ventas', 'Costo de ventas', 'Utilidad'],
+            'ventas_costos_values': [
+                float(_round(ventas_total)),
+                float(_round(costo_ventas_estimado)),
+                float(_round(utilidad_ventas_costos)),
+            ],
+            'ventas_costos_has_data': ventas_costos_has_data,
             'oc_labels': ['Pendientes', 'Completadas'],
             'oc_values': [oc_pendientes, oc_completadas],
             'oc_has_data': oc_has_data,
@@ -306,6 +374,15 @@ def calcular_dashboard_finanzas(fecha_inicio: date | None = None, fecha_fin: dat
         'costeos_recientes': costeos[:8],
         'cuentas_recientes': cuentas[:8],
         'presupuestos': presupuestos[:8],
+        'inventario': {
+            'valor_stock': _round(inventario_valor),
+            'unidades_stock': _round(inventario_unidades),
+            'materiales_con_stock': len(stock_rows),
+            'materiales_valorados': inventario_materiales_valorados,
+            'materiales_sin_costo': inventario_materiales_sin_costo,
+            'has_data': inventario_has_data,
+            'detalle': inventario_detalle[:6],
+        },
         'alertas': alerts,
     }
 

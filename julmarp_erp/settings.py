@@ -67,6 +67,12 @@ def list_from_env(name, defaults):
     ]
 
 
+def bool_from_env(name, default=False):
+    return os.environ.get(name, str(default)).strip().lower() in {
+        '1', 'true', 'yes', 'on'
+    }
+
+
 load_local_env()
 
 
@@ -74,10 +80,13 @@ load_local_env()
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-4xx2=+^a3l(u9q1a882fy8234m-pt7*k8zk5dcdsesqojdh8o-'
+SECRET_KEY = os.environ.get(
+    'DJANGO_SECRET_KEY',
+    'django-insecure-4xx2=+^a3l(u9q1a882fy8234m-pt7*k8zk5dcdsesqojdh8o-',
+)
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = bool_from_env('DJANGO_DEBUG', True)
 
 DEFAULT_ALLOWED_HOSTS = [
     '127.0.0.1',
@@ -131,8 +140,9 @@ if importlib.util.find_spec('whitenoise'):
 
 ROOT_URLCONF = 'julmarp_erp.urls'
 
-# Allow same-origin iframing for multi-tab workspace system
-X_FRAME_OPTIONS = 'SAMEORIGIN'
+# El entorno local conserva el iframe entre pestañas; producción queda en DENY
+# salvo que el despliegue defina explícitamente otra política.
+X_FRAME_OPTIONS = os.environ.get('X_FRAME_OPTIONS', 'SAMEORIGIN' if DEBUG else 'DENY')
 
 TEMPLATES = [
     {
@@ -159,13 +169,23 @@ DATABASE_URL = os.environ.get('DATABASE_URL')
 USE_SUPABASE_DB = os.environ.get('USE_SUPABASE_DB', 'false').strip().lower() in {
     '1', 'true', 'yes', 'on'
 }
+USE_POSTGRES_DB = bool_from_env('USE_POSTGRES_DB', USE_SUPABASE_DB)
 
 DATABASES = {
-    'default': database_from_url(DATABASE_URL) if USE_SUPABASE_DB and DATABASE_URL else {
+    'default': database_from_url(DATABASE_URL) if USE_POSTGRES_DB and DATABASE_URL else {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
+
+if not DEBUG:
+    SECURE_SSL_REDIRECT = bool_from_env('SECURE_SSL_REDIRECT', True)
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SECURE_HSTS_SECONDS = int(os.environ.get('SECURE_HSTS_SECONDS', '31536000'))
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = bool_from_env('SECURE_HSTS_PRELOAD', True)
 
 
 AUTH_USER_MODEL = 'autenticacion.UsuarioERP'

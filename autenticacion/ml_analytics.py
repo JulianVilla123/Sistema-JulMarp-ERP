@@ -29,10 +29,17 @@ from .models import (
     RegistroUsoRecursoProduccion,
     SalidaLineaDetalle,
 )
+from .predictive_contract import metadatos_contrato
+from .predictive_factors import ajustar_valor_por_factores, senales_operativas_inventario
+from .predictive_regression import (
+    ajustar_regresion_multiple,
+    evaluar_regresion_multiple_temporal,
+    predecir_regresion_multiple,
+)
 
 ZERO = Decimal('0')
 ONE = Decimal('1')
-VERSION_MODELO_ACTUAL = '1.2'
+VERSION_MODELO_ACTUAL = '1.3'
 
 
 def _to_decimal(value) -> Decimal:
@@ -62,6 +69,30 @@ def _float_or_none(value):
     if value is None:
         return None
     return float(_round(_to_decimal(value)))
+
+
+def _aplicar_factores_a_serie(values, future_weeks, *, departamento, metrica, enabled=True):
+    """Ajusta una serie futura y conserva la línea base para comparación."""
+    baseline = [_to_decimal(value) for value in values]
+    if not enabled:
+        return baseline, [], baseline[:]
+    adjusted = []
+    applied = []
+    for value, week_start in zip(baseline, future_weeks):
+        enriched, summary = ajustar_valor_por_factores(
+            value,
+            semana_inicio=week_start,
+            departamento=departamento,
+            metrica=metrica,
+        )
+        adjusted.append(enriched)
+        if summary['factores']:
+            applied.append({
+                'semana': week_start.isoformat(),
+                'impacto_pct': float(summary['impacto_pct']),
+                'factores': summary['factores'],
+            })
+    return adjusted, applied, baseline
 
 
 def _weighted_average(values: list[Decimal]) -> Decimal:
@@ -210,7 +241,8 @@ def _weekly_sales_history(limit: int = 12) -> dict:
 
 
 def calcular_prediccion_ventas(limit: int = 12, horizon_weeks: int = 4,
-                               min_samples: int = 4) -> dict:
+                               min_samples: int = 4,
+                               usar_factores_externos: bool = True) -> dict:
     """Pronostica ventas semanales a partir de cuentas por cobrar emitidas.
 
     Se utiliza ``monto_total`` porque representa la venta emitida al cliente;
@@ -243,7 +275,11 @@ def calcular_prediccion_ventas(limit: int = 12, horizon_weeks: int = 4,
             'forecast_reliable': False,
             'forecast_values': [],
             'labels': [],
-            'chart': {'labels': [], 'history': [], 'forecast': []},
+            'chart': {
+                'labels': [],
+                'history': [],
+                'forecast': [],
+            },
             'periodo_inicio': timezone.localdate(),
             'periodo_fin': timezone.localdate(),
             'backtests': 0,
@@ -256,7 +292,18 @@ def calcular_prediccion_ventas(limit: int = 12, horizon_weeks: int = 4,
         detail = 'Historial corto; se utiliza promedio ponderado como señal preventiva.'
     else:
         forecast_values, confidence, detail = _linear_forecast(values, steps=horizon_weeks)
+    future_starts = [week_starts[-1] + timedelta(weeks=index) for index in range(1, horizon_weeks + 1)]
+    forecast_values, external_factors, baseline_forecast_values = _aplicar_factores_a_serie(
+        forecast_values,
+        future_starts,
+        departamento='Finanzas',
+        metrica='ventas_clientes',
+        enabled=usar_factores_externos,
+    )
     forecast_values = [max(ZERO, _round(value)) for value in forecast_values]
+    baseline_forecast_values = [max(ZERO, _round(value)) for value in baseline_forecast_values]
+    if external_factors:
+        detail = f'{detail} Se ajustó con factores externos registrados.'
     evaluation = _evaluate_forecast(values, horizon_weeks)
     current_value = _round(values[-1])
     next_week = forecast_values[0] if forecast_values else None
@@ -277,13 +324,11 @@ def calcular_prediccion_ventas(limit: int = 12, horizon_weeks: int = 4,
     display_status = status if forecast_reliable else 'amarillo'
     confidence_label, confidence_status = _confidence_label(len(values), confidence)
     labels = [week_start.strftime('%d/%m/%y') for week_start in week_starts]
-    future_starts = [week_starts[-1] + timedelta(weeks=index) for index in range(1, horizon_weeks + 1)]
     labels.extend(week_start.strftime('%d/%m/%y') for week_start in future_starts)
     chart_forecast = [None for _ in values]
     if values:
         chart_forecast[-1] = float(current_value)
     chart_forecast.extend(float(value) for value in forecast_values)
-
     return {
         'enabled': True,
         'samples': len(values),
@@ -305,6 +350,10 @@ def calcular_prediccion_ventas(limit: int = 12, horizon_weeks: int = 4,
         'display_status': display_status,
         'forecast_reliable': forecast_reliable,
         'forecast_values': forecast_values,
+        'baseline_forecast_values': baseline_forecast_values,
+        'external_factors': external_factors,
+        'external_factors_applied': bool(external_factors),
+        'model_variant': 'Regresión lineal + factores externos' if external_factors else 'Regresión lineal semanal',
         'labels': labels,
         'chart': {
             'labels': labels,
@@ -346,7 +395,8 @@ def _calidad_dataset_mfg(reports: list[ReporteKPIProduccion]) -> dict:
     }
 
 
-def calcular_predicciones_mfg(limit: int = 104, horizon_weeks: int = 1) -> dict:
+def calcular_predicciones_mfg(limit: int = 104, horizon_weeks: int = 1,
+                              usar_factores_externos: bool = True) -> dict:
     horizon_weeks = max(1, min(int(horizon_weeks or 1), 12))
     reports_by_week = {}
     for report in ReporteKPIProduccion.objects.order_by('-fecha_fin', '-fecha_generacion'):
@@ -366,6 +416,7 @@ def calcular_predicciones_mfg(limit: int = 104, horizon_weeks: int = 1) -> dict:
         for week in range(1, horizon_weeks + 1)
     ] if report_dates else [f'Semana +{week}' for week in range(1, horizon_weeks + 1)]
     future_x_values = [x_values[-1] + Decimal(week) for week in range(1, horizon_weeks + 1)] if x_values else []
+    future_week_starts = [week_starts[-1] + timedelta(weeks=index) for index in range(1, horizon_weeks + 1)] if week_starts else []
 
     metric_config = [
         ('oee', 'Eficiencia global (OEE)', '%', 'oee', True),
@@ -384,6 +435,7 @@ def calcular_predicciones_mfg(limit: int = 104, horizon_weeks: int = 1) -> dict:
 
     predictions = []
     trend_charts = []
+    external_factors_used = []
     action_by_metric = {
         'oee': 'Revisar paros, disponibilidad de maquinas y causas de perdida de rendimiento.',
         'disponibilidad': 'Revisar paros y mantenimiento de los equipos con mayor tiempo detenido.',
@@ -410,6 +462,14 @@ def calcular_predicciones_mfg(limit: int = 104, horizon_weeks: int = 1) -> dict:
         if len(values) < 3:
             fallback = _weighted_average(values)
             forecast_values = [fallback for _ in range(horizon_weeks)] if values else []
+        forecast_values, external_factors, baseline_forecast_values = _aplicar_factores_a_serie(
+            forecast_values,
+            future_week_starts,
+            departamento='MFG',
+            metrica=field_name,
+            enabled=usar_factores_externos,
+        )
+        external_factors_used.extend(external_factors)
         bounded = field_name in {'oee', 'disponibilidad', 'rendimiento', 'calidad', 'tasa_rechazo', 'cumplimiento_ordenes', 'utilizacion_recursos'}
         nonnegative = bounded or field_name == 'unidades_totales'
         if bounded:
@@ -447,6 +507,8 @@ def calcular_predicciones_mfg(limit: int = 104, horizon_weeks: int = 1) -> dict:
             'code': field_name,
             'label': label,
             'value': _round(forecast) if forecast is not None else None,
+            'baseline_value': _round(baseline_forecast_values[-1]) if baseline_forecast_values else None,
+            'external_factors': external_factors,
             'lower': _round(lower) if lower is not None else None,
             'upper': _round(upper) if upper is not None else None,
             'unit': unit,
@@ -488,6 +550,14 @@ def calcular_predicciones_mfg(limit: int = 104, horizon_weeks: int = 1) -> dict:
             'status': status,
             'bounded': bounded,
         })
+
+    multiple_comparison = _comparar_mfg_regresion_multiple(
+        reports=reports,
+        metric_config=metric_config,
+        x_values=x_values,
+        future_x_values=future_x_values,
+        horizon_weeks=horizon_weeks,
+    )
 
     alerts = []
     improving = []
@@ -531,7 +601,105 @@ def calcular_predicciones_mfg(limit: int = 104, horizon_weeks: int = 1) -> dict:
         'data_quality': data_quality,
         'data_quality_details': _calidad_dataset_mfg(reports),
         'backtest_periods': max(0, len(reports) - 3),
+        'external_factors': external_factors_used,
+        'external_factors_applied': bool(external_factors_used),
+        'model_variant': 'Tendencia lineal + factores externos' if external_factors_used else 'Tendencia lineal',
+        'multiple_comparison': multiple_comparison,
+        'multiple_model_available': any(item['enabled'] for item in multiple_comparison),
     }
+
+
+def _comparar_mfg_regresion_multiple(*, reports, metric_config, x_values, future_x_values, horizon_weeks):
+    """Ejecuta la regresión múltiple en modo comparativo para MFG.
+
+    Esta primera integración no reemplaza el pronóstico visible. Usa variables
+    operativas históricas disponibles en cada reporte y deja el resultado listo
+    para la etapa de selección del modelo.
+    """
+    feature_names = ['semana', 'ordenes_reportadas', 'horas_programadas', 'horas_reales']
+    feature_rows = []
+    for index, report in enumerate(reports):
+        detail = report.detalle or {}
+        feature_rows.append([
+            x_values[index] if index < len(x_values) else ZERO,
+            _to_decimal(detail.get('total_ordenes')),
+            _to_decimal(detail.get('horas_programadas')),
+            _to_decimal(detail.get('horas_reales')),
+        ])
+
+    if not reports:
+        return []
+
+    future_features_by_column = []
+    for column in range(len(feature_names)):
+        historical = [row[column] for row in feature_rows]
+        projected, _, _ = _linear_forecast(
+            historical,
+            steps=horizon_weeks,
+            x_values=x_values,
+            future_x_values=future_x_values,
+        )
+        future_features_by_column.append(projected)
+    future_features = [
+        [future_features_by_column[column][index] for column in range(len(feature_names))]
+        for index in range(horizon_weeks)
+    ]
+
+    def target_value(report, field_name):
+        if field_name == 'unidades_totales':
+            return _to_decimal((report.detalle or {}).get('unidades_totales'))
+        return _to_decimal(getattr(report, field_name))
+
+    bounded_fields = {
+        'oee', 'disponibilidad', 'rendimiento', 'calidad',
+        'tasa_rechazo', 'cumplimiento_ordenes', 'utilizacion_recursos',
+    }
+    results = []
+    for field_name, label, unit, _, _ in metric_config:
+        targets = [target_value(report, field_name) for report in reports]
+        minimum = max(6, len(feature_names) + 2)
+        model = ajustar_regresion_multiple(
+            feature_rows,
+            targets,
+            feature_names,
+            min_samples=minimum,
+        )
+        validation = evaluar_regresion_multiple_temporal(
+            feature_rows,
+            targets,
+            feature_names,
+            min_samples=minimum,
+        )
+        baseline_values, _, _ = _linear_forecast(
+            targets,
+            steps=horizon_weeks,
+            x_values=x_values,
+            future_x_values=future_x_values,
+        )
+        multiple_values = predecir_regresion_multiple(model, future_features) if model['enabled'] else []
+        if field_name in bounded_fields:
+            multiple_values = [_bounded_percent(value) for value in multiple_values]
+        elif field_name in {'unidades_totales', 'tiempo_ciclo_promedio', 'costo_real', 'costo_planificado'}:
+            multiple_values = [max(ZERO, value) for value in multiple_values]
+        results.append({
+            'code': field_name,
+            'label': label,
+            'unit': unit,
+            'enabled': model['enabled'],
+            'samples': model['samples'],
+            'features': feature_names,
+            'coefficients': model['coeficientes'],
+            'intercept': model['intercepto'],
+            'baseline_forecast': _round(baseline_values[-1]) if baseline_values else None,
+            'multiple_forecast': _round(multiple_values[-1]) if multiple_values else None,
+            'difference': _round(multiple_values[-1] - baseline_values[-1]) if multiple_values and baseline_values else None,
+            'mae': _round(validation['mae']) if validation['backtests'] else None,
+            'mape': _round(validation['mape'], '0.01') if validation['mape'] is not None else None,
+            'r2': _round(model['r2'], '0.0001') if model['r2'] is not None else None,
+            'backtests': validation['backtests'],
+            'reason': model['reason'] if not model['enabled'] else validation['reason'],
+        })
+    return results
 
 
 def calcular_predicciones_mfg_segmentadas(
@@ -539,6 +707,7 @@ def calcular_predicciones_mfg_segmentadas(
     fecha_fin=None,
     horizon_weeks: int = 4,
     min_samples: int = 2,
+    usar_factores_externos: bool = True,
 ) -> dict:
     end_date = fecha_fin or timezone.localdate()
     start_date = fecha_inicio or (end_date - timedelta(days=83))
@@ -574,6 +743,14 @@ def calcular_predicciones_mfg_segmentadas(
         if len(values) < min_samples:
             continue
         forecast_values, _, _ = _linear_forecast(values, steps=horizon_weeks)
+        future_weeks = [weeks[-1] + timedelta(weeks=index) for index in range(1, horizon_weeks + 1)]
+        forecast_values, external_factors, baseline_forecast_values = _aplicar_factores_a_serie(
+            forecast_values,
+            future_weeks,
+            departamento='MFG',
+            metrica='unidades_totales',
+            enabled=usar_factores_externos,
+        )
         evaluation = _evaluate_forecast(values, horizon_weeks)
         current = values[-1]
         forecast = forecast_values[-1] if forecast_values else None
@@ -595,7 +772,9 @@ def calcular_predicciones_mfg_segmentadas(
             'periodo_fin': weeks[-1],
             'valor_actual': _round(current),
             'valor_predicho': _round(forecast) if forecast is not None else None,
+            'valor_predicho_base': _round(baseline_forecast_values[-1]) if baseline_forecast_values else None,
             'cambio': _round(change) if change is not None else None,
+            'factores_externos': external_factors,
             'confianza': evaluation['confidence'],
             'confianza_label': confidence_label,
             'confianza_status': confidence_status,
@@ -609,7 +788,26 @@ def calcular_predicciones_mfg_segmentadas(
         'segments': segments,
         'samples': len(orders),
         'data_quality': 'alta' if segments and min(item['muestras'] for item in segments) >= 8 else 'media' if segments else 'baja',
+        'external_factors_applied': any(item['factores_externos'] for item in segments),
     }
+
+
+def _upsert_prediction_preserving_outcome(**kwargs):
+    """Actualiza el pronóstico sin borrar la evidencia de su evaluación."""
+    lookup = {key: value for key, value in kwargs.items() if key != 'defaults'}
+    existing = RegistroPrediccion.objects.filter(**lookup).first()
+    preserved = {}
+    if existing:
+        previous_metadata = existing.metadatos or {}
+        for key in ('resultado_simulado', 'tipo_cierre', 'fuente_cierre'):
+            if previous_metadata.get(key) is not None:
+                preserved[key] = previous_metadata[key]
+
+    registro, created = RegistroPrediccion.objects.update_or_create(**kwargs)
+    if preserved:
+        registro.metadatos = {**(registro.metadatos or {}), **preserved}
+        registro.save(update_fields=['metadatos', 'fecha_actualizacion'])
+    return registro, created
 
 
 def registrar_predicciones(
@@ -657,7 +855,7 @@ def registrar_predicciones(
                 'activo': True,
             },
         )
-        RegistroPrediccion.objects.update_or_create(
+        _upsert_prediction_preserving_outcome(
             departamento=departamento,
             alcance=alcance,
             segmento=segmento,
@@ -679,8 +877,13 @@ def registrar_predicciones(
                 'accion_recomendada': item.get('action', ''),
                 'creado_por': usuario,
                 'metadatos': {
+                    **metadatos_contrato(
+                        muestras=forecast.get('samples', 0),
+                        calidad=forecast.get('data_quality') or forecast.get('data_quality_details', {}).get('label', 'baja'),
+                        fuente=f'{departamento} · serie histórica semanal',
+                        variables=['valor_historico', 'periodo_semanal'],
+                    ),
                     'unidad': item.get('unit', ''),
-                    'muestras': forecast.get('samples', 0),
                     'backtests': item.get('backtests', 0),
                     'mape': _float_or_none(item.get('mape')),
                     'skill': _float_or_none(item.get('skill')),
@@ -716,6 +919,7 @@ def evaluar_predicciones(
         'costo_planificado',
         'utilizacion_recursos',
         'flujo_caja',
+        'ventas_clientes',
         'rentabilidad',
         'rentabilidad_pct',
         'oc_pendientes',
@@ -728,6 +932,7 @@ def evaluar_predicciones(
         resultado_real__isnull=True,
         fecha_objetivo__lte=timezone.localdate(),
         codigo_metrica__in=metric_fields,
+        version_modelo=VERSION_MODELO_ACTUAL,
     )
     for registro in pendientes:
         fecha_rango = (
@@ -746,7 +951,12 @@ def evaluar_predicciones(
         reporte = reportes.first()
         if reporte is None:
             continue
-        if departamento == 'Finanzas':
+        if departamento == 'Finanzas' and registro.codigo_metrica == 'ventas_clientes':
+            resultado = CuentaPorPagarCobrar.objects.filter(
+                tipo=CuentaPorPagarCobrar.TipoCuenta.POR_COBRAR,
+                fecha_emision__range=fecha_rango,
+            ).aggregate(total=Sum('monto_total'))['total']
+        elif departamento == 'Finanzas':
             section = 'produccion' if registro.codigo_metrica in {'costo_real', 'costo_planificado', 'variacion_costos'} else 'kpis'
             resultado = _to_decimal((reporte.indicadores or {}).get(section, {}).get(registro.codigo_metrica))
         elif registro.codigo_metrica == 'unidades_totales':
@@ -768,27 +978,111 @@ def evaluar_predicciones(
     return evaluadas
 
 
+def evaluar_predicciones_operativas(*, departamento: str, usuario=None, tolerancia_dias: int = 3) -> int:
+    """Evalúa predicciones de Inventario, QA y Mantenimiento con datos reales."""
+    departamentos = {'Inventario', 'QA', 'Mantenimiento'}
+    if departamento not in departamentos:
+        return 0
+    pendientes = RegistroPrediccion.objects.filter(
+        departamento=departamento,
+        resultado_real__isnull=True,
+        fecha_objetivo__lte=timezone.localdate(),
+        version_modelo=VERSION_MODELO_ACTUAL,
+    )
+    evaluadas = 0
+    for registro in pendientes:
+        objetivo = registro.fecha_objetivo
+        semana_inicio = objetivo - timedelta(days=objetivo.weekday())
+        semana_fin = semana_inicio + timedelta(days=4)
+        resultado = None
+
+        if departamento == 'Inventario' and registro.codigo_metrica == 'demanda_material':
+            resultado = SalidaLineaDetalle.objects.filter(
+                sku=registro.segmento,
+                salida__fecha_salida__range=(semana_inicio, semana_fin),
+            ).aggregate(total=Sum('cantidad_enviada'))['total']
+
+        elif departamento == 'Mantenimiento' and registro.codigo_metrica == 'paros_previstos':
+            resultado = RegistroParoMantenimiento.objects.filter(
+                maquina__maquina_nombre=registro.segmento,
+                fecha_paro__range=(semana_inicio, semana_fin),
+            ).aggregate(total=Sum('horas_paro'))['total']
+
+        elif departamento == 'QA' and registro.codigo_metrica in {'probabilidad_defecto', 'tendencia_scrap'}:
+            ordenes = OrdenFabricacion.objects.filter(
+                estado=OrdenFabricacion.EstadoOF.COMPLETADA,
+                fecha_fin_real__date__range=(semana_inicio, semana_fin),
+            )
+            if registro.alcance == 'PRODUCTO':
+                ordenes = ordenes.filter(bom__producto=registro.segmento)
+            elif registro.alcance == 'BOM':
+                ordenes = ordenes.filter(bom__codigo=registro.segmento)
+            elif registro.alcance == 'LINEA':
+                ordenes = ordenes.filter(linea_produccion=registro.segmento)
+            orden_ids = list(ordenes.values_list('id', flat=True))
+            produccion = ordenes.aggregate(total=Sum('cantidad_producida'))['total'] or ZERO
+            defectos = RegistroScrapDefecto.objects.filter(orden_id__in=orden_ids).aggregate(
+                total=Sum('cantidad_defectos')
+            )['total'] or ZERO
+            if produccion > ZERO:
+                resultado = _safe_div(defectos, produccion) * Decimal('100')
+
+        if resultado is None or registro.valor_predicho is None:
+            continue
+        registro.resultado_real = _round(resultado)
+        registro.error_real = _round(abs(resultado - registro.valor_predicho))
+        registro.fecha_evaluacion = timezone.now()
+        registro.metadatos = {
+            **(registro.metadatos or {}),
+            'evaluado_por': getattr(usuario, 'username', None),
+            'periodo_resultado_inicio': semana_inicio.isoformat(),
+            'periodo_resultado_fin': semana_fin.isoformat(),
+            'tolerancia_dias': tolerancia_dias,
+        }
+        registro.save(update_fields=['resultado_real', 'error_real', 'fecha_evaluacion', 'metadatos', 'fecha_actualizacion'])
+        evaluadas += 1
+    return evaluadas
+
+
 def monitorear_salud_predictiva(days: int = 180) -> dict:
     """Resume error, pendientes, deriva y versiones de las predicciones recientes."""
     end_date = timezone.localdate()
     start_date = end_date - timedelta(days=max(days - 1, 1))
-    rows = list(RegistroPrediccion.objects.filter(fecha_creacion__date__range=(start_date, end_date)))
+    rows = list(RegistroPrediccion.objects.filter(
+        fecha_creacion__date__range=(start_date, end_date),
+        version_modelo=VERSION_MODELO_ACTUAL,
+    ))
     departments = sorted({row.departamento for row in rows})
     details = []
     for department in departments:
         department_rows = [row for row in rows if row.departamento == department]
         evaluated = [row for row in department_rows if row.resultado_real is not None and row.error_real is not None]
+        simulated_evaluated = [
+            row for row in evaluated
+            if (row.metadatos or {}).get('resultado_simulado')
+        ]
+        real_evaluated = [row for row in evaluated if row not in simulated_evaluated]
         due_pending = [row for row in department_rows if row.resultado_real is None and row.fecha_objetivo and row.fecha_objetivo <= end_date]
         percentage_errors = [
             abs(_to_decimal(row.error_real)) / max(abs(_to_decimal(row.valor_predicho)), ONE) * Decimal('100')
-            for row in evaluated
+            for row in real_evaluated
         ]
-        mean_error = _safe_div(sum((_to_decimal(row.error_real) for row in evaluated), ZERO), Decimal(len(evaluated))) if evaluated else ZERO
+        simulated_percentage_errors = [
+            abs(_to_decimal(row.error_real)) / max(abs(_to_decimal(row.valor_predicho)), ONE) * Decimal('100')
+            for row in simulated_evaluated
+        ]
+        mean_error = _safe_div(sum((_to_decimal(row.error_real) for row in real_evaluated), ZERO), Decimal(len(real_evaluated))) if real_evaluated else ZERO
         mean_percentage_error = _safe_div(sum(percentage_errors, ZERO), Decimal(len(percentage_errors))) if percentage_errors else None
-        if mean_percentage_error is not None and mean_percentage_error >= Decimal('25'):
+        simulated_mape = _safe_div(
+            sum(simulated_percentage_errors, ZERO), Decimal(len(simulated_percentage_errors))
+        ) if simulated_percentage_errors else None
+        if not real_evaluated and simulated_evaluated:
+            status = 'amarillo'
+            action = 'Validación simulada; esperar cierres reales antes de aprobar el modelo.'
+        elif mean_percentage_error is not None and mean_percentage_error >= Decimal('25'):
             status = 'rojo'
             action = 'Revisar deriva del modelo y recalibrar con datos recientes.'
-        elif due_pending or len(evaluated) < 4:
+        elif due_pending or len(real_evaluated) < 4:
             status = 'amarillo'
             action = 'Evaluar periodos vencidos y reunir más resultados reales.'
         else:
@@ -798,22 +1092,48 @@ def monitorear_salud_predictiva(days: int = 180) -> dict:
             'departamento': department,
             'predicciones': len(department_rows),
             'evaluadas': len(evaluated),
+            'evaluadas_reales': len(real_evaluated),
+            'evaluadas_simuladas': len(simulated_evaluated),
             'pendientes_vencidas': len(due_pending),
             'error_medio': _round(mean_error),
             'mape': _round(mean_percentage_error, '0.1') if mean_percentage_error is not None else None,
+            'mape_simulado': _round(simulated_mape, '0.1') if simulated_mape is not None else None,
             'versiones': sorted({row.version_modelo for row in department_rows}),
             'status': status,
             'accion': action,
         })
     details.sort(key=lambda item: {'rojo': 0, 'amarillo': 1, 'verde': 2}.get(item['status'], 2))
+    technical_rows = [
+        item for item in details
+        if item['evaluadas_simuladas'] > 0 and item['mape_simulado'] is not None
+    ]
+    technical_complete = bool(details) and len(technical_rows) == len(details) and all(
+        item['evaluadas_simuladas'] >= 4 and item['mape_simulado'] <= Decimal('10')
+        for item in details
+    )
+    real_evaluations = sum(item['evaluadas_reales'] for item in details)
     return {
         'enabled': bool(rows),
         'fecha_inicio': start_date,
         'fecha_fin': end_date,
         'predicciones': len(rows),
         'evaluadas': sum(item['evaluadas'] for item in details),
+        'evaluadas_reales': sum(item['evaluadas_reales'] for item in details),
+        'evaluadas_simuladas': sum(item['evaluadas_simuladas'] for item in details),
         'pendientes_vencidas': sum(item['pendientes_vencidas'] for item in details),
         'deriva_detectada': any(item['status'] == 'rojo' for item in details),
+        'validacion_tecnica': {
+            'estado': 'completa' if technical_complete else 'pendiente',
+            'metodo': 'Cierres simulados controlados para validar el flujo de evaluación.',
+            'criterio_mape_maximo': 10.0,
+            'departamentos_validados': len(technical_rows),
+            'departamentos_totales': len(details),
+        },
+        'validacion_productiva': {
+            'estado': 'disponible' if real_evaluations >= 4 else 'pendiente',
+            'evaluaciones_reales': real_evaluations,
+            'mensaje': 'Requiere cierres reales posteriores a la fecha objetivo.',
+        },
         'departamentos': details,
         'alerts': [
             {
@@ -856,6 +1176,11 @@ def ejecutar_ciclo_predictivo(usuario=None, evaluar=True) -> dict:
     if evaluar:
         evaluadas['MFG'] = evaluar_predicciones(departamento='MFG', usuario=usuario)
         evaluadas['Finanzas'] = evaluar_predicciones(departamento='Finanzas', usuario=usuario)
+        for departamento in ('Inventario', 'QA', 'Mantenimiento'):
+            evaluadas[departamento] = evaluar_predicciones_operativas(
+                departamento=departamento,
+                usuario=usuario,
+            )
     return {
         'version_modelo': VERSION_MODELO_ACTUAL,
         'ejecutado_en': timezone.now(),
@@ -999,7 +1324,8 @@ def preparar_dataset_ml_produccion(fecha_inicio=None, fecha_fin=None, limit: int
 
 
 def calcular_predicciones_financieras(limit: int = 12, horizon_weeks: int = 4,
-                                      min_samples: int = 4) -> dict:
+                                      min_samples: int = 4,
+                                      usar_factores_externos: bool = True) -> dict:
     """Pronostica finanzas y planeación a partir de reportes KPI históricos."""
     reports_raw = list(
         ReporteFinanciero.objects
@@ -1016,6 +1342,7 @@ def calcular_predicciones_financieras(limit: int = 12, horizon_weeks: int = 4,
         limit=limit,
         horizon_weeks=horizon_weeks,
         min_samples=min_samples,
+        usar_factores_externos=usar_factores_externos,
     )
 
     metric_defs = [
@@ -1064,6 +1391,11 @@ def calcular_predicciones_financieras(limit: int = 12, horizon_weeks: int = 4,
         return True, ''
 
     items = []
+    external_factors_used = []
+    last_week_start = (
+        reports[-1].fecha_fin - timedelta(days=reports[-1].fecha_fin.weekday())
+        if reports else None
+    )
     for key, label, section, prefix, suffix, kind, group in metric_defs:
         values = series(key, section)
         if not values:
@@ -1078,7 +1410,20 @@ def calcular_predicciones_financieras(limit: int = 12, horizon_weeks: int = 4,
                 confidence = Decimal('45')
                 detail = 'Historial limitado; se utiliza promedio ponderado.'
             evaluation = _evaluate_forecast(values, horizon_weeks)
+        future_weeks = [
+            last_week_start + timedelta(weeks=index)
+            for index in range(1, horizon_weeks + 1)
+        ] if last_week_start else []
+        forecast_values, external_factors, baseline_forecast_values = _aplicar_factores_a_serie(
+            forecast_values,
+            future_weeks,
+            departamento='Finanzas',
+            metrica=key,
+            enabled=usar_factores_externos,
+        )
+        external_factors_used.extend(external_factors)
         forecast_values = [_round(value) for value in forecast_values]
+        baseline_forecast_values = [_round(value) for value in baseline_forecast_values]
         forecast = forecast_values[-1] if forecast_values else None
         latest = values[-1] if values else None
         confidence_label, confidence_status = _confidence_label(len(values), confidence)
@@ -1112,6 +1457,8 @@ def calcular_predicciones_financieras(limit: int = 12, horizon_weeks: int = 4,
             'prediction_valid': prediction_valid,
             'validation_note': validation_note,
             'forecast_values': forecast_values,
+            'baseline_forecast_values': baseline_forecast_values,
+            'external_factors': external_factors,
             'prefix': prefix,
             'suffix': suffix,
             'confidence': _round(confidence, '0.1'),
@@ -1216,6 +1563,12 @@ def calcular_predicciones_financieras(limit: int = 12, horizon_weeks: int = 4,
     start_date = min(period_starts) if period_starts else timezone.localdate()
     end_date = max(period_ends) if period_ends else timezone.localdate()
     report_quality = 'alta' if len(reports) >= 8 else ('media' if len(reports) >= 4 else 'baja')
+    multiple_comparison = _comparar_finanzas_regresion_multiple(
+        reports=reports,
+        metric_defs=metric_defs,
+        sales_history=_weekly_sales_history(limit=limit),
+        horizon_weeks=horizon_weeks,
+    )
     return {
         'enabled': bool(reports) or sales_forecast['enabled'],
         'samples': len(reports),
@@ -1248,6 +1601,183 @@ def calcular_predicciones_financieras(limit: int = 12, horizon_weeks: int = 4,
         'trend_forecast': item_by_key.get('flujo_caja', {}).get('forecast_values', []),
         'sales': sales_forecast,
         'sales_chart': sales_forecast['chart'],
+        'external_factors': external_factors_used + sales_forecast.get('external_factors', []),
+        'external_factors_applied': bool(external_factors_used or sales_forecast.get('external_factors_applied')),
+        'model_variant': 'Tendencia financiera + factores externos' if (external_factors_used or sales_forecast.get('external_factors_applied')) else 'Tendencia financiera',
+        'multiple_comparison': multiple_comparison,
+        'multiple_model_available': multiple_comparison['enabled'],
+    }
+
+
+def _weekly_inventory_demand_history(limit: int = 104) -> dict:
+    """Agrupa el consumo de materiales por semana para alinear Finanzas."""
+    movements = list(
+        SalidaLineaDetalle.objects
+        .filter(cantidad_enviada__gt=0)
+        .order_by('salida__fecha_salida', 'id')
+        .values('salida__fecha_salida', 'cantidad_enviada')
+    )
+    grouped = defaultdict(lambda: ZERO)
+    for movement in movements:
+        fecha = movement['salida__fecha_salida']
+        week_start = fecha - timedelta(days=fecha.weekday())
+        grouped[week_start] += _to_decimal(movement['cantidad_enviada'])
+    if not grouped:
+        return {'week_starts': [], 'values': [], 'movements': 0}
+    first_week = min(grouped)
+    last_week = max(grouped)
+    if ((last_week - first_week).days // 7) + 1 > limit:
+        first_week = last_week - timedelta(weeks=limit - 1)
+    week_starts = [
+        first_week + timedelta(weeks=index)
+        for index in range(((last_week - first_week).days // 7) + 1)
+    ]
+    return {
+        'week_starts': week_starts,
+        'values': [grouped.get(week_start, ZERO) for week_start in week_starts],
+        'movements': len(movements),
+    }
+
+
+def _weekly_mfg_finance_signals(limit: int = 104) -> dict:
+    """Obtiene señales de MFG por semana para alimentar Finanzas."""
+    reports_by_week = {}
+    for report in ReporteKPIProduccion.objects.order_by('fecha_fin', 'fecha_generacion'):
+        week_start = report.fecha_fin - timedelta(days=report.fecha_fin.weekday())
+        reports_by_week[week_start] = report
+    weeks = sorted(reports_by_week)
+    if len(weeks) > limit:
+        weeks = weeks[-limit:]
+    values = {}
+    for week_start in weeks:
+        report = reports_by_week[week_start]
+        detail = report.detalle or {}
+        values[week_start] = {
+            'produccion_piezas': _to_decimal(detail.get('unidades_totales')),
+            'oee': _to_decimal(report.oee),
+            'disponibilidad': _to_decimal(report.disponibilidad),
+        }
+    return {'weeks': weeks, 'values': values}
+
+
+def _comparar_finanzas_regresion_multiple(*, reports, metric_defs, sales_history, horizon_weeks):
+    """Alinea Finanzas con Ventas, MFG e Inventario en modo comparativo."""
+    if not reports:
+        return {
+            'enabled': False,
+            'features': [],
+            'sources': {'Finanzas': 0, 'Ventas': 0, 'MFG': 0, 'Inventario': 0},
+            'metrics': [],
+            'reason': 'No hay cierres financieros para alinear.',
+        }
+
+    finance_weeks = [
+        report.fecha_fin - timedelta(days=report.fecha_fin.weekday())
+        for report in reports
+    ]
+    first_week = finance_weeks[0]
+    x_values = [Decimal((week - first_week).days // 7) for week in finance_weeks]
+    future_x_values = [x_values[-1] + Decimal(index) for index in range(1, horizon_weeks + 1)]
+    sales_by_week = dict(zip(sales_history['week_starts'], sales_history['values']))
+    mfg_history = _weekly_mfg_finance_signals()
+    inventory_history = _weekly_inventory_demand_history()
+    inventory_by_week = dict(zip(inventory_history['week_starts'], inventory_history['values']))
+    feature_names = [
+        'semana',
+        'ventas_emitidas',
+        'produccion_piezas',
+        'demanda_material',
+        'oee',
+        'disponibilidad',
+    ]
+    feature_rows = []
+    source_counts = {'Finanzas': len(reports), 'Ventas': 0, 'MFG': 0, 'Inventario': 0}
+    for index, week_start in enumerate(finance_weeks):
+        sales = _to_decimal(sales_by_week.get(week_start))
+        mfg = mfg_history['values'].get(week_start, {})
+        demand = _to_decimal(inventory_by_week.get(week_start))
+        if sales:
+            source_counts['Ventas'] += 1
+        if mfg:
+            source_counts['MFG'] += 1
+        if demand:
+            source_counts['Inventario'] += 1
+        feature_rows.append([
+            x_values[index],
+            sales,
+            _to_decimal(mfg.get('produccion_piezas')),
+            demand,
+            _to_decimal(mfg.get('oee')),
+            _to_decimal(mfg.get('disponibilidad')),
+        ])
+
+    future_features_by_column = []
+    for column in range(len(feature_names)):
+        historical = [row[column] for row in feature_rows]
+        projected, _, _ = _linear_forecast(
+            historical,
+            steps=horizon_weeks,
+            x_values=x_values,
+            future_x_values=future_x_values,
+        )
+        future_features_by_column.append(projected)
+    future_features = [
+        [future_features_by_column[column][index] for column in range(len(feature_names))]
+        for index in range(horizon_weeks)
+    ]
+
+    results = []
+    minimum = max(8, len(feature_names) + 2)
+    for key, label, section, prefix, suffix, kind, group in metric_defs:
+        targets = [_to_decimal((report.indicadores or {}).get(section, {}).get(key)) for report in reports]
+        model = ajustar_regresion_multiple(
+            feature_rows,
+            targets,
+            feature_names,
+            min_samples=minimum,
+        )
+        validation = evaluar_regresion_multiple_temporal(
+            feature_rows,
+            targets,
+            feature_names,
+            min_samples=minimum,
+        )
+        baseline_values, _, _ = _linear_forecast(
+            targets,
+            steps=horizon_weeks,
+            x_values=x_values,
+            future_x_values=future_x_values,
+        )
+        multiple_values = predecir_regresion_multiple(model, future_features) if model['enabled'] else []
+        if kind == 'count' or key in {'costo_real', 'costo_planificado'}:
+            multiple_values = [max(ZERO, value) for value in multiple_values]
+        if kind == 'margin':
+            multiple_values = [max(Decimal('-100'), min(Decimal('100'), value)) for value in multiple_values]
+        results.append({
+            'code': key,
+            'label': label,
+            'unit': f'{prefix}{suffix}',
+            'group': group,
+            'enabled': model['enabled'],
+            'samples': model['samples'],
+            'features': feature_names,
+            'coefficients': model['coeficientes'],
+            'intercept': model['intercepto'],
+            'baseline_forecast': _round(baseline_values[-1]) if baseline_values else None,
+            'multiple_forecast': _round(multiple_values[-1]) if multiple_values else None,
+            'difference': _round(multiple_values[-1] - baseline_values[-1]) if multiple_values and baseline_values else None,
+            'mae': _round(validation['mae']) if validation['backtests'] else None,
+            'mape': _round(validation['mape'], '0.01') if validation['mape'] is not None else None,
+            'r2': _round(model['r2'], '0.0001') if model['r2'] is not None else None,
+            'backtests': validation['backtests'],
+            'reason': model['reason'] if not model['enabled'] else validation['reason'],
+        })
+    return {
+        'enabled': any(item['enabled'] for item in results),
+        'features': feature_names,
+        'sources': source_counts,
+        'metrics': results,
+        'reason': 'Variables alineadas semanalmente entre Finanzas, Ventas, MFG e Inventario.',
     }
 
 
@@ -1287,7 +1817,7 @@ def registrar_predicciones_financieras(forecast: dict, usuario=None) -> int:
                 'activo': True,
             },
         )
-        RegistroPrediccion.objects.update_or_create(
+        _upsert_prediction_preserving_outcome(
             departamento='Finanzas', alcance='GLOBAL', segmento='GLOBAL', codigo_metrica=code,
             periodo_inicio=period_start, periodo_fin=period_end,
             fecha_objetivo=target_date, horizonte=forecast['horizon_weeks'], modelo=item_model,
@@ -1295,7 +1825,13 @@ def registrar_predicciones_financieras(forecast: dict, usuario=None) -> int:
             defaults={
                 'nombre_metrica': name,
                 'valor_actual': item['latest_value'],
-                'valor_predicho': item['value'] if item.get('prediction_valid', True) else None,
+                # Ventas se proyecta para varias semanas: la fecha objetivo es
+                # el cierre del horizonte, por lo que se guarda su último valor.
+                'valor_predicho': (
+                    item['forecast_values'][-1]
+                    if code == 'ventas_clientes' and item.get('forecast_values') and item.get('prediction_valid', True)
+                    else item['value'] if item.get('prediction_valid', True) else None
+                ),
                 'limite_inferior': None,
                 'limite_superior': None,
                 'confianza': item['confidence'],
@@ -1303,7 +1839,12 @@ def registrar_predicciones_financieras(forecast: dict, usuario=None) -> int:
                 'accion_recomendada': action,
                 'creado_por': usuario,
                 'metadatos': {
-                    'muestras': item['samples'],
+                    **metadatos_contrato(
+                        muestras=item['samples'],
+                        calidad=forecast['data_quality'],
+                        fuente=item.get('source') or 'Reportes financieros y ventas semanales',
+                        variables=['valor_historico', 'ventas_semanales'],
+                    ),
                     'backtests': item['backtests'],
                     'mape': _float_or_none(item['mape']),
                     'pronostico_confiable': item['forecast_reliable'],
@@ -1326,6 +1867,7 @@ def calcular_predicciones_inventario(
     horizon_days: int = 30,
     limit: int = 12,
     min_samples: int = 4,
+    usar_factores_externos: bool = True,
 ) -> dict:
     """Pronostica demanda semanal y convierte el resultado en una política de inventario.
 
@@ -1421,13 +1963,28 @@ def calcular_predicciones_inventario(
                 'precio': _to_decimal(row['precio_unitario']),
             }
 
+    operational_signals = senales_operativas_inventario(
+        desde=start_date,
+        hasta=end_date,
+        skus=weekly_by_sku,
+    )
+
     all_risks = []
     for sku, weekly_data in weekly_by_sku.items():
         weeks = sorted(weekly_data)
         weekly_values = [weekly_data[week] for week in weeks]
         evaluation = _evaluate_forecast(weekly_values, horizon_weeks)
         forecast_values, _, _ = _linear_forecast(weekly_values, steps=horizon_weeks)
+        future_weeks = [weeks[-1] + timedelta(weeks=index) for index in range(1, horizon_weeks + 1)]
+        forecast_values, external_factors, baseline_forecast_values = _aplicar_factores_a_serie(
+            forecast_values,
+            future_weeks,
+            departamento='Inventario',
+            metrica='demanda_material',
+            enabled=usar_factores_externos,
+        )
         forecast_values = [max(_to_decimal(value), ZERO) for value in forecast_values]
+        baseline_forecast_values = [max(_to_decimal(value), ZERO) for value in baseline_forecast_values]
         forecast_reliable = len(weekly_values) >= min_samples
         confidence_label, confidence_status = _confidence_label(len(weekly_values), evaluation['confidence'])
 
@@ -1439,10 +1996,13 @@ def calcular_predicciones_inventario(
 
         stock = max(stock_by_sku.get(sku, ZERO), ZERO)
         on_order = max(pending_by_sku.get(sku, ZERO), ZERO)
+        operational = operational_signals.get(sku, {})
         lead_times = lead_time_by_sku.get(sku, [])
         lead_time_days = max(1, round(sum(lead_times) / len(lead_times))) if lead_times else 7
-        safety_days = max(3, (lead_time_days + 1) // 2)
-        reorder_point = demand_daily * Decimal(lead_time_days + safety_days)
+        delay_days = _to_decimal(operational.get('dias_retraso_promedio')) if usar_factores_externos else ZERO
+        effective_lead_time_days = lead_time_days + max(0, round(delay_days))
+        safety_days = max(3, (effective_lead_time_days + 1) // 2)
+        reorder_point = demand_daily * Decimal(effective_lead_time_days + safety_days)
         purchase_quantity = max(reorder_point - stock - on_order, ZERO)
         coverage_days = _safe_div(stock, demand_daily) if demand_daily > 0 else None
         stockout_days = coverage_days if coverage_days is not None else None
@@ -1466,6 +2026,8 @@ def calcular_predicciones_inventario(
             action = 'Dar seguimiento a la orden de compra en tránsito antes de emitir una nueva.'
         elif status == 'rojo':
             action = 'Confirmar abastecimiento inmediato y revisar el consumo de la línea.'
+        if operational.get('ordenes_retrasadas'):
+            action += f" Hay {operational['ordenes_retrasadas']} orden(es) retrasada(s); considerar {effective_lead_time_days} días de abastecimiento."
         if not forecast_reliable:
             action = f'Historial corto ({len(weekly_values)} periodos); validar manualmente antes de comprar. {action}'
 
@@ -1481,10 +2043,18 @@ def calcular_predicciones_inventario(
             'en_orden': _round(on_order),
             'consumo_diario': _round(demand_daily),
             'demanda_proyectada': _round(demand_projected),
+            'demanda_proyectada_base': _round(sum(baseline_forecast_values, ZERO)),
+            'factores_externos': external_factors,
             'cobertura_dias': _round(coverage_days) if coverage_days is not None else None,
             'punto_reorden': _round(reorder_point),
             'faltante': _round(purchase_quantity),
             'lead_time_dias': lead_time_days,
+            'lead_time_ajustado_dias': effective_lead_time_days,
+            'ordenes_retrasadas': operational.get('ordenes_retrasadas', 0),
+            'dias_retraso_promedio': _round(operational.get('dias_retraso_promedio') or ZERO),
+            'precio_historico': _round(operational.get('precio_historico')) if operational.get('precio_historico') is not None else None,
+            'variacion_precio_pct': _round(operational.get('variacion_precio_pct') or ZERO),
+            'costo_sugerido_compra': _round(purchase_quantity * _to_decimal(supplier.get('precio'))),
             'safety_days': safety_days,
             'dias_agotamiento': _round(stockout_days) if stockout_days is not None else None,
             'fecha_agotamiento': stockout_date,
@@ -1527,7 +2097,19 @@ def calcular_predicciones_inventario(
             'criticos': sum(1 for item in all_risks if item['status'] == 'rojo'),
             'por_reordenar': sum(1 for item in all_risks if item['faltante'] > ZERO),
             'cantidad_sugerida_compra': _round(sum((item['faltante'] for item in all_risks), ZERO)),
+            'punto_reorden_total': _round(sum((item['punto_reorden'] for item in all_risks), ZERO)),
+            'costo_sugerido_compra': _round(sum((item['costo_sugerido_compra'] for item in all_risks), ZERO)),
+            'ordenes_retrasadas': sum(item['ordenes_retrasadas'] for item in all_risks),
         },
+        'external_factors': [
+            factor
+            for item in all_risks
+            for factor in item.get('factores_externos', [])
+        ],
+        'external_factors_applied': any(item.get('factores_externos') for item in all_risks),
+        'model_variant': 'Demanda semanal + precios/retrasos + política de inventario'
+        if any(item.get('factores_externos') for item in all_risks)
+        else 'Pronóstico semanal de demanda + punto de reorden y tiempo de entrega',
     }
 
 
@@ -1569,7 +2151,7 @@ def registrar_predicciones_inventario(forecast: dict, usuario=None) -> int:
                     'activo': True,
                 },
             )
-            RegistroPrediccion.objects.update_or_create(
+            _upsert_prediction_preserving_outcome(
                 departamento='Inventario',
                 alcance='MATERIAL',
                 segmento=sku,
@@ -1577,7 +2159,7 @@ def registrar_predicciones_inventario(forecast: dict, usuario=None) -> int:
                 periodo_inicio=item['periodo_inicio'],
                 periodo_fin=item['periodo_fin'],
                 fecha_objetivo=item['fecha_agotamiento'] or (forecast['fecha_fin'] + timedelta(days=forecast['horizon_days'])),
-                horizonte=forecast['horizon_days'],
+                    horizonte=forecast['horizon_weeks'],
                 modelo=modelo,
                 version_modelo=VERSION_MODELO_ACTUAL,
                 defaults={
@@ -1591,14 +2173,31 @@ def registrar_predicciones_inventario(forecast: dict, usuario=None) -> int:
                     'accion_recomendada': item['action'],
                     'creado_por': usuario,
                     'metadatos': {
+                        **metadatos_contrato(
+                            muestras=item['muestras'],
+                            calidad=forecast['data_quality'],
+                            fuente='Salidas a línea + inventario + órdenes de compra + proveedores',
+                            variables=[
+                                'consumo_semanal',
+                                'stock_actual',
+                                'ordenes_en_transito',
+                                'lead_time_proveedor',
+                                'precio_historico',
+                                'variacion_precio_pct',
+                                'dias_retraso_promedio',
+                            ],
+                        ),
                         'unidad': unit,
-                        'muestras': item['muestras'],
                         'backtests': item['backtests'],
                         'mape': _float_or_none(item['mape']),
                         'mae': _float_or_none(item['mae']),
                         'calidad_dataset': forecast['data_quality'],
                         'proveedor_recomendado': item['proveedor_recomendado'],
                         'lead_time_dias': item['lead_time_dias'],
+                        'lead_time_ajustado_dias': item['lead_time_ajustado_dias'],
+                        'variacion_precio_pct': _float_or_none(item['variacion_precio_pct']),
+                        'dias_retraso_promedio': _float_or_none(item['dias_retraso_promedio']),
+                        'ordenes_retrasadas': item['ordenes_retrasadas'],
                         'en_orden': _float_or_none(item['en_orden']),
                     },
                 },
@@ -1617,6 +2216,7 @@ def calcular_predicciones_calidad(
     horizon_weeks: int = 4,
     limit: int = 10,
     min_samples: int = 4,
+    usar_factores_externos: bool = True,
 ) -> dict:
     """Analiza riesgo de calidad por producto, línea, causa y proveedor."""
     days = max(28, int(days or 90))
@@ -1720,10 +2320,21 @@ def calcular_predicciones_calidad(
             if len(history) < 3:
                 fallback = _weighted_average(history)
                 forecast_values = [fallback for _ in range(horizon_weeks)]
+            future_weeks = [weeks[-1] + timedelta(weeks=index) for index in range(1, horizon_weeks + 1)]
+            forecast_values, external_factors, baseline_forecast_values = _aplicar_factores_a_serie(
+                forecast_values,
+                future_weeks,
+                departamento='QA',
+                metrica='tasa_defecto',
+                enabled=usar_factores_externos,
+            )
             forecast_values = [_bounded_percent(value) for value in forecast_values]
             current_rate = history[-1]
             predicted_rate = forecast_values[-1]
             evaluation = _evaluate_forecast(history, horizon_weeks)
+        if not history:
+            external_factors = []
+            baseline_forecast_values = []
 
         samples = len(history)
         confidence_label, confidence_status = _confidence_label(samples, evaluation['confidence'])
@@ -1751,6 +2362,8 @@ def calcular_predicciones_calidad(
             'dimension': dimension,
             'segmento': name,
             'probabilidad_defecto': _round(predicted_rate) if predicted_rate is not None else None,
+            'probabilidad_defecto_base': _round(baseline_forecast_values[-1]) if baseline_forecast_values else None,
+            'factores_externos': external_factors,
             'tasa_actual': _round(current_rate) if current_rate is not None else None,
             'defectos': _round(totals['defects']),
             'produccion': _round(totals['produced']),
@@ -1870,6 +2483,14 @@ def calcular_predicciones_calidad(
     trend_forecast, _, _ = _linear_forecast(trend_values, steps=horizon_weeks) if trend_values else ([], ZERO, '')
     if len(trend_values) < 3 and trend_values:
         trend_forecast = [_weighted_average(trend_values) for _ in range(horizon_weeks)]
+    trend_future_weeks = [week_starts[-1] + timedelta(weeks=index) for index in range(1, horizon_weeks + 1)] if week_starts else []
+    trend_forecast, trend_external_factors, trend_baseline_forecast = _aplicar_factores_a_serie(
+        trend_forecast,
+        trend_future_weeks,
+        departamento='QA',
+        metrica='tasa_defecto',
+        enabled=usar_factores_externos,
+    )
     trend_forecast = [_bounded_percent(value) for value in trend_forecast]
     trend_evaluation = _evaluate_forecast(trend_values, horizon_weeks) if trend_values else {'confidence': ZERO, 'mae': ZERO, 'mape': None, 'backtests': 0}
     trend_confidence_label, trend_confidence_status = _confidence_label(len(trend_values), trend_evaluation['confidence'])
@@ -1972,6 +2593,19 @@ def calcular_predicciones_calidad(
             'confidence_status': claim_status,
             'reliable': len(orders) >= min_samples,
         },
+        'external_factors': trend_external_factors + [
+            factor
+            for segment in segments
+            for factor in segment.get('factores_externos', [])
+        ],
+        'external_factors_applied': bool(
+            trend_external_factors
+            or any(segment.get('factores_externos') for segment in segments)
+        ),
+        'model_variant': 'Tendencia de defectos + factores externos' if (
+            trend_external_factors
+            or any(segment.get('factores_externos') for segment in segments)
+        ) else 'Tendencia de defectos y tasas de rechazo por segmento',
     }
 
 
@@ -2006,7 +2640,7 @@ def registrar_predicciones_calidad(forecast: dict, usuario=None) -> int:
                 'activo': True,
             },
         )
-        RegistroPrediccion.objects.update_or_create(
+        _upsert_prediction_preserving_outcome(
             departamento='QA',
             alcance=alcance,
             segmento=segmento,
@@ -2027,7 +2661,15 @@ def registrar_predicciones_calidad(forecast: dict, usuario=None) -> int:
                 'estado': status,
                 'accion_recomendada': action,
                 'creado_por': usuario,
-                'metadatos': metadata,
+                'metadatos': {
+                    **metadatos_contrato(
+                        muestras=metadata.get('muestras', 0),
+                        calidad=metadata.get('calidad_dataset', 'baja'),
+                        fuente='Producción, inspecciones y reclamos',
+                        variables=['produccion', 'defectos', 'causas', 'segmento'],
+                    ),
+                    **metadata,
+                },
             },
         )
         registros += 1
@@ -2088,7 +2730,8 @@ def registrar_predicciones_calidad(forecast: dict, usuario=None) -> int:
 
 
 def calcular_predicciones_mantenimiento(days: int = 90, horizon_weeks: int = 4,
-                                         limit: int = 10, min_samples: int = 4) -> dict:
+                                         limit: int = 10, min_samples: int = 4,
+                                         usar_factores_externos: bool = True) -> dict:
     """Calcula riesgo de paro por máquina usando bitácora, uso y calidad."""
     end_date = timezone.localdate()
     start_date = end_date - timedelta(days=max(days - 1, 1))
@@ -2158,7 +2801,16 @@ def calcular_predicciones_mantenimiento(days: int = 90, horizon_weeks: int = 4,
         forecast_values, _, trend = _linear_forecast(values, steps=horizon_weeks) if values else ([], ZERO, 'sin datos')
         if len(values) < 3 and values:
             forecast_values = [_weighted_average(values) for _ in range(horizon_weeks)]
+        future_weeks = [week_starts[-1] + timedelta(weeks=index) for index in range(1, horizon_weeks + 1)] if week_starts else []
+        forecast_values, external_factors, baseline_forecast_values = _aplicar_factores_a_serie(
+            forecast_values,
+            future_weeks,
+            departamento='Mantenimiento',
+            metrica='paros_previstos',
+            enabled=usar_factores_externos,
+        )
         forecast_values = [max(ZERO, _round(value)) for value in forecast_values]
+        baseline_forecast_values = [max(ZERO, _round(value)) for value in baseline_forecast_values]
         confidence_label, confidence_status = _confidence_label(len(values), evaluation['confidence'])
         usage = usage_by_machine[machine.id]
         produced = usage['produced']
@@ -2206,6 +2858,8 @@ def calcular_predicciones_mantenimiento(days: int = 90, horizon_weeks: int = 4,
             'horas_ciclo_unidad': _round(cycle_hours) if cycle_hours is not None else None,
             'defectos_maquina': _round(defect_count),
             'horas_paro_previstas': _round(projected_hours),
+            'horas_paro_previstas_base': _round(sum(baseline_forecast_values, ZERO)),
+            'factores_externos': external_factors,
             'tendencia': trend,
             'riesgo_score': _round(risk_score, '0.1'),
             'status': status,
@@ -2262,6 +2916,13 @@ def calcular_predicciones_mantenimiento(days: int = 90, horizon_weeks: int = 4,
         ],
         'trend_forecast': _round(sum((item['horas_paro_previstas'] for item in risks), ZERO)),
         'trend_reliable': bool(stops) and len(week_starts) >= min_samples,
+        'external_factors': [
+            factor
+            for item in risks
+            for factor in item.get('factores_externos', [])
+        ],
+        'external_factors_applied': any(item.get('factores_externos') for item in risks),
+        'model_variant': 'Tendencia de paros + factores externos' if any(item.get('factores_externos') for item in risks) else 'Tendencia de paros, uso de máquina y defectos asociados',
     }
 
 
@@ -2309,7 +2970,7 @@ def registrar_predicciones_mantenimiento(forecast: dict, usuario=None) -> int:
                     'activo': True,
                 },
             )
-            RegistroPrediccion.objects.update_or_create(
+            _upsert_prediction_preserving_outcome(
                 departamento='Mantenimiento', alcance='MAQUINA', segmento=item['maquina'],
                 codigo_metrica=code, periodo_inicio=forecast['fecha_inicio'],
                 periodo_fin=forecast['fecha_fin'], fecha_objetivo=item['fecha_revision'],
@@ -2324,7 +2985,15 @@ def registrar_predicciones_mantenimiento(forecast: dict, usuario=None) -> int:
                     'estado': status,
                     'accion_recomendada': action,
                     'creado_por': usuario,
-                    'metadatos': metadata,
+                    'metadatos': {
+                        **metadatos_contrato(
+                            muestras=item['muestras'],
+                            calidad=forecast.get('data_quality', 'baja'),
+                            fuente='Paros, ciclos y defectos por máquina',
+                            variables=['paros', 'horas_ciclo', 'defectos_maquina'],
+                        ),
+                        **metadata,
+                    },
                 },
             )
             registros += 1

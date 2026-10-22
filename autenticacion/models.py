@@ -1143,6 +1143,71 @@ class CatalogoMetricaPredictiva(models.Model):
         ]
 
 
+class FactorExternoPredictivo(models.Model):
+    """Evento externo que puede explicar cambios en una serie semanal."""
+
+    class TipoFactor(models.TextChoices):
+        TEMPORADA = 'TEMPORADA', 'Temporada'
+        FESTIVO = 'FESTIVO', 'Día festivo'
+        PROMOCION = 'PROMOCION', 'Promoción'
+        PRECIO = 'PRECIO', 'Cambio de precio'
+        RETRASO_PROVEEDOR = 'RETRASO_PROVEEDOR', 'Retraso de proveedor'
+        OTRO = 'OTRO', 'Otro'
+
+    tipo = models.CharField('Tipo de factor', max_length=24, choices=TipoFactor.choices)
+    nombre = models.CharField('Nombre', max_length=150)
+    departamento = models.CharField('Departamento', max_length=40, default='Todos')
+    metrica = models.CharField(
+        'Métrica objetivo',
+        max_length=80,
+        default='GLOBAL',
+        help_text='Código de métrica afectada o GLOBAL para todo el departamento.',
+    )
+    fecha_inicio = models.DateField('Fecha inicio')
+    fecha_fin = models.DateField('Fecha fin')
+    impacto_pct = models.DecimalField(
+        'Impacto estimado %',
+        max_digits=7,
+        decimal_places=2,
+        default=0,
+        help_text='Impacto esperado sobre la métrica; puede ser positivo o negativo.',
+    )
+    valor_referencia = models.DecimalField(
+        'Valor de referencia',
+        max_digits=14,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+    fuente = models.CharField('Fuente', max_length=150, blank=True)
+    notas = models.TextField('Notas', blank=True)
+    activo = models.BooleanField('Activo', default=True)
+    creado_por = models.ForeignKey(
+        UsuarioERP,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='factores_externos_predictivos',
+    )
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Factor externo predictivo'
+        verbose_name_plural = 'Factores externos predictivos'
+        ordering = ['fecha_inicio', 'tipo', 'nombre']
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(fecha_fin__gte=models.F('fecha_inicio')),
+                name='factor_externo_fecha_fin_gte_inicio',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['departamento', 'fecha_inicio', 'fecha_fin']),
+            models.Index(fields=['tipo', 'activo']),
+        ]
+
+
 class RegistroPrediccion(models.Model):
     departamento = models.CharField('Departamento', max_length=40)
     alcance = models.CharField('Alcance', max_length=20, default='GLOBAL')

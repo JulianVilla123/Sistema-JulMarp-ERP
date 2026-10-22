@@ -14,6 +14,7 @@ from .models import (
     DeclaracionImpuesto,
     Departamento,
     EstadoFinanciero,
+    FactorExternoPredictivo,
     HistorialCambioUsuario,
     InformeValidacionDefectoQA,
     InventarioAlmacen,
@@ -95,9 +96,25 @@ class TicketSoporteAdmin(admin.ModelAdmin):
 
 @admin.register(Material)
 class MaterialAdmin(admin.ModelAdmin):
-    list_display = ('sku', 'nombre', 'proveedor_display', 'um', 'stock_actual', 'activo')
-    search_fields = ('sku', 'nombre', 'descripcion', 'proveedor__nombre')
+    list_display = ('sku', 'nombre', 'um', 'stock_actual', 'activo')
+    search_fields = ('sku', 'nombre', 'descripcion')
     list_filter = ('activo', 'um')
+
+
+@admin.register(FactorExternoPredictivo)
+class FactorExternoPredictivoAdmin(admin.ModelAdmin):
+    list_display = (
+        'nombre',
+        'tipo',
+        'departamento',
+        'metrica',
+        'fecha_inicio',
+        'fecha_fin',
+        'impacto_pct',
+        'activo',
+    )
+    list_filter = ('tipo', 'departamento', 'activo')
+    search_fields = ('nombre', 'fuente', 'notas', 'metrica')
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
